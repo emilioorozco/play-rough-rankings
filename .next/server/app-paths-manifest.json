@@ -1,0 +1,15 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/auth/[...all]/route": "app/api/auth/[...all]/route.js",
+  "/api/trpc/[trpc]/route": "app/api/trpc/[trpc]/route.js",
+  "/admin/page": "app/admin/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/leaderboards/page": "app/leaderboards/page.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/players/page": "app/players/page.js",
+  "/profile/page": "app/profile/page.js",
+  "/tournaments/manage/page": "app/tournaments/manage/page.js",
+  "/tournaments/page": "app/tournaments/page.js",
+  "/tournaments/[id]/page": "app/tournaments/[id]/page.js"
+}

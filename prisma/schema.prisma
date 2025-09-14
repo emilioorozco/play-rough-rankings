@@ -1,0 +1,236 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Better Auth models for authentication
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          String    @default("player") // "player" | "organizer" | "admin"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  player   Player?
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Core models for Play Rough Rankings
+
+model Game {
+  id        String   @id @default(uuid())
+  name      String   @unique // "POKEMON_TCG"
+  shortName String // "PTCG"
+  isActive  Boolean  @default(true)
+  metadata  Json? // Game-specific settings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tournaments     Tournament[]
+  playerGameStats PlayerGameStats[]
+  decks           Deck[]
+
+  @@map("games")
+}
+
+model Player {
+  id                String   @id @default(uuid())
+  userId            String   @unique // Links to Better Auth user
+  displayName       String?
+  profileVisibility String   @default("PUBLIC") // "PUBLIC" | "PRIVATE"
+  externalPlayerIds Json? // Map of game UUID to external player ID
+  metadata          Json? // Age groups, preferences, etc.
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameStats            PlayerGameStats[]
+  organizedTournaments Tournament[]      @relation("TournamentOrganizer")
+  player1Matches       Match[]           @relation("Player1")
+  player2Matches       Match[]           @relation("Player2")
+  wonMatches           Match[]           @relation("MatchWinner")
+  tournamentEntries    TournamentEntry[]
+
+  @@map("players")
+}
+
+model PlayerGameStats {
+  id            String   @id @default(uuid())
+  playerId      String
+  gameId        String
+  currentRating Int      @default(1200)
+  seasonalStats Json // { wins, losses, tournaments, points }
+  bestFinish    Int? // Best tournament placement
+  totalEarnings Float    @default(0)
+  metadata      Json? // Game-specific achievements, rankings
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, gameId])
+  @@map("player_game_stats")
+}
+
+model Store {
+  id           String   @id @default(uuid())
+  name         String
+  address      String
+  city         String
+  state        String
+  zipCode      String
+  contactEmail String?
+  website      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  tournaments Tournament[]
+
+  @@map("stores")
+}
+
+model Tournament {
+  id              String   @id @default(uuid())
+  name            String
+  gameId          String
+  storeId         String
+  organizerId     String
+  date            DateTime
+  format          String // "Standard", "Modern", etc.
+  status          String   @default("UPCOMING") // "UPCOMING" | "ACTIVE" | "COMPLETED"
+  maxPlayers      Int?
+  entryFee        Float?
+  prizePool       String?
+  tournamentLevel String? // "LOCAL" | "REGIONAL" | "NATIONAL" | "INTERNATIONAL"
+  metadata        Json? // Age groups, sanctioning info, etc.
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  game      Game              @relation(fields: [gameId], references: [id])
+  store     Store             @relation(fields: [storeId], references: [id])
+  organizer Player            @relation("TournamentOrganizer", fields: [organizerId], references: [id])
+  matches   Match[]
+  entries   TournamentEntry[]
+
+  @@map("tournaments")
+}
+
+model Deck {
+  id          String   @id @default(uuid())
+  name        String // "Charizard ex Control", "Miraidon ex", etc.
+  archetype   String // "Control", "Aggro", "Combo", etc.
+  gameId      String
+  format      String // "Standard", "Expanded", etc.
+  description String?
+  metadata    Json? // Deck-specific data like key cards, colors, etc.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  game              Game              @relation(fields: [gameId], references: [id])
+  tournamentEntries TournamentEntry[]
+
+  @@unique([name, gameId, format])
+  @@map("decks")
+}
+
+model TournamentEntry {
+  id           String   @id @default(uuid())
+  tournamentId String
+  playerId     String
+  deckId       String? // Optional - player might not specify deck
+  placement    Int? // Final tournament placement
+  record       Json? // { wins, losses, draws } for this tournament
+  metadata     Json? // Tournament-specific data
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  player     Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  deck       Deck?      @relation(fields: [deckId], references: [id])
+
+  @@unique([tournamentId, playerId])
+  @@map("tournament_entries")
+}
+
+model Match {
+  id           String   @id @default(uuid())
+  tournamentId String
+  player1Id    String
+  player2Id    String
+  winnerId     String?
+  round        Int
+  table        Int?
+  status       String   @default("PENDING") // "PENDING" | "ACTIVE" | "COMPLETED"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  player1    Player     @relation("Player1", fields: [player1Id], references: [id])
+  player2    Player     @relation("Player2", fields: [player2Id], references: [id])
+  winner     Player?    @relation("MatchWinner", fields: [winnerId], references: [id])
+
+  @@map("matches")
+}
