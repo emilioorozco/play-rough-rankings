@@ -1,46 +1,48 @@
-'use client'
+"use client";
 
-import { useActivity } from './activity-provider'
+import { useActivity } from "./activity-provider";
 
 interface ActivityIndicatorProps {
-  className?: string
-  showDetails?: boolean
+  className?: string;
+  showDetails?: boolean;
 }
 
-export function ActivityIndicator({ className = '', showDetails = false }: ActivityIndicatorProps) {
-  const { activity } = useActivity()
+export function ActivityIndicator({
+  className = "",
+  showDetails = false,
+}: ActivityIndicatorProps) {
+  const { activity } = useActivity();
 
-  const getStatusColor = () => {
-    if (!activity.isActive) return 'var(--pico-muted-color)'
-    if (activity.isViewing) return 'var(--pico-contrast-background)'
-    return 'var(--pico-primary)'
-  }
+  const getStatusStyle = () => {
+    if (!activity.isActive) return "bg-muted-foreground text-muted-foreground";
+    if (activity.isViewing) return "bg-accent text-accent-foreground";
+    return "bg-primary text-primary-foreground";
+  };
 
   const getStatusText = () => {
-    if (!activity.isActive) return 'Away'
-    if (activity.isViewing && activity.viewingTarget) return `Viewing ${activity.viewingTarget}`
-    return 'Active'
-  }
+    if (!activity.isActive) return "Away";
+    if (activity.isViewing && activity.viewingTarget)
+      return `Viewing ${activity.viewingTarget}`;
+    return "Active";
+  };
 
   return (
-    <div className={`activity-indicator ${className}`}>
-      <div 
-        className="activity-dot"
-        style={{
-          width: '8px',
-          height: '8px',
-          borderRadius: '50%',
-          backgroundColor: getStatusColor(),
-          display: 'inline-block',
-          marginRight: showDetails ? '0.5rem' : '0',
-          animation: activity.isActive ? 'pulse 2s infinite' : 'none',
-        }}
+    <div className={`flex items-center gap-2 ${className}`}>
+      <div
+        className={`w-2 h-2 rounded-full ${getStatusStyle().split(" ")[0]} ${
+          activity.isActive ? "animate-pulse" : ""
+        }`}
       />
       {showDetails && (
-        <span className="activity-status" style={{ fontSize: '0.875rem', color: getStatusColor() }}>
+        <span
+          className={`text-sm ${getStatusStyle()
+            .split(" ")
+            .slice(1)
+            .join(" ")}`}
+        >
           {getStatusText()}
         </span>
       )}
     </div>
-  )
+  );
 }

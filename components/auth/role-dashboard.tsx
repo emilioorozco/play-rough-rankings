@@ -1,54 +1,94 @@
-'use client'
+"use client";
 
-import { useSession } from './session-provider'
-import Link from 'next/link'
+import { useSession } from "./session-provider";
+import Link from "next/link";
 
 export function RoleDashboard() {
-  const { user } = useSession()
+  const { user } = useSession();
 
   if (!user) {
-    return null
+    return null;
   }
 
   const getWelcomeMessage = () => {
     switch (user.role) {
-      case 'admin':
-        return 'Welcome back, Administrator! You have full system access.'
-      case 'organizer':
-        return 'Welcome back, Tournament Organizer! Ready to manage some tournaments?'
+      case "admin":
+        return "Welcome back, Administrator! You have full system access.";
+      case "organizer":
+        return "Welcome back, Tournament Organizer! Ready to manage some tournaments?";
       default:
-        return 'Welcome back, Player! Check out your latest stats and upcoming tournaments.'
+        return "Welcome back, Player! Check out your latest stats and upcoming tournaments.";
     }
-  }
+  };
 
   const getQuickActions = () => {
     const actions = [
-      { href: '/profile', label: 'View Profile', icon: '👤', description: 'Manage your account settings' },
-      { href: '/leaderboards', label: 'Leaderboards', icon: '🏆', description: 'See current rankings' },
-      { href: '/tournaments', label: 'Tournaments', icon: '🎯', description: 'Browse tournaments' },
-    ]
+      {
+        href: "/profile",
+        label: "View Profile",
+        icon: "👤",
+        description: "Manage your account settings",
+      },
+      {
+        href: "/leaderboards",
+        label: "Leaderboards",
+        icon: "🏆",
+        description: "See current rankings",
+      },
+      {
+        href: "/tournaments",
+        label: "Tournaments",
+        icon: "🎯",
+        description: "Browse tournaments",
+      },
+    ];
 
-    if (user.role === 'organizer' || user.role === 'admin') {
+    if (user.role === "organizer" || user.role === "admin") {
       actions.push(
-        { href: '/tournaments/manage', label: 'Manage Tournaments', icon: '⚙️', description: 'Organize tournaments' },
-        { href: '/tournaments/create', label: 'Create Tournament', icon: '➕', description: 'Start a new tournament' }
-      )
+        {
+          href: "/tournaments/manage",
+          label: "Manage Tournaments",
+          icon: "⚙️",
+          description: "Organize tournaments",
+        },
+        {
+          href: "/tournaments/create",
+          label: "Create Tournament",
+          icon: "➕",
+          description: "Start a new tournament",
+        },
+      );
     }
 
-    if (user.role === 'admin') {
+    if (user.role === "admin") {
       actions.push(
-        { href: '/admin', label: 'Admin Panel', icon: '🛠️', description: 'System administration' },
-        { href: '/admin/users', label: 'Manage Users', icon: '👥', description: 'User management' },
-        { href: '/admin/stores', label: 'Manage Stores', icon: '🏪', description: 'Store management' }
-      )
+        {
+          href: "/admin",
+          label: "Admin Panel",
+          icon: "🛠️",
+          description: "System administration",
+        },
+        {
+          href: "/admin/users",
+          label: "Manage Users",
+          icon: "👥",
+          description: "User management",
+        },
+        {
+          href: "/admin/stores",
+          label: "Manage Stores",
+          icon: "🏪",
+          description: "Store management",
+        },
+      );
     }
 
-    return actions
-  }
+    return actions;
+  };
 
   const getRoleSpecificStats = () => {
     switch (user.role) {
-      case 'admin':
+      case "admin":
         return (
           <div className="admin-stats">
             <h3>System Overview</h3>
@@ -70,9 +110,9 @@ export function RoleDashboard() {
               </div>
             </div>
           </div>
-        )
-      
-      case 'organizer':
+        );
+
+      case "organizer":
         return (
           <div className="organizer-stats">
             <h3>Your Tournament Activity</h3>
@@ -94,8 +134,8 @@ export function RoleDashboard() {
               </div>
             </div>
           </div>
-        )
-      
+        );
+
       default:
         return (
           <div className="player-stats">
@@ -118,9 +158,9 @@ export function RoleDashboard() {
               </div>
             </div>
           </div>
-        )
+        );
     }
-  }
+  };
 
   return (
     <div className="role-dashboard">
@@ -135,7 +175,13 @@ export function RoleDashboard() {
         <h3>Quick Actions</h3>
         <div className="actions-grid">
           {getQuickActions().map((action) => (
-            <Link key={action.href} href={action.href as `/dashboard` | `/tournaments` | `/leaderboards`} className="action-card">
+            <Link
+              key={action.href}
+              href={
+                action.href as `/dashboard` | `/tournaments` | `/leaderboards`
+              }
+              className="action-card"
+            >
               <div className="action-icon">{action.icon}</div>
               <div className="action-content">
                 <h4>{action.label}</h4>
@@ -146,31 +192,28 @@ export function RoleDashboard() {
         </div>
       </section>
 
-      {user.role !== 'player' && (
+      {user.role !== "player" && (
         <section className="role-tools mt-4">
           <h3>
-            {user.role === 'admin' ? 'Administrative Tools' : 'Organizer Tools'}
+            {user.role === "admin" ? "Administrative Tools" : "Organizer Tools"}
           </h3>
-          <div className="tools-info" style={{
-            padding: '1rem',
-            backgroundColor: 'var(--pico-contrast-focus)',
-            borderRadius: 'var(--pico-border-radius)',
-            border: '1px solid var(--pico-contrast-border)'
-          }}>
-            {user.role === 'admin' ? (
+          <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg">
+            {user.role === "admin" ? (
               <p>
-                As an administrator, you have access to all system features including user management, 
-                store administration, and system configuration.
+                As an administrator, you have access to all system features
+                including user management, store administration, and system
+                configuration.
               </p>
             ) : (
               <p>
-                As a tournament organizer, you can create and manage tournaments, upload results, 
-                and track player participation in your events.
+                As a tournament organizer, you can create and manage
+                tournaments, upload results, and track player participation in
+                your events.
               </p>
             )}
           </div>
         </section>
       )}
     </div>
-  )
+  );
 }

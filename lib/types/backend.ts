@@ -466,3 +466,4 @@ export type {
   PrismaClient,
   DefaultArgs,
 }
+

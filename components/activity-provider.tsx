@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 
 interface ActivityState {
   isActive: boolean
@@ -39,9 +39,9 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
     }))
   }
 
-  const markActive = () => {
+  const markActive = useCallback(() => {
     setActivity({ isActive: true })
-  }
+  }, [])
 
   const setViewing = (target?: string) => {
     setActivity({
@@ -86,7 +86,7 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       clearInterval(activityTimeout)
     }
-  }, [activity.lastActivity])
+  }, [activity.lastActivity, markActive])
 
   useEffect(() => {
     // Update current page when pathname changes

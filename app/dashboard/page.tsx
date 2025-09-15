@@ -1,12 +1,16 @@
-import { ProtectedRoute } from '@/components/auth/protected-route'
-import { RoleDashboard } from '@/components/auth/role-dashboard'
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
-  return (
-    <ProtectedRoute>
-      <div className="container">
-        <RoleDashboard />
-      </div>
-    </ProtectedRoute>
-  )
+  const router = useRouter();
+
+  useEffect(() => {
+    // Redirect to the unified homepage
+    router.replace("/");
+  }, [router]);
+
+  // Return null while redirecting
+  return null;
 }

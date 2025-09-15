@@ -17,14 +17,14 @@ export default function LeaderboardsPage() {
   })
 
   return (
-    <div className="container">
-      <div className="hero-section">
-        <h1>Tournament Leaderboards</h1>
-        <p>View seasonal rankings and top players across all supported games</p>
+    <div className="container mx-auto px-4 py-6 sm:py-8">
+      <div className="text-center mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-secondary-500 mb-2">Tournament Leaderboards</h1>
+        <p className="text-gray-500 text-sm sm:text-base px-2">View seasonal rankings and top players across all supported games</p>
       </div>
 
-      <div className="leaderboards-layout">
-        <aside className="filters-sidebar">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
+        <aside className="lg:col-span-1 order-2 lg:order-1">
           <LeaderboardFilters
             games={games || []}
             gamesLoading={gamesLoading}
@@ -39,7 +39,7 @@ export default function LeaderboardsPage() {
           />
         </aside>
 
-        <main className="leaderboards-content">
+        <main className="lg:col-span-3 order-1 lg:order-2">
           <LeaderboardDisplay
             gameId={selectedGameId}
             format={selectedFormat}

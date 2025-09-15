@@ -3,3 +3,18 @@ node_modules
 .env
 
 /generated/prisma
+
+# Next.js build artifacts
+.next/
+
+# Design drafts folder
+design-drafts/
+
+# macOS files
+.DS_Store
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Package lock files (auto-generated)
+package-lock.json

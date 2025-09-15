@@ -11,7 +11,6 @@ interface ExternalPlayerIdManagerProps {
 }
 
 export function ExternalPlayerIdManager({ 
-  playerId, 
   externalPlayerIds, 
   games 
 }: ExternalPlayerIdManagerProps) {
@@ -56,7 +55,7 @@ export function ExternalPlayerIdManager({
         gameId,
         externalId: newExternalId.trim(),
       })
-    } catch (error) {
+    } catch {
       // Error handled by mutation onError
     }
   }
@@ -65,7 +64,7 @@ export function ExternalPlayerIdManager({
     if (window.confirm('Are you sure you want to remove this external player ID?')) {
       try {
         await removeExternalIdMutation.mutateAsync({ gameId })
-      } catch (error) {
+      } catch {
         // Error handled by mutation onError
       }
     }
