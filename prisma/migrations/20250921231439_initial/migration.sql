@@ -2,12 +2,15 @@
 CREATE TABLE "public"."user" (
     "id" TEXT NOT NULL,
     "name" TEXT,
+    "firstName" TEXT,
+    "lastName" TEXT,
     "email" TEXT NOT NULL,
-    "emailVerified" TIMESTAMP(3),
+    "emailVerified" BOOLEAN NOT NULL DEFAULT false,
     "image" TEXT,
     "role" TEXT NOT NULL DEFAULT 'player',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "dateOfBirth" TIMESTAMP(3),
 
     CONSTRAINT "user_pkey" PRIMARY KEY ("id")
 );
@@ -63,7 +66,6 @@ CREATE TABLE "public"."games" (
     "name" TEXT NOT NULL,
     "shortName" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -74,8 +76,6 @@ CREATE TABLE "public"."games" (
 CREATE TABLE "public"."players" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "displayName" TEXT,
-    "profileVisibility" TEXT NOT NULL DEFAULT 'PUBLIC',
     "externalPlayerIds" JSONB,
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -121,19 +121,24 @@ CREATE TABLE "public"."stores" (
 CREATE TABLE "public"."tournaments" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "gameId" TEXT NOT NULL,
-    "storeId" TEXT NOT NULL,
-    "organizerId" TEXT NOT NULL,
-    "date" TIMESTAMP(3) NOT NULL,
-    "format" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'UPCOMING',
-    "maxPlayers" INTEGER,
-    "entryFee" DOUBLE PRECISION,
-    "prizePool" TEXT,
-    "tournamentLevel" TEXT,
-    "metadata" JSONB,
+    "description" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "date" TIMESTAMP(3) NOT NULL,
+    "entryFee" DOUBLE PRECISION,
+    "format" TEXT NOT NULL,
+    "gameId" TEXT NOT NULL,
+    "maxPlayers" INTEGER,
+    "metadata" JSONB,
+    "organizerId" TEXT NOT NULL,
+    "prizePool" TEXT,
+    "registrationDeadline" TIMESTAMP(3),
+    "rules" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "storeId" TEXT NOT NULL,
+    "totalRounds" INTEGER,
+    "tournamentLevel" TEXT,
+    "tournamentStructure" TEXT,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'UPCOMING',
 
     CONSTRAINT "tournaments_pkey" PRIMARY KEY ("id")
 );
@@ -162,6 +167,9 @@ CREATE TABLE "public"."tournament_entries" (
     "deckId" TEXT,
     "placement" INTEGER,
     "record" JSONB,
+    "seed" INTEGER,
+    "registrationDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "dropped" BOOLEAN NOT NULL DEFAULT false,
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -179,10 +187,30 @@ CREATE TABLE "public"."matches" (
     "round" INTEGER NOT NULL,
     "table" INTEGER,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "player1Score" INTEGER,
+    "player2Score" INTEGER,
+    "scheduledTime" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "matches_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."UserPreferences" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "nameDisplayPreference" TEXT NOT NULL DEFAULT 'DISPLAY_NAME',
+    "optInCommunications" BOOLEAN NOT NULL DEFAULT false,
+    "optInTournamentUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "optInLeaderboardUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "optInMarketing" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "profileVisibility" TEXT NOT NULL DEFAULT 'PUBLIC',
+    "subscribeToUpdates" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "UserPreferences_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -206,6 +234,9 @@ CREATE UNIQUE INDEX "decks_name_gameId_format_key" ON "public"."decks"("name", "
 -- CreateIndex
 CREATE UNIQUE INDEX "tournament_entries_tournamentId_playerId_key" ON "public"."tournament_entries"("tournamentId", "playerId");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "UserPreferences_userId_key" ON "public"."UserPreferences"("userId");
+
 -- AddForeignKey
 ALTER TABLE "public"."account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -216,34 +247,31 @@ ALTER TABLE "public"."session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY 
 ALTER TABLE "public"."players" ADD CONSTRAINT "players_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."player_game_stats" ADD CONSTRAINT "player_game_stats_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "public"."players"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."player_game_stats" ADD CONSTRAINT "player_game_stats_gameId_fkey" FOREIGN KEY ("gameId") REFERENCES "public"."games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."player_game_stats" ADD CONSTRAINT "player_game_stats_gameId_fkey" FOREIGN KEY ("gameId") REFERENCES "public"."games"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."player_game_stats" ADD CONSTRAINT "player_game_stats_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "public"."players"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."tournaments" ADD CONSTRAINT "tournaments_gameId_fkey" FOREIGN KEY ("gameId") REFERENCES "public"."games"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."tournaments" ADD CONSTRAINT "tournaments_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "public"."stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."tournaments" ADD CONSTRAINT "tournaments_organizerId_fkey" FOREIGN KEY ("organizerId") REFERENCES "public"."user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."tournaments" ADD CONSTRAINT "tournaments_organizerId_fkey" FOREIGN KEY ("organizerId") REFERENCES "public"."players"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."tournaments" ADD CONSTRAINT "tournaments_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "public"."stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."decks" ADD CONSTRAINT "decks_gameId_fkey" FOREIGN KEY ("gameId") REFERENCES "public"."games"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."tournament_entries" ADD CONSTRAINT "tournament_entries_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "public"."tournaments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."tournament_entries" ADD CONSTRAINT "tournament_entries_deckId_fkey" FOREIGN KEY ("deckId") REFERENCES "public"."decks"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."tournament_entries" ADD CONSTRAINT "tournament_entries_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "public"."players"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."tournament_entries" ADD CONSTRAINT "tournament_entries_deckId_fkey" FOREIGN KEY ("deckId") REFERENCES "public"."decks"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."matches" ADD CONSTRAINT "matches_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "public"."tournaments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."tournament_entries" ADD CONSTRAINT "tournament_entries_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "public"."tournaments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."matches" ADD CONSTRAINT "matches_player1Id_fkey" FOREIGN KEY ("player1Id") REFERENCES "public"."players"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -252,4 +280,10 @@ ALTER TABLE "public"."matches" ADD CONSTRAINT "matches_player1Id_fkey" FOREIGN K
 ALTER TABLE "public"."matches" ADD CONSTRAINT "matches_player2Id_fkey" FOREIGN KEY ("player2Id") REFERENCES "public"."players"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."matches" ADD CONSTRAINT "matches_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "public"."tournaments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."matches" ADD CONSTRAINT "matches_winnerId_fkey" FOREIGN KEY ("winnerId") REFERENCES "public"."players"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."UserPreferences" ADD CONSTRAINT "UserPreferences_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
