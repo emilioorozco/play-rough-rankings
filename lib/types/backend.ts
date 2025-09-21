@@ -87,23 +87,12 @@ export interface DateRangeFilter {
 // ============================================================================
 
 /**
- * Game metadata interface for game-specific settings
- * This replaces the `any` type used in server.ts for game metadata
- */
-export interface GameMetadata {
-  ageGroups?: string[]
-  pointSystem?: string
-  sanctioning?: Record<string, unknown>
-  [key: string]: unknown
-}
-
-/**
  * Game update data interface for game updates
  * Used in server.ts for game update operations
+ * Note: formats and metadata are now handled by game classes
  */
 export interface GameUpdateData {
   shortName?: string
-  metadata?: GameMetadata
   isActive?: boolean
 }
 

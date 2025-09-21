@@ -7,7 +7,7 @@ export interface ApiGame {
   isActive: boolean
   createdAt: string | Date
   updatedAt: string | Date
-  metadata?: Record<string, unknown> | null
+  // Note: formats and metadata are now provided by game classes, not database
 }
 
 export interface ApiPlayerGameStats {
@@ -57,7 +57,7 @@ export interface ApiTournament {
   }
   organizer: {
     id: string
-    displayName: string | null
+    name: string | null
   }
   matchCount: number
   participants?: Array<{

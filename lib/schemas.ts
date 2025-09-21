@@ -1,16 +1,15 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // ============================================================================
 // CORE VALIDATION SCHEMAS
 // ============================================================================
 
-// Game Schema
+// Game Schema (simplified - game logic moved to classes)
 export const GameSchema = z.object({
   id: z.string().uuid(),
-  name: z.enum(['POKEMON_TCG']), // Start with Pokemon TCG, easily expandable
+  name: z.string(), // Game name (e.g., "Pokemon Trading Card Game")
   shortName: z.string().min(1).max(10), // "PTCG"
   isActive: z.boolean().default(true),
-  metadata: z.record(z.string(), z.any()).optional(), // Game-specific settings
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -26,8 +25,6 @@ export const CreateGameSchema = GameSchema.omit({
 export const PlayerSchema = z.object({
   id: z.string().uuid(),
   userId: z.string(), // Links to Better Auth user ID
-  displayName: z.string().optional(),
-  profileVisibility: z.enum(['PUBLIC', 'PRIVATE']).default('PUBLIC'),
   // External player IDs for different game systems - maps game UUID to player's external ID
   externalPlayerIds: z.record(z.string().uuid(), z.string()).optional(),
   metadata: z.record(z.string(), z.any()).optional(), // Age groups, preferences, etc.
@@ -83,7 +80,7 @@ export const StoreSchema = z.object({
   address: z.string().min(1).max(500),
   city: z.string().min(1).max(100),
   state: z.string().min(2).max(50),
-  zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Invalid ZIP code format'),
+  zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Invalid ZIP code format"),
   contactEmail: z.string().email().optional(),
   website: z.string().url().optional(),
   isActive: z.boolean().default(true),
@@ -109,16 +106,19 @@ export const UpdateStoreSchema = StoreSchema.partial().omit({
 export const TournamentSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional(), // Tournament description
   gameId: z.string().uuid(), // Links to specific card game
   storeId: z.string().uuid(),
-  organizerId: z.string().uuid(),
-  date: z.date(),
+  organizerId: z.string().min(20), // Better Auth User ID (CUID variant)
+  date: z.string().datetime().transform((str) => new Date(str)),
   format: z.string().min(1).max(100), // "Standard", "Modern", "Legacy", etc. (game-specific)
-  status: z.enum(['UPCOMING', 'ACTIVE', 'COMPLETED']).default('UPCOMING'),
+  status: z.enum(["UPCOMING", "ACTIVE", "COMPLETED"]).default("UPCOMING"),
   maxPlayers: z.number().int().min(1).optional(),
   entryFee: z.number().min(0).optional(),
   prizePool: z.string().max(500).optional(),
-  tournamentLevel: z.enum(['LOCAL', 'REGIONAL', 'NATIONAL', 'INTERNATIONAL']).optional(),
+  tournamentLevel: z
+    .enum(["LOCAL", "REGIONAL", "NATIONAL", "INTERNATIONAL"])
+    .optional(),
   metadata: z.record(z.string(), z.any()).optional(), // Age groups, sanctioning info, etc.
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -147,7 +147,7 @@ export const MatchSchema = z.object({
   winnerId: z.string().uuid().optional(),
   round: z.number().int().min(1),
   table: z.number().int().min(1).optional(),
-  status: z.enum(['PENDING', 'ACTIVE', 'COMPLETED']).default('PENDING'),
+  status: z.enum(["PENDING", "ACTIVE", "COMPLETED"]).default("PENDING"),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -172,10 +172,42 @@ export const UpdateMatchSchema = MatchSchema.partial().omit({
 
 // Better Auth user context schema (available in tRPC context)
 export const AuthUserSchema = z.object({
-  id: z.string(),
+  id: z.string().min(20), // Better Auth User ID (CUID variant)
   email: z.string().email(),
-  name: z.string().optional(),
-  role: z.enum(['player', 'organizer', 'admin']).default('player'),
+  name: z.string().optional(), // @deprecated - use firstName and lastName instead
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  role: z.enum(["player", "organizer", "admin"]).default("player"),
+});
+
+// User Preferences Schema
+export const UserPreferencesSchema = z.object({
+  id: z.string().cuid(),
+  userId: z.string().cuid(),
+  nameDisplayPreference: z.enum(["FIRST_NAME", "FIRST_LAST_NAME", "DISPLAY_NAME", "OPT_OUT"]).default("FIRST_NAME"),
+  profileVisibility: z.enum(["PUBLIC", "PRIVATE"]).default("PUBLIC"),
+  optInCommunications: z.boolean().default(false),
+  optInTournamentUpdates: z.boolean().default(true),
+  optInLeaderboardUpdates: z.boolean().default(true),
+  optInMarketing: z.boolean().default(false),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+// User Preferences creation input schema
+export const CreateUserPreferencesSchema = UserPreferencesSchema.omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// User Preferences update schema
+export const UpdateUserPreferencesSchema = UserPreferencesSchema.partial().omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // ============================================================================
@@ -191,7 +223,7 @@ export const ExternalPlayerIdSchema = z.object({
 // Tournament file upload schema
 export const TournamentFileUploadSchema = z.object({
   tournamentId: z.string().uuid(),
-  fileType: z.enum(['CSV', 'JSON', 'TDF']),
+  fileType: z.enum(["CSV", "JSON", "TDF"]),
   fileSize: z.number().max(10 * 1024 * 1024), // 10MB max
 });
 
@@ -214,7 +246,8 @@ export const LeaderboardQuerySchema = z.object({
 export const TournamentListQuerySchema = z.object({
   gameId: z.string().uuid().optional(),
   storeId: z.string().uuid().optional(),
-  status: z.enum(['UPCOMING', 'ACTIVE', 'COMPLETED']).optional(),
+  organizerId: z.string().optional(),
+  status: z.enum(["UPCOMING", "ACTIVE", "COMPLETED"]).optional(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
   limit: z.number().int().min(1).max(100).default(20),
@@ -241,16 +274,16 @@ export const ErrorResponseSchema = z.object({
  */
 export const validateExternalPlayerIds = (
   externalPlayerIds: Record<string, string> | undefined,
-  validGameIds: string[]
+  validGameIds: string[],
 ): boolean => {
   if (!externalPlayerIds) return true;
-  
+
   const gameIds = Object.keys(externalPlayerIds);
-  return gameIds.every(gameId => {
+  return gameIds.every((gameId) => {
     // Validate UUID format
     const uuidResult = z.string().uuid().safeParse(gameId);
     if (!uuidResult.success) return false;
-    
+
     // Validate game exists
     return validGameIds.includes(gameId);
   });
@@ -310,11 +343,13 @@ export const TournamentEntrySchema = z.object({
   playerId: z.string().uuid(),
   deckId: z.string().uuid().optional(),
   placement: z.number().int().min(1).optional(),
-  record: z.object({
-    wins: z.number().int().min(0).default(0),
-    losses: z.number().int().min(0).default(0),
-    draws: z.number().int().min(0).default(0),
-  }).optional(),
+  record: z
+    .object({
+      wins: z.number().int().min(0).default(0),
+      losses: z.number().int().min(0).default(0),
+      draws: z.number().int().min(0).default(0),
+    })
+    .optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -328,13 +363,15 @@ export const CreateTournamentEntrySchema = TournamentEntrySchema.omit({
 });
 
 // Tournament Entry update schema
-export const UpdateTournamentEntrySchema = TournamentEntrySchema.partial().omit({
-  id: true,
-  tournamentId: true,
-  playerId: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const UpdateTournamentEntrySchema = TournamentEntrySchema.partial().omit(
+  {
+    id: true,
+    tournamentId: true,
+    playerId: true,
+    createdAt: true,
+    updatedAt: true,
+  },
+);
 
 // Deck statistics query schema
 export const DeckStatsQuerySchema = z.object({
@@ -393,6 +430,9 @@ export type CreateTournamentEntry = z.infer<typeof CreateTournamentEntrySchema>;
 export type UpdateTournamentEntry = z.infer<typeof UpdateTournamentEntrySchema>;
 
 export type AuthUser = z.infer<typeof AuthUserSchema>;
+export type UserPreferences = z.infer<typeof UserPreferencesSchema>;
+export type CreateUserPreferences = z.infer<typeof CreateUserPreferencesSchema>;
+export type UpdateUserPreferences = z.infer<typeof UpdateUserPreferencesSchema>;
 export type ExternalPlayerId = z.infer<typeof ExternalPlayerIdSchema>;
 export type TournamentFileUpload = z.infer<typeof TournamentFileUploadSchema>;
 export type PlayerSearch = z.infer<typeof PlayerSearchSchema>;

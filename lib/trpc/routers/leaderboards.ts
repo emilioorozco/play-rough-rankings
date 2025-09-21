@@ -48,15 +48,24 @@ export const leaderboardsRouter = router({
         where: {
           gameId: input.gameId,
           player: {
-            profileVisibility: 'PUBLIC', // Only show public profiles
+            user: {
+              userPreferences: {
+                profileVisibility: 'PUBLIC', // Only show public profiles
+              },
+            },
           },
         },
         include: {
           player: {
             select: {
               id: true,
-              displayName: true,
-              profileVisibility: true,
+              user: {
+                select: {
+                  name: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
             },
           },
         },
@@ -89,7 +98,7 @@ export const leaderboardsRouter = router({
         return {
           rank: index + 1,
           playerId: stat.playerId,
-          displayName: stat.player.displayName || 'Anonymous Player',
+          displayName: stat.player.user.firstName || stat.player.user.name || 'Anonymous Player',
           currentRating: stat.currentRating,
           seasonalStats: {
             wins: seasonalStats.wins || 0,
@@ -152,15 +161,24 @@ export const leaderboardsRouter = router({
         where: {
           gameId: input.gameId,
           player: {
-            profileVisibility: 'PUBLIC',
+            user: {
+              userPreferences: {
+                profileVisibility: 'PUBLIC',
+              },
+            },
           },
         },
         include: {
           player: {
             select: {
               id: true,
-              displayName: true,
-              profileVisibility: true,
+              user: {
+                select: {
+                  name: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
             },
           },
         },
@@ -418,15 +436,24 @@ export const leaderboardsRouter = router({
           playerId: { in: qualifiedPlayerIds },
           gameId: input.gameId,
           player: {
-            profileVisibility: 'PUBLIC',
+            user: {
+              userPreferences: {
+                profileVisibility: 'PUBLIC',
+              },
+            },
           },
         },
         include: {
           player: {
             select: {
               id: true,
-              displayName: true,
-              profileVisibility: true,
+              user: {
+                select: {
+                  name: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
             },
           },
         },
@@ -443,7 +470,7 @@ export const leaderboardsRouter = router({
 
           return {
             playerId: playerData.playerId,
-            displayName: playerData.player.displayName || 'Anonymous Player',
+            displayName: playerData.player.user.firstName || playerData.player.user.name || 'Anonymous Player',
             currentRating: playerData.currentRating,
             periodStats: {
               wins: periodStats.wins,
@@ -577,13 +604,23 @@ export const leaderboardsRouter = router({
                 playerId: { in: Array.from(uniquePlayerIds) },
                 gameId: input.gameId,
                 player: {
-                  profileVisibility: 'PUBLIC',
+                  user: {
+                    userPreferences: {
+                      profileVisibility: 'PUBLIC',
+                    },
+                  },
                 },
               },
               include: {
                 player: {
                   select: {
-                    displayName: true,
+                    user: {
+                      select: {
+                        name: true,
+                        firstName: true,
+                        lastName: true,
+                      },
+                    },
                   },
                 },
               },
@@ -593,7 +630,7 @@ export const leaderboardsRouter = router({
             if (topPlayerStat) {
               topPlayer = {
                 playerId: topPlayerStat.playerId,
-                displayName: topPlayerStat.player.displayName || 'Anonymous Player',
+                displayName: topPlayerStat.player.user.firstName || topPlayerStat.player.user.name || 'Anonymous Player',
                 rating: topPlayerStat.currentRating,
               }
             }
@@ -777,7 +814,7 @@ export const leaderboardsRouter = router({
         game,
         player: {
           id: player.id,
-          displayName: player.displayName,
+          displayName: player.user.firstName || player.user.name,
         },
         trends,
       }
@@ -1112,7 +1149,7 @@ export const leaderboardsRouter = router({
         game,
         player: {
           id: player.id,
-          displayName: player.displayName,
+          displayName: player.user.firstName || player.user.name,
         },
         season,
         deckStats: playerDeckStats,
