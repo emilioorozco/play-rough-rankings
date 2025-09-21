@@ -211,6 +211,8 @@ module.exports = {
         "fade-out": "fadeOut 0.5s ease-in-out",
         "slide-in": "slideIn 0.3s ease-out",
         "slide-out": "slideOut 0.3s ease-out",
+        "slide-left": "slideLeft 0.3s ease-out",
+        "slide-right": "slideRight 0.3s ease-out",
         pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         bounce: "bounce 1s infinite",
         spin: "spin 1s linear infinite",
@@ -232,6 +234,14 @@ module.exports = {
         slideOut: {
           "0%": { transform: "translateY(0)", opacity: "1" },
           "100%": { transform: "translateY(-10px)", opacity: "0" },
+        },
+        slideLeft: {
+          "0%": { transform: "translateX(100%)", opacity: "0" },
+          "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+        slideRight: {
+          "0%": { transform: "translateX(-100%)", opacity: "0" },
+          "100%": { transform: "translateX(0)", opacity: "1" },
         },
       },
 
