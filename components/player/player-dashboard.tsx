@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
 import { useSession } from '@/components/auth/session-provider'
 import { trpc } from '@/lib/trpc/client'
 import { PlayerStatsDisplay } from './player-stats-display'
 import { ExternalPlayerIdManager } from './external-player-id-manager'
 import { PrivacyControls } from './privacy-controls'
+import { UserPreferences } from '@/components/auth/user-preferences'
+import { useTab } from '@/hooks/stores/use-ui-store'
 
 export function PlayerDashboard() {
   const { user } = useSession()
-  const [activeTab, setActiveTab] = useState<'overview' | 'stats' | 'external-ids' | 'privacy'>('overview')
+  const { activeTab, setTab } = useTab('playerDashboard')
 
   // Get available games for filtering
   const { data: games } = trpc.games.list.useQuery({ includeInactive: false })
@@ -38,6 +39,7 @@ export function PlayerDashboard() {
     { id: 'stats', label: 'Game Stats', icon: '🎯' },
     { id: 'external-ids', label: 'Player IDs', icon: '🆔' },
     { id: 'privacy', label: 'Privacy', icon: '🔒' },
+    { id: 'preferences', label: 'Preferences', icon: '⚙️' },
   ] as const
 
   return (
@@ -56,7 +58,7 @@ export function PlayerDashboard() {
               role="tab"
               aria-selected={activeTab === tab.id}
               className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setTab(tab.id)}
             >
               <span className="tab-icon">{tab.icon}</span>
               <span className="tab-label">{tab.label}</span>
@@ -154,6 +156,10 @@ export function PlayerDashboard() {
             playerId={playerProfile.id}
             currentVisibility={playerProfile.profileVisibility}
           />
+        )}
+
+        {activeTab === 'preferences' && (
+          <UserPreferences />
         )}
       </div>
     </div>

@@ -13,10 +13,14 @@ import {
   TrendingUp,
   Store,
   Gamepad2,
-  Target,
   Award,
   Activity,
   Star,
+  User as UserIcon,
+  Award as AwardIcon,
+  Settings,
+  PlusCircle,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -59,19 +63,19 @@ export function EnhancedDashboard() {
       {
         href: "/profile",
         label: "View Profile",
-        icon: "👤",
+        icon: UserIcon,
         description: "Manage your account settings",
       },
       {
         href: "/leaderboards",
         label: "Leaderboards",
-        icon: "🏆",
+        icon: AwardIcon,
         description: "See current rankings",
       },
       {
         href: "/tournaments",
         label: "Tournaments",
-        icon: "🎯",
+        icon: Trophy,
         description: "Browse tournaments",
       },
     ];
@@ -81,13 +85,13 @@ export function EnhancedDashboard() {
         {
           href: "/tournaments/manage",
           label: "Manage Tournaments",
-          icon: "⚙️",
+          icon: Settings,
           description: "Organize tournaments",
         },
         {
           href: "/tournaments/create",
           label: "Create Tournament",
-          icon: "➕",
+          icon: PlusCircle,
           description: "Start a new tournament",
         },
       );
@@ -98,19 +102,19 @@ export function EnhancedDashboard() {
         {
           href: "/admin",
           label: "Admin Panel",
-          icon: "🛠️",
+          icon: Shield,
           description: "System administration",
         },
         {
           href: "/admin/users",
           label: "Manage Users",
-          icon: "👥",
+          icon: Users,
           description: "User management",
         },
         {
           href: "/admin/stores",
           label: "Manage Stores",
-          icon: "🏪",
+          icon: Store,
           description: "Store management",
         },
       );
@@ -273,7 +277,7 @@ export function EnhancedDashboard() {
             <Link key={action.href} href={action.href as string}>
               <Card className="hover:shadow-md hover:shadow-primary-500/10 transition-all duration-200 hover:-translate-y-1 cursor-pointer">
                 <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                  <div className="text-2xl">{action.icon}</div>
+                  {(() => { const Icon = action.icon as any; return <Icon className="h-5 w-5" /> })()}
                   <CardTitle className="text-lg ml-3">{action.label}</CardTitle>
                 </CardHeader>
                 <CardContent>

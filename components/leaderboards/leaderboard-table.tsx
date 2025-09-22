@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { useTab } from '@/hooks/stores'
 import { TrendingUp, TrendingDown, Medal, ChevronUp, ChevronDown } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
 import { Badge } from '../ui/badge'
 import { Avatar, AvatarFallback } from '../ui/avatar'
 import { Button } from '../ui/button'
 import Link from 'next/link'
-import { useActivity } from '@/components/activity-provider'
+import { useActivity } from '@/stores/app-store'
 import { useViewTransitions } from '@/hooks/use-view-transitions'
 import type { ApiLeaderboardEntry } from '@/lib/types/api'
 
@@ -29,7 +30,9 @@ export function LeaderboardTable({
   const { transitionToPlayer } = useViewTransitions()
   const [sortField, setSortField] = useState<SortField>('rank')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
+  
+  // Use store for view mode tab state
+  const { activeTab: viewMode, setTab: setViewMode } = useTab('leaderboard-view')
 
   const handlePlayerClick = (playerId: string, playerName: string, e: React.MouseEvent) => {
     e.preventDefault()
