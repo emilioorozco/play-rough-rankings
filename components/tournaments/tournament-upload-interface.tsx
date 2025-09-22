@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { trpc } from '@/lib/trpc/client'
+import { useFormDraft } from '@/hooks/useFormDraft'
+import { useAsyncOperationEnhanced } from '@/hooks/stores/use-loading-store-enhanced'
 
 interface Tournament {
   id: string
@@ -23,13 +25,30 @@ interface UploadError {
 
 export function TournamentUploadInterface({ tournament }: TournamentUploadInterfaceProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [fileType, setFileType] = useState<FileType>('CSV')
   const [uploadErrors, setUploadErrors] = useState<UploadError[]>([])
   const [uploadSuccess, setUploadSuccess] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Use form draft store for auto-save functionality
+  const { draft, save } = useFormDraft('tournament-upload')
+  const { execute, isLoading: isUploading } = useAsyncOperationEnhanced('tournament-upload')
+
   const utils = trpc.useUtils()
+
+  // Initialize form data from draft
+  const formData = draft?.data || { fileType: 'CSV' }
+  const fileType = formData.fileType as FileType
+
+  // Auto-save form data
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (fileType) {
+        save({ fileType }, 'tournament-upload')
+      }
+    }, 1000)
+    
+    return () => clearTimeout(timeoutId)
+  }, [fileType, save])
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -41,7 +60,7 @@ export function TournamentUploadInterface({ tournament }: TournamentUploadInterf
       // Auto-detect file type based on extension
       const extension = file.name.split('.').pop()?.toUpperCase()
       if (extension === 'CSV' || extension === 'JSON' || extension === 'TDF') {
-        setFileType(extension as FileType)
+        save({ fileType: extension as FileType }, 'tournament-upload')
       }
     }
   }
@@ -76,10 +95,7 @@ export function TournamentUploadInterface({ tournament }: TournamentUploadInterf
       return
     }
 
-    setIsUploading(true)
-    setUploadErrors([])
-
-    try {
+    await execute(async () => {
       // Read file content
       const fileContent = await readFileContent(selectedFile)
       
@@ -100,14 +116,11 @@ export function TournamentUploadInterface({ tournament }: TournamentUploadInterf
       if (tournament) {
         utils.tournaments.getById.invalidate({ id: tournament.id })
       }
-      
-    } catch (error) {
+    }).catch((error) => {
       setUploadErrors([{
         message: error instanceof Error ? error.message : 'Upload failed'
       }])
-    } finally {
-      setIsUploading(false)
-    }
+    })
   }
 
   const readFileContent = (file: File): Promise<string> => {
@@ -257,7 +270,7 @@ export function TournamentUploadInterface({ tournament }: TournamentUploadInterf
                   name="fileType"
                   value={type}
                   checked={fileType === type}
-                  onChange={(e) => setFileType(e.target.value as FileType)}
+                  onChange={(e) => save({ fileType: e.target.value as FileType }, 'tournament-upload')}
                 />
                 <span>{type}</span>
               </label>
@@ -296,6 +309,13 @@ export function TournamentUploadInterface({ tournament }: TournamentUploadInterf
             <button onClick={clearFile} className="clear-file-btn">
               Remove
             </button>
+          </div>
+        )}
+
+        {/* Draft indicator */}
+        {draft && (
+          <div className="draft-indicator">
+            💾 Draft saved {draft.lastSaved ? new Date(draft.lastSaved).toLocaleTimeString() : 'just now'}
           </div>
         )}
 

@@ -1,9 +1,9 @@
 'use client'
 
-import { trpc } from '@/lib/trpc/client'
 import { TournamentCard } from './tournament-card'
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Trophy } from 'lucide-react'
+import { useTournamentData } from '@/hooks/stores/use-tournament-data'
 
 interface TournamentListProps {
   filters: {
@@ -17,55 +17,31 @@ interface TournamentListProps {
 }
 
 export function TournamentList({ filters }: TournamentListProps) {
-  const [page, setPage] = useState(0)
-  const limit = 12
-
-  // Build query parameters from filters
-  const queryParams = useMemo(() => {
-    const params: Record<string, unknown> = {
-      limit,
-      offset: page * limit,
-    }
-
-    if (filters.gameId) params.gameId = filters.gameId
-    if (filters.storeId) params.storeId = filters.storeId
-    if (filters.status) params.status = filters.status
-    if (filters.startDate) params.startDate = new Date(filters.startDate)
-    if (filters.endDate) params.endDate = new Date(filters.endDate)
-
-    return params
-  }, [filters, page, limit])
-
-  const tournamentsQuery = trpc.tournaments.list.useQuery(queryParams)
+  // Use custom hook for data fetching and store management
+  const {
+    tournaments,
+    isLoading,
+    error,
+    totalCount,
+    refetch,
+  } = useTournamentData({ filters, limit: 12, offset: 0 })
 
   // Filter tournaments by search term on the client side
   const filteredTournaments = useMemo(() => {
-    if (!tournamentsQuery.data?.tournaments) return []
+    if (!tournaments) return []
     
-    if (!filters.search) return tournamentsQuery.data.tournaments
+    if (!filters.search) return tournaments
 
     const searchTerm = filters.search.toLowerCase()
-    return tournamentsQuery.data.tournaments.filter((tournament) =>
+    return tournaments.filter((tournament) =>
       tournament.name.toLowerCase().includes(searchTerm) ||
       tournament.store.name.toLowerCase().includes(searchTerm) ||
       tournament.game.name.toLowerCase().includes(searchTerm)
     )
-  }, [tournamentsQuery.data?.tournaments, filters.search])
+  }, [tournaments, filters.search])
 
-  const handleLoadMore = () => {
-    setPage(prev => prev + 1)
-  }
 
-  const handleReset = () => {
-    setPage(0)
-  }
-
-  // Reset page when filters change
-  useMemo(() => {
-    handleReset()
-  }, [filters])
-
-  if (tournamentsQuery.isLoading && page === 0) {
+  if (isLoading && tournaments.length === 0) {
     return (
       <div className="space-y-6">
         <div className="text-center py-12">
@@ -76,17 +52,11 @@ export function TournamentList({ filters }: TournamentListProps) {
     )
   }
 
-  if (tournamentsQuery.error) {
+  if (error) {
     return (
       <div className="space-y-6">
         <div className="text-center py-12 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-600 mb-4">Error loading tournaments: {tournamentsQuery.error.message}</p>
-          <button 
-            onClick={() => tournamentsQuery.refetch()}
-            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors duration-200"
-          >
-            Try Again
-          </button>
+          <p className="text-red-600">Error loading tournaments: {error}</p>
         </div>
       </div>
     )
@@ -123,19 +93,8 @@ export function TournamentList({ filters }: TournamentListProps) {
         ))}
       </div>
 
-      {tournamentsQuery.data?.hasMore && (
-        <div className="text-center pt-6">
-          <button
-            onClick={handleLoadMore}
-            disabled={tournamentsQuery.isLoading}
-            className="bg-secondary-500 text-white px-6 py-3 rounded-lg hover:bg-secondary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-          >
-            {tournamentsQuery.isLoading ? 'Loading...' : 'Load More'}
-          </button>
-        </div>
-      )}
 
-      {tournamentsQuery.isLoading && page > 0 && (
+      {isLoading && tournaments.length > 0 && (
         <div className="text-center py-4">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto mb-2"></div>
           <p className="text-gray-500">Loading more tournaments...</p>

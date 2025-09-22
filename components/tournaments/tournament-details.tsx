@@ -156,10 +156,10 @@ export function TournamentDetails({ tournament }: TournamentDetailsProps) {
                 <span className="detail-value">{tournament.matchCount}</span>
               </div>
 
-              {tournament.organizer.displayName && (
+              {tournament.organizer.name && (
                 <div className="detail-row">
                   <span className="detail-label">Organizer:</span>
-                  <span className="detail-value">{tournament.organizer.displayName}</span>
+                  <span className="detail-value">{tournament.organizer.name}</span>
                 </div>
               )}
             </div>

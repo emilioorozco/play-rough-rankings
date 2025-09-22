@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Calendar,
   MapPin,
   Users,
-  Trophy,
   Clock,
   Star,
   Eye,
@@ -17,7 +16,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { formatDate, formatDateTime } from "@/lib/utils/date-formatting";
-import { useActivity } from "@/components/activity-provider";
+import { useActivity } from "@/stores/app-store";
 import { useViewTransitions } from "@/hooks/use-view-transitions";
 
 import type { ApiTournament } from "@/lib/types/api";
@@ -32,97 +31,90 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
   const { setViewing } = useActivity();
   const { transitionToTournament } = useViewTransitions();
   const [isHovered, setIsHovered] = useState(false);
-  const [viewerCount, setViewerCount] = useState(1); // Initialize with stable value
-  const [mounted, setMounted] = useState(false);
+  const [viewerCount] = useState(Math.floor(Math.random() * 5) + 1); // Mock viewer count
 
-  // Set random viewer count after component mounts to prevent hydration mismatch
-  useEffect(() => {
-    setMounted(true);
-    setViewerCount(Math.floor(Math.random() * 5) + 1);
-  }, []);
+  const tournamentDate = useMemo(() => new Date(tournament.date), [tournament.date]);
+  const isUpcoming = useMemo(() => tournament.status === "UPCOMING", [tournament.status]);
+  const isActive = useMemo(() => tournament.status === "ACTIVE", [tournament.status]);
+  const isCompleted = useMemo(() => tournament.status === "COMPLETED", [tournament.status]);
 
-  const tournamentDate = new Date(tournament.date);
-  const isUpcoming = tournament.status === "UPCOMING";
-  const isActive = tournament.status === "ACTIVE";
-  const isCompleted = tournament.status === "COMPLETED";
-
-  const handleMouseEnter = () => {
+  const handleMouseEnter = useCallback(() => {
     setIsHovered(true);
     setViewing(`Tournament: ${tournament.name}`);
-  };
+  }, [setViewing, tournament.name]);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     setIsHovered(false);
     setViewing();
-  };
+  }, [setViewing]);
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     transitionToTournament(tournament.id);
-  };
+  }, [transitionToTournament, tournament.id]);
 
-  const getStatusBadgeVariant = () => {
+  const statusBadgeVariant = useMemo(() => {
     switch (tournament.status) {
       case "UPCOMING":
-        return "upcoming" as const;
+        return "default" as const;
       case "ACTIVE":
-        return "active" as const;
+        return "default" as const;
       case "COMPLETED":
-        return "completed" as const;
+        return "secondary" as const;
       default:
         return "outline" as const;
     }
-  };
+  }, [tournament.status]);
 
-  const getLevelBadgeVariant = () => {
+  const levelBadgeVariant = useMemo(() => {
     if (!tournament.tournamentLevel) return "outline" as const;
 
     switch (tournament.tournamentLevel) {
       case "LOCAL":
-        return "secondary" as const;
+        return "outline" as const;
       case "REGIONAL":
-        return "warning" as const;
+        return "secondary" as const;
       case "NATIONAL":
-        return "error" as const;
+        return "default" as const;
       case "INTERNATIONAL":
-        return "accent" as const;
+        return "destructive" as const;
       default:
         return "outline" as const;
     }
-  };
+  }, [tournament.tournamentLevel]);
 
-  const getParticipantCount = () => {
+  const participantCount = useMemo(() => {
     return tournament.participants?.length || 0;
-  };
+  }, [tournament.participants]);
 
-  const getMaxParticipants = () => {
+  const maxParticipants = useMemo(() => {
     return tournament.maxPlayers || 0;
-  };
+  }, [tournament.maxPlayers]);
 
-  const getPrizePool = () => {
+  const prizePool = useMemo(() => {
     if (!tournament.prizePool) return 0;
     // Handle both string and number prize pools
-    const prizePool =
+    const prizePoolValue =
       typeof tournament.prizePool === "string"
         ? parseFloat(tournament.prizePool.replace(/[^0-9.]/g, ""))
         : tournament.prizePool;
-    return isNaN(prizePool) ? 0 : prizePool;
-  };
+    return isNaN(prizePoolValue) ? 0 : prizePoolValue;
+  }, [tournament.prizePool]);
 
-  const getOrganizerInitials = () => {
-    if (!tournament.organizer.displayName) return "O";
-    return tournament.organizer.displayName
+  const organizerInitials = useMemo(() => {
+    if (!tournament.organizer.name) return "O";
+    return tournament.organizer.name
       .split(" ")
       .map((name) => name.charAt(0))
       .join("")
       .toUpperCase()
       .slice(0, 2);
-  };
+  }, [tournament.organizer.name]);
 
   return (
     <Card
       className={`group hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1 border-border bg-card ${
-        mounted && isActive && viewerCount > 2 ? "ring-2 ring-accent/20" : ""
+        isActive && viewerCount > 2 ? "ring-2 ring-accent/20" : ""
       }`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -131,16 +123,19 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <Badge variant={getStatusBadgeVariant()} className="font-medium">
+              <Badge variant={statusBadgeVariant} className="font-medium">
                 {isActive && (
-                  <div className="w-2 h-2 bg-red-500 rounded-full mr-1 animate-pulse" />
+                  <div className="w-2 h-2 bg-destructive rounded-full mr-1 animate-pulse" />
                 )}
                 {tournament.status.charAt(0).toUpperCase() +
                   tournament.status.slice(1).toLowerCase()}
               </Badge>
 
               {tournament.tournamentLevel && (
-                <Badge variant={getLevelBadgeVariant()} className="font-medium">
+                <Badge 
+                  variant={levelBadgeVariant} 
+                  className="font-medium dark:bg-accent dark:text-white dark:border-transparent"
+                >
                   {tournament.tournamentLevel.charAt(0).toUpperCase() +
                     tournament.tournamentLevel.slice(1).toLowerCase()}
                 </Badge>
@@ -160,13 +155,11 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
               {tournament.game.name} • {tournament.format}
             </p>
           </div>
-
-          <Trophy className="h-6 w-6 text-accent flex-shrink-0 ml-2" />
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4 flex-shrink-0" />
             <span className="truncate">{formatDate(tournamentDate)}</span>
@@ -185,20 +178,18 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users className="h-4 w-4 flex-shrink-0" />
             <span>
-              {getParticipantCount()}
-              {getMaxParticipants() > 0 && `/${getMaxParticipants()}`}
+              {participantCount}
+              {maxParticipants > 0 && `/${maxParticipants}`}
             </span>
           </div>
         </div>
 
         {/* Additional tournament details */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-sm">
-          {tournament.entryFee && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <span className="font-medium">Entry:</span>
-              <span>${tournament.entryFee}</span>
-            </div>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="font-medium">Entry:</span>
+            <span>${tournament.entryFee || 0}</span>
+          </div>
 
           {tournament.matchCount > 0 && (
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -212,26 +203,26 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
           <div className="flex items-center gap-2">
             <Avatar className="h-6 w-6">
               <AvatarFallback className="text-xs bg-muted text-muted-foreground">
-                {getOrganizerInitials()}
+                {organizerInitials}
               </AvatarFallback>
             </Avatar>
             <span className="text-sm text-muted-foreground">
-              by {tournament.organizer.displayName || "Organizer"}
+              by {tournament.organizer.name || "Organizer"}
             </span>
           </div>
 
-          {getPrizePool() > 0 && (
+          {prizePool > 0 && (
             <div className="flex items-center gap-1 text-accent font-semibold">
               <Star className="h-4 w-4 fill-current" />
               <span className="text-sm">
-                ${getPrizePool().toLocaleString()}
+                ${prizePool.toLocaleString()}
               </span>
             </div>
           )}
         </div>
 
         {/* Live activity indicators for active tournaments */}
-        {mounted && isActive && isHovered && viewerCount > 2 && (
+        {isActive && isHovered && viewerCount > 2 && (
           <div className="flex items-center justify-between pt-2 border-t border-border">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Eye className="h-4 w-4" />
@@ -246,14 +237,11 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
 
         <div className="flex gap-2 pt-2">
           <Button
-            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground transition-colors duration-200 text-sm sm:text-base"
+            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground transition-colors duration-200"
             asChild
           >
             <Link href={`/tournaments/${tournament.id}`} onClick={handleClick}>
-              <span className="hidden sm:inline">
-                {isUpcoming ? "Join Tournament" : "View Details"}
-              </span>
-              <span className="sm:hidden">{isUpcoming ? "Join" : "View"}</span>
+              {isUpcoming ? "Join Tournament" : "View Details"}
             </Link>
           </Button>
 

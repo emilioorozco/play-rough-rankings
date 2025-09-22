@@ -3,9 +3,12 @@
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { TournamentUploadInterface } from '@/components/tournaments/tournament-upload-interface'
+import { useSession } from '@/components/auth/session-provider'
 // Tournament Management List Component
 function TournamentManagementList() {
+  const { user } = useSession()
   const { data: tournaments, isLoading } = trpc.tournaments.list.useQuery({
+    organizerId: user?.id,
     limit: 20,
     offset: 0,
   })

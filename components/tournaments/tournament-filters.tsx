@@ -1,25 +1,17 @@
 'use client'
 
 import { trpc } from '@/lib/trpc/client'
-import { useState, useEffect } from 'react'
 
 interface TournamentFiltersProps {
   filters: {
-    gameId: string
-    storeId: string
-    status: string
-    startDate: string
-    endDate: string
-    search: string
+    gameId?: string
+    storeId?: string
+    status?: string
+    startDate?: string
+    endDate?: string
+    search?: string
   }
-  onFiltersChange: (filters: {
-    gameId: string
-    storeId: string
-    status: string
-    startDate: string
-    endDate: string
-    search: string
-  }) => void
+  onFiltersChange: (filters: any) => void
 }
 
 export function TournamentFilters({ filters, onFiltersChange }: TournamentFiltersProps) {
@@ -63,7 +55,7 @@ export function TournamentFilters({ filters, onFiltersChange }: TournamentFilter
           id="search"
           type="text"
           placeholder="Tournament name..."
-          value={filters.search}
+          value={filters.search || ''}
           onChange={(e) => handleFilterChange('search', e.target.value)}
         />
       </div>
@@ -72,7 +64,7 @@ export function TournamentFilters({ filters, onFiltersChange }: TournamentFilter
         <label htmlFor="game">Game</label>
         <select
           id="game"
-          value={filters.gameId}
+          value={filters.gameId || ''}
           onChange={(e) => handleFilterChange('gameId', e.target.value)}
         >
           <option value="">All Games</option>
@@ -88,7 +80,7 @@ export function TournamentFilters({ filters, onFiltersChange }: TournamentFilter
         <label htmlFor="store">Store</label>
         <select
           id="store"
-          value={filters.storeId}
+          value={filters.storeId || ''}
           onChange={(e) => handleFilterChange('storeId', e.target.value)}
         >
           <option value="">All Stores</option>
@@ -104,7 +96,7 @@ export function TournamentFilters({ filters, onFiltersChange }: TournamentFilter
         <label htmlFor="status">Status</label>
         <select
           id="status"
-          value={filters.status}
+          value={filters.status || ''}
           onChange={(e) => handleFilterChange('status', e.target.value)}
         >
           <option value="">All Statuses</option>
@@ -119,7 +111,7 @@ export function TournamentFilters({ filters, onFiltersChange }: TournamentFilter
         <input
           id="startDate"
           type="date"
-          value={filters.startDate}
+          value={filters.startDate || ''}
           onChange={(e) => handleFilterChange('startDate', e.target.value)}
         />
       </div>
@@ -129,7 +121,7 @@ export function TournamentFilters({ filters, onFiltersChange }: TournamentFilter
         <input
           id="endDate"
           type="date"
-          value={filters.endDate}
+          value={filters.endDate || ''}
           onChange={(e) => handleFilterChange('endDate', e.target.value)}
         />
       </div>

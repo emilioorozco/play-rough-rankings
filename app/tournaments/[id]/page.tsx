@@ -1,63 +1,244 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import React from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
-import { TournamentDetails } from '@/components/tournaments/tournament-details'
-import { TournamentManagement } from '@/components/tournaments/tournament-management'
 import { useSession } from '@/components/auth/session-provider'
-import type { ApiTournament } from '@/lib/types/api'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { TournamentHeroSection } from '@/components/tournaments/tournament-hero-section'
+import { TournamentQuickInfo } from '@/components/tournaments/tournament-quick-info'
+import { TournamentTabs } from '@/components/tournaments/tournament-tabs'
+import { 
+  useCurrentTournament, 
+  useRegistrationStatus 
+} from '@/stores/tournament-store'
+import { useTab } from '@/stores/ui-store'
+import { 
+  useUserPreferencesStoreSelectors,
+  useOptimizedUserPreferencesSelectors 
+} from '@/stores/selectors'
 
 export default function TournamentDetailsPage() {
   const params = useParams()
+  const router = useRouter()
   const { user } = useSession()
   const tournamentId = params.id as string
 
+  // Fetch tournament data with TRPC
   const tournamentQuery = trpc.tournaments.getById.useQuery({
     id: tournamentId,
     includeMatches: true,
     includeParticipants: true,
   })
 
-  if (tournamentQuery.isLoading) {
-    return (
-      <div className="container">
-        <div className="loading-state">
-          <p>Loading tournament details...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (tournamentQuery.error) {
-    return (
-      <div className="container">
-        <div className="error-state">
-          <h1>Tournament Not Found</h1>
-          <p>{tournamentQuery.error.message}</p>
-        </div>
-      </div>
-    )
-  }
-
-  const tournament = tournamentQuery.data! as ApiTournament
-  const isOrganizer = user && (
-    user.role === 'admin' || 
-    user.role === 'organizer' || 
-    user.id === tournament.organizer.id
+  // Fetch registration status with TRPC
+  const registrationStatusQuery = trpc.tournaments.getRegistrationStatus.useQuery(
+    { tournamentId },
+    { enabled: !!user }
   )
 
+  // Get tournament store state
+  const { 
+    tournament: storeTournament, 
+    setTournament: setStoreTournament,
+    setTournamentId: setStoreTournamentId
+  } = useCurrentTournament()
+
+  // Get registration status from TRPC query (simplified for now)
+  const isRegistered = registrationStatusQuery.data?.isRegistered || false
+  const canRegister = registrationStatusQuery.data?.canRegister || false
+
+  // Populate store when data loads
+  React.useEffect(() => {
+    if (tournamentQuery.data) {
+      setStoreTournament(tournamentQuery.data as any)
+      setStoreTournamentId(tournamentId)
+    }
+  }, [tournamentQuery.data, setStoreTournament, setStoreTournamentId, tournamentId])
+
+  // Use TRPC data as primary source, fallback to store
+  const tournament = tournamentQuery.data || storeTournament
+  const isTournamentLoading = tournamentQuery.isLoading
+  const tournamentError = tournamentQuery.error?.message
+  const isRegistrationLoading = registrationStatusQuery.isLoading
+  const registrationError = registrationStatusQuery.error?.message
+
+  // Use UI Store for active tab
+  const { activeTab, setActiveTab } = useTab('tournamentDetails')
+
+  // Set default tab if none is selected
+  React.useEffect(() => {
+    if (!activeTab) {
+      setActiveTab('overview')
+    }
+  }, [activeTab, setActiveTab])
+
+  // Get user preferences from TRPC (simplified for now)
+  const userPreferencesQuery = trpc.userPreferences.get.useQuery(
+    undefined,
+    { enabled: !!user }
+  )
+
+  // Use user preferences data for rendering
+  const userPreferencesData = userPreferencesQuery.data
+
+  if (isTournamentLoading || isRegistrationLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 pt-2 pb-6">
+          {/* Breadcrumb Skeleton */}
+          <div className="flex items-center gap-4 mb-2">
+            <Skeleton className="h-8 w-32" />
+          </div>
+
+          {/* Hero Section Skeleton */}
+          <div className="mb-8">
+            <Skeleton className="h-64 w-full rounded-lg" />
+          </div>
+
+          {/* Quick Info Skeleton */}
+          <div className="mb-8">
+            <Skeleton className="h-32 w-full rounded-lg" />
+          </div>
+
+          {/* Tabs Skeleton */}
+          <div className="mb-6">
+            <Skeleton className="h-10 w-full" />
+          </div>
+
+          {/* Content Skeleton */}
+          <div className="space-y-4">
+            <Skeleton className="h-32 w-full rounded-lg" />
+            <Skeleton className="h-32 w-full rounded-lg" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (tournamentError || registrationError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 pt-2 pb-6">
+          <div className="flex items-center gap-4 mb-8">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.back()}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </div>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-destructive mb-2">
+                  Error Loading Tournament
+                </h2>
+                <p className="text-muted-foreground mb-4">
+                  {tournamentError || registrationError}
+                </p>
+                <Button onClick={() => {
+                  tournamentQuery.refetch()
+                  registrationStatusQuery.refetch()
+                }}>
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (!tournament) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 pt-2 pb-6">
+          <div className="flex items-center gap-4 mb-8">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.back()}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </div>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold mb-2">Tournament Not Found</h2>
+                <p className="text-muted-foreground mb-4">
+                  The tournament you're looking for doesn't exist or has been removed.
+                </p>
+                <Button onClick={() => router.push('/tournaments')}>
+                  Browse Tournaments
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // Check if user is organizer or can manage
+  const isOrganizer = user?.id === tournament.organizer?.id
+  const canManage = isOrganizer || user?.role === 'ADMIN'
+
   return (
-    <div className="container">
-      <div className="tournament-details-layout">
-        <main className="tournament-details-main">
-          <TournamentDetails tournament={tournament} />
-        </main>
-        
-        {isOrganizer && (
-          <aside className="tournament-management-sidebar">
-            <TournamentManagement tournament={tournament} />
-          </aside>
-        )}
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 pt-2 pb-6">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-4 mb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Tournament Details
+          </span>
+        </div>
+
+        {/* Hero Section */}
+        <TournamentHeroSection
+          tournament={tournament as any}
+          isOrganizer={isOrganizer}
+          canManage={canManage}
+          isRegistered={isRegistered}
+          currentUser={user}
+        />
+
+        {/* Quick Info */}
+        <TournamentQuickInfo
+          tournament={tournament as any}
+        />
+
+        {/* Tabs */}
+        <TournamentTabs
+          tournament={tournament as any}
+          activeTab={activeTab as any}
+          onTabChange={setActiveTab}
+          isOrganizer={isOrganizer}
+          isRegistered={isRegistered}
+          currentUser={user}
+          userPreferences={userPreferencesData as any}
+        />
       </div>
     </div>
   )

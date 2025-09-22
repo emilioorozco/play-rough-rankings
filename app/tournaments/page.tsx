@@ -2,17 +2,10 @@
 
 import { TournamentList } from '@/components/tournaments/tournament-list'
 import { TournamentFilters } from '@/components/tournaments/tournament-filters'
-import { useState } from 'react'
+import { useFilter } from '@/hooks/stores'
 
 export default function TournamentsPage() {
-  const [filters, setFilters] = useState({
-    gameId: '',
-    storeId: '',
-    status: '',
-    startDate: '',
-    endDate: '',
-    search: '',
-  })
+  const { filters, setFilter } = useFilter('tournament-list')
 
   return (
     <div className="container mx-auto px-4 py-6 sm:py-8">
@@ -25,7 +18,7 @@ export default function TournamentsPage() {
         <aside className="lg:col-span-1 order-2 lg:order-1">
           <TournamentFilters 
             filters={filters} 
-            onFiltersChange={setFilters} 
+            onFiltersChange={setFilter} 
           />
         </aside>
         
