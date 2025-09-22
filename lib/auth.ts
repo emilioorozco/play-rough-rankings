@@ -8,6 +8,10 @@ export const auth = betterAuth({
   }),
   secret: process.env.BETTER_AUTH_SECRET!,
   baseURL: process.env.BETTER_AUTH_URL!,
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL!,
+    "https://appleid.apple.com",
+  ],
   emailAndPassword: {
     enabled: true,
   },
@@ -65,10 +69,35 @@ export const auth = betterAuth({
         };
       },
     },
-    // apple: {
-    //   clientId: process.env.APPLE_CLIENT_ID!,
-    //   clientSecret: process.env.APPLE_CLIENT_SECRET!,
-    // },
+    apple: {
+      clientId: process.env.APPLE_CLIENT_ID!,
+      clientSecret: process.env.APPLE_CLIENT_SECRET!,
+      scope: ["name", "email"], // Apple OAuth scopes
+      profile: (profile: any) => {
+        console.log("[Apple] profile received (keys):", Object.keys(profile));
+        try {
+          console.dir(profile, { depth: null });
+        } catch {}
+        
+        // Apple provides name in a nested object structure
+        // The name object is only available on first sign-in
+        const name = profile.name || {};
+        const firstName = name.firstName || "";
+        const lastName = name.lastName || "";
+        const fullName = firstName && lastName ? `${firstName} ${lastName}` : profile.email?.split('@')[0] || "";
+        
+        console.log(`[Apple] parsed names => firstName="${firstName}", lastName="${lastName}", fullName="${fullName}"`);
+        
+        return {
+          id: profile.sub,
+          email: profile.email,
+          name: fullName,
+          firstName: firstName,
+          lastName: lastName,
+          image: null, // Apple doesn't provide profile images via OAuth
+        };
+      },
+    },
   },
   user: {
     additionalFields: {
