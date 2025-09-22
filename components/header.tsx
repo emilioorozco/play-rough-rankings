@@ -9,17 +9,24 @@ import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { ActivityIndicator } from "./activity-indicator";
-import { ThemeContext } from "./theme-provider";
-import { useContext } from "react";
+import { useTheme } from "@/stores/app-store";
+import { useLoadingBar } from "@/stores/loading-store";
 import { SearchComponent } from "./search";
+import { LoginModal } from "./auth/login-modal";
+import { useModal, useInteraction } from "@/hooks/stores";
 
 export function Header() {
   const { user, signOut, isLoading } = useSession();
+  const { showLoadingBar } = useLoadingBar();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [showUserInfoInDropdown, setShowUserInfoInDropdown] = useState(true);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const themeContext = useContext(ThemeContext);
+  const { theme, toggleTheme } = useTheme();
+  
+  // Use store hooks for modal and interaction state
+  const { isOpen: isLoginModalOpen, open: openLoginModal, close: closeLoginModal } = useModal('login');
+  const { isActive: isUserMenuOpen, activate: openUserMenu, deactivate: closeUserMenu } = useInteraction('userMenu');
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -28,7 +35,7 @@ export function Header() {
         userMenuRef.current &&
         !userMenuRef.current.contains(event.target as Node)
       ) {
-        setIsUserMenuOpen(false);
+        closeUserMenu();
       }
     };
 
@@ -39,12 +46,39 @@ export function Header() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isUserMenuOpen]);
+  }, [isUserMenuOpen, closeUserMenu]);
+
+  // Calculate whether to show user info in dropdown based on available space
+  useEffect(() => {
+    const calculateUserInfoVisibility = () => {
+      if (!user) return;
+      
+      const isLandscape = window.innerWidth > window.innerHeight;
+      const isSmallScreen = window.innerWidth < 768; // md breakpoint
+      const isPortrait = window.innerHeight > window.innerWidth;
+      
+      // Show user info in dropdown if:
+      // - It's portrait mode on any screen size
+      // - It's landscape but the height (which is the phone's width in portrait) is too small
+      const shouldShow = isPortrait || (isLandscape && window.innerHeight < 350);
+      
+      setShowUserInfoInDropdown(shouldShow);
+    };
+
+    calculateUserInfoVisibility();
+    window.addEventListener('resize', calculateUserInfoVisibility);
+    window.addEventListener('orientationchange', calculateUserInfoVisibility);
+
+    return () => {
+      window.removeEventListener('resize', calculateUserInfoVisibility);
+      window.removeEventListener('orientationchange', calculateUserInfoVisibility);
+    };
+  }, [user]);
 
   const handleSignOut = async () => {
     try {
       await signOut();
-      setIsUserMenuOpen(false);
+      closeUserMenu();
       router.push("/");
     } catch (error) {
       console.error("Sign out failed:", error);
@@ -54,18 +88,20 @@ export function Header() {
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case "admin":
-        return "destructive" as const;
+        return "admin" as const;
       case "organizer":
-        return "accent" as const;
+        return "organizer" as const;
+      case "player":
+        return "player" as const;
       default:
         return "secondary" as const;
     }
   };
 
-  const getMenuItems = () => {
+  const getMenuItems = (): Array<{ href: string; label: string; icon: string }> => {
     if (!user) return [];
 
-    const items = [
+    const items: Array<{ href: string; label: string; icon: string }> = [
       { href: "/", label: "Dashboard", icon: "📊" },
       { href: "/profile", label: "Profile", icon: "👤" },
     ];
@@ -189,6 +225,7 @@ export function Header() {
               </Button>
             )}
 
+
             {/* User Menu */}
             {isLoading ? (
               <div className="flex items-center gap-2">
@@ -227,7 +264,7 @@ export function Header() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  onClick={() => isUserMenuOpen ? closeUserMenu() : openUserMenu()}
                   className="hover:bg-accent transition-colors duration-200"
                 >
                   <ChevronDown
@@ -237,48 +274,118 @@ export function Header() {
 
                 {/* User Dropdown Menu */}
                 {isUserMenuOpen && (
-                  <div className="absolute top-full right-4 mt-2 w-64 bg-card border border-border rounded-lg shadow-lg z-50 animate-fade-in">
-                    <div className="p-4 border-b border-border">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarFallback className="bg-primary text-primary-foreground">
-                            {user.name
-                              ? user.name.charAt(0).toUpperCase()
-                              : user.email.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-card-foreground">
-                            {user.name || "User"}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {user.email}
-                          </p>
-                          <Badge
-                            variant={getRoleBadgeVariant(user.role)}
-                            className="text-xs mt-1"
-                          >
-                            {user.role}
-                          </Badge>
+                  <div className="absolute top-full right-4 mt-2 w-64 bg-card border border-border rounded-lg shadow-lg z-50 animate-fade-in max-h-[80vh] flex flex-col">
+                    {/* User Info Section - Conditionally shown */}
+                    {showUserInfoInDropdown && (
+                      <div className="p-4 border-b border-border flex-shrink-0">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-primary text-primary-foreground">
+                              {user.name
+                                ? user.name.charAt(0).toUpperCase()
+                                : user.email.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-card-foreground">
+                              {user.name || "User"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {user.email}
+                            </p>
+                            <Badge
+                              variant={getRoleBadgeVariant(user.role)}
+                              className="text-xs mt-1"
+                            >
+                              {user.role}
+                            </Badge>
+                          </div>
                         </div>
                       </div>
+                    )}
+
+                    {/* Mobile Search - Only show on mobile */}
+                    <div className="md:hidden p-4 border-b border-border flex-shrink-0">
+                      <SearchComponent placeholder="Search tournaments, players..." />
                     </div>
 
-                    <nav className="p-2">
-                      {getMenuItems().map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setIsUserMenuOpen(false)}
-                          className="flex items-center gap-3 px-3 py-2 text-sm text-card-foreground hover:bg-accent rounded-md transition-colors duration-200"
-                        >
-                          <span>{item.icon}</span>
-                          {item.label}
-                        </Link>
-                      ))}
-                    </nav>
+                    <div className="flex-1 overflow-y-auto">
+                      <nav className="p-2">
+                        {/* Main Navigation Links - Only show on mobile */}
+                        <div className="md:hidden">
+                          <Link
+                            href="/tournaments"
+                            onClick={() => closeUserMenu()}
+                          >
+                            <Button variant="ghost" className="w-full justify-start">
+                              Tournaments
+                            </Button>
+                          </Link>
+                          <Link
+                            href="/leaderboards"
+                            onClick={() => closeUserMenu()}
+                          >
+                            <Button variant="ghost" className="w-full justify-start">
+                              Leaderboards
+                            </Button>
+                          </Link>
+                          <Link
+                            href="/players"
+                            onClick={() => closeUserMenu()}
+                          >
+                            <Button variant="ghost" className="w-full justify-start">
+                              Players
+                            </Button>
+                          </Link>
+                          <div className="border-t border-border my-2"></div>
+                        </div>
 
-                    <div className="p-2 border-t border-border">
+                        {/* User-specific menu items */}
+                        {getMenuItems().map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href as any}
+                            onClick={() => closeUserMenu()}
+                          >
+                            <Button variant="ghost" className="w-full justify-start">
+                              {item.label}
+                            </Button>
+                          </Link>
+                        ))}
+                      </nav>
+                    </div>
+
+                    <div className="p-2 border-t border-border flex-shrink-0">
+                      {/* Theme Toggle */}
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          toggleTheme();
+                          closeUserMenu();
+                        }}
+                        className="w-full justify-start mb-2"
+                      >
+                        {theme === "light" ? (
+                            "Switch to Dark Mode"
+                          ) : (
+                            "Switch to Light Mode"
+                          )}
+                        </Button>
+                      
+                      {/* Test Loading Bar Button - Development Only */}
+                      {process.env.NODE_ENV === 'development' && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            showLoadingBar(3000);
+                            closeUserMenu();
+                          }}
+                          className="w-full justify-start mb-2 text-xs"
+                        >
+                          Test Loading
+                        </Button>
+                      )}
+                      
                       <Button
                         variant="ghost"
                         onClick={handleSignOut}
@@ -292,31 +399,34 @@ export function Header() {
                 )}
               </div>
             ) : (
-              <Link href="/login">
-                <Button className="bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-200">
-                  Sign In
-                </Button>
-              </Link>
+              <Button 
+                onClick={() => openLoginModal()}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-200"
+              >
+                Sign In
+              </Button>
             )}
 
-            {/* Mobile Menu Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden hover:bg-accent transition-colors duration-200"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? (
-                <X className="h-4 w-4 sm:h-5 sm:w-5" />
-              ) : (
-                <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
-              )}
-            </Button>
+            {/* Mobile Menu Toggle - Only show for non-logged-in users */}
+            {!user && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden hover:bg-accent transition-colors duration-200"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                {isMobileMenuOpen ? (
+                  <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                ) : (
+                  <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
+                )}
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Mobile Navigation */}
-        {isMobileMenuOpen && (
+        {/* Mobile Navigation - Only show for non-logged-in users */}
+        {!user && isMobileMenuOpen && (
           <div className="md:hidden mt-4 pt-4 border-t border-border animate-slide-in">
             {/* Mobile Search */}
             <div className="mb-4">
@@ -345,51 +455,18 @@ export function Header() {
                   Players
                 </Button>
               </Link>
-              {user && (
-                <>
-                  <Link
-                    href="/dashboard"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <Button variant="ghost" className="w-full justify-start">
-                      Dashboard
-                    </Button>
-                  </Link>
-                  {(user.role === "organizer" || user.role === "admin") && (
-                    <Link
-                      href="/tournaments/manage"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <Button variant="ghost" className="w-full justify-start">
-                        Manage Tournaments
-                      </Button>
-                    </Link>
-                  )}
-                  {user.role === "admin" && (
-                    <Link
-                      href="/admin"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <Button variant="ghost" className="w-full justify-start">
-                        Admin Panel
-                      </Button>
-                    </Link>
-                  )}
-                </>
-              )}
 
               {/* Theme Toggle in Mobile Menu */}
-              {themeContext && (
-                <div className="pt-2 mt-2 border-t border-border">
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      themeContext.toggleTheme();
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="w-full justify-start gap-3"
-                  >
-                    {themeContext.theme === "light" ? (
+              <div className="pt-2 mt-2 border-t border-border">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    toggleTheme();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full justify-start gap-3"
+                >
+                  {theme === "light" ? (
                       <>
                         <Moon className="h-4 w-4" />
                         Switch to Dark Mode
@@ -402,11 +479,19 @@ export function Header() {
                     )}
                   </Button>
                 </div>
-              )}
             </nav>
           </div>
         )}
       </div>
+      
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => closeLoginModal()}
+        onSuccess={() => {
+          closeLoginModal();
+          // Optionally redirect or show success message
+        }}
+      />
     </header>
   );
 }

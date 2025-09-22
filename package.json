@@ -17,6 +17,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
+    "script:create-missing-records": "npx tsx scripts/create-missing-records.ts",
+    "script:create-missing-records:dry-run": "npx tsx scripts/create-missing-records.ts --dry-run",
     "postinstall": "prisma generate"
   },
   "keywords": [],
@@ -67,6 +69,7 @@
     "prisma": "^6.16.2",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^3.4.17",
-    "ts-jest": "^29.4.4"
+    "ts-jest": "^29.4.4",
+    "tsx": "^4.20.5"
   }
 }

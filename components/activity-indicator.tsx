@@ -1,6 +1,6 @@
 "use client";
 
-import { useActivity } from "./activity-provider";
+import { useActivity } from "@/stores/app-store";
 
 interface ActivityIndicatorProps {
   className?: string;

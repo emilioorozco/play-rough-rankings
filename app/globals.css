@@ -35,7 +35,7 @@
 
   /* Interface Elements */
   --border: 220 13% 91%; /* Light gray borders */
-  --input: 210 20% 98%; /* Very light gray inputs */
+  --input: 220 13% 85%; /* More visible gray borders for form inputs */
   --ring: 339 68% 58%; /* Focus rings match primary */
   --radius: 0.5rem;
 
@@ -245,7 +245,7 @@
   }
 
   .main-content {
-    @apply flex-1 py-6 sm:py-8;
+    @apply flex-1 pt-2 pb-6 sm:pt-4 sm:pb-8;
   }
 
   .main-footer {
@@ -395,6 +395,18 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Hide datetime-local format hint when empty */
+  .datetime-empty::-webkit-datetime-edit-text,
+  .datetime-empty::-webkit-datetime-edit-month-field,
+  .datetime-empty::-webkit-datetime-edit-day-field,
+  .datetime-empty::-webkit-datetime-edit-year-field,
+  .datetime-empty::-webkit-datetime-edit-hour-field,
+  .datetime-empty::-webkit-datetime-edit-minute-field,
+  .datetime-empty::-webkit-datetime-edit-second-field,
+  .datetime-empty::-webkit-datetime-edit-ampm-field {
+    opacity: 0;
+  }
 }
 
 /* Keyframes */
@@ -415,5 +427,18 @@
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+/* Loading bar animation */
+@keyframes loading-bar {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(100%);
   }
 }

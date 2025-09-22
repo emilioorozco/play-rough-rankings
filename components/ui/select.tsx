@@ -7,6 +7,7 @@ interface SelectProps {
   value?: string;
   onValueChange?: (value: string) => void;
   children?: React.ReactNode;
+  disabled?: boolean;
 }
 
 interface SelectTriggerProps
@@ -35,21 +36,88 @@ const SelectContext = React.createContext<{
   onValueChange?: (value: string) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
+  selectId?: string;
+  registerItem?: (value: string, label: string) => void;
+  getLabel?: (value?: string) => string | undefined;
 }>({ isOpen: false, setIsOpen: () => {} });
 
 const Select: React.FC<SelectProps> = ({ value, onValueChange, children }) => {
   const [isOpen, setIsOpen] = React.useState(false);
+  const selectId = React.useId();
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const itemsRef = React.useRef<Map<string, string>>(new Map());
+
+  const registerItem = React.useCallback((val: string, label: string) => {
+    itemsRef.current.set(val, label);
+  }, []);
+
+  const getLabel = React.useCallback((val?: string) => {
+    if (!val) return undefined;
+    return itemsRef.current.get(val);
+  }, []);
+
+  React.useEffect(() => {
+    function handleOtherOpen(event: Event) {
+      const custom = event as CustomEvent<string>;
+      if (custom.detail !== selectId) {
+        setIsOpen(false);
+      }
+    }
+
+    window.addEventListener("prr-select-open", handleOtherOpen as EventListener);
+    return () => {
+      window.removeEventListener(
+        "prr-select-open",
+        handleOtherOpen as EventListener,
+      );
+    };
+  }, [selectId]);
+
+  // Close on click outside and on Escape
+  React.useEffect(() => {
+    if (!isOpen) return;
+    
+    function handleDocumentClick(e: MouseEvent) {
+      const root = rootRef.current;
+      if (!root) return;
+      const target = e.target as Node | null;
+      if (target && !root.contains(target)) {
+        // Use setTimeout to prevent conflicts with click handlers
+        setTimeout(() => setIsOpen(false), 0);
+      }
+    }
+    
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+    
+    // Use capture phase to ensure we catch the event before other handlers
+    document.addEventListener("click", handleDocumentClick, true);
+    document.addEventListener("keydown", handleKeyDown);
+    
+    return () => {
+      document.removeEventListener("click", handleDocumentClick, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const contextValue = React.useMemo(
+    () => ({ value, onValueChange, isOpen, setIsOpen, selectId, registerItem, getLabel }),
+    [value, onValueChange, isOpen, selectId, registerItem, getLabel],
+  );
 
   return (
-    <SelectContext.Provider value={{ value, onValueChange, isOpen, setIsOpen }}>
-      <div className="relative">{children}</div>
+    <SelectContext.Provider value={contextValue}>
+      <div ref={rootRef} className="relative" data-select-id={selectId}>{children}</div>
     </SelectContext.Provider>
   );
 };
 
 const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
   ({ className, children, ...props }, ref) => {
-    const { isOpen, setIsOpen } = React.useContext(SelectContext);
+    const { isOpen, setIsOpen, selectId } = React.useContext(SelectContext);
 
     return (
       <button
@@ -61,7 +129,27 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
           "disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const next = !isOpen;
+          if (next) {
+            const ev = new CustomEvent("prr-select-open", {
+              detail: selectId,
+            });
+            // Fallback to useId tied event if data-id not available
+            try {
+              window.dispatchEvent(ev);
+            } catch {}
+          }
+          setIsOpen(next);
+        }}
+        onFocus={() => {
+          // Don't auto-open on focus to prevent conflicts
+        }}
+        onBlur={() => {
+          // Don't auto-close on blur to prevent conflicts
+        }}
         {...props}
       >
         {children}
@@ -78,22 +166,42 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
 SelectTrigger.displayName = "SelectTrigger";
 
 const SelectValue: React.FC<SelectValueProps> = ({ placeholder }) => {
-  const { value } = React.useContext(SelectContext);
-  const [displayValue, setDisplayValue] = React.useState<string | undefined>();
+  const { value, getLabel } = React.useContext(SelectContext);
+  const [label, setLabel] = React.useState<string | undefined>();
 
   React.useEffect(() => {
     if (value) {
-      // Find the display value from SelectItem children
-      // This is a simplified approach
-      setDisplayValue(value);
+      const foundLabel = getLabel?.(value);
+      if (foundLabel) {
+        setLabel(foundLabel);
+      } else {
+        // If label not found immediately, keep trying with increasing delays
+        // This handles cases where items are registered after the component mounts
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        const tryGetLabel = () => {
+          attempts++;
+          const retryLabel = getLabel?.(value);
+          
+          if (retryLabel) {
+            setLabel(retryLabel);
+          } else if (attempts < maxAttempts) {
+            // Try again with increasing delay
+            setTimeout(tryGetLabel, attempts * 10);
+          }
+        };
+        
+        const timeoutId = setTimeout(tryGetLabel, 10);
+        return () => clearTimeout(timeoutId);
+      }
     } else {
-      setDisplayValue(undefined);
+      setLabel(undefined);
     }
-  }, [value]);
-
+  }, [value, getLabel, placeholder]);
   return (
-    <span className={cn(!displayValue && "text-muted-foreground")}>
-      {displayValue || placeholder}
+    <span className={cn(label ? "text-foreground" : "text-muted-foreground")}>
+      {label || placeholder}
     </span>
   );
 };
@@ -102,13 +210,13 @@ const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
   ({ children, className }, ref) => {
     const { isOpen } = React.useContext(SelectContext);
 
-    if (!isOpen) return null;
 
     return (
       <div
         ref={ref}
         className={cn(
-          "absolute top-full left-0 z-50 mt-1 max-h-96 min-w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
+          "absolute top-full left-0 z-[60] mt-1 max-h-96 min-w-full overflow-visible rounded-md border bg-popover text-popover-foreground shadow-md",
+          !isOpen && "hidden", // Hide instead of not rendering
           className,
         )}
       >
@@ -119,33 +227,49 @@ const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
 );
 SelectContent.displayName = "SelectContent";
 
-const SelectItem = React.forwardRef<HTMLButtonElement, SelectItemProps>(
+const SelectItem = React.forwardRef<HTMLDivElement, SelectItemProps>(
   ({ className, children, value, ...props }, ref) => {
     const {
       value: selectedValue,
       onValueChange,
       setIsOpen,
+      registerItem,
     } = React.useContext(SelectContext);
     const isSelected = selectedValue === value;
 
+    // Extract plain text label from children if possible
+    React.useEffect(() => {
+      let text = "";
+      const toText = (node: React.ReactNode): string => {
+        if (typeof node === "string" || typeof node === "number") return String(node);
+        if (Array.isArray(node)) return node.map(toText).join("");
+        return "";
+      };
+      text = toText(children);
+      if (text && registerItem) {
+        registerItem(value, text);
+      }
+    }, [children, value, registerItem]);
+
     return (
-      <button
+      <div
         ref={ref}
-        type="button"
         className={cn(
-          "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 px-2 text-sm outline-none",
+          "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 px-2 text-sm outline-none",
           "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
           isSelected && "bg-accent text-accent-foreground",
           className,
         )}
-        onClick={() => {
+        onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('SelectItem clicked:', value); // Debug log
           onValueChange?.(value);
           setIsOpen(false);
         }}
-        {...props}
       >
         {children}
-      </button>
+      </div>
     );
   },
 );

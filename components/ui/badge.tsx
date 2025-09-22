@@ -9,29 +9,33 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary-500 text-primary-inverse hover:bg-primary-600",
+          "border-transparent bg-primary text-primary-foreground hover:bg-primary/90",
         secondary:
-          "border-transparent bg-secondary-500 text-secondary-inverse hover:bg-secondary-600",
+          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/90",
         destructive:
-          "border-transparent bg-error-500 text-white hover:bg-error-600",
-        outline: "text-secondary-500",
+          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline: "text-foreground border-border",
         success:
           "border-transparent bg-success-500 text-white hover:bg-success-600",
         warning:
           "border-transparent bg-warning-500 text-white hover:bg-warning-600",
         info: "border-transparent bg-info-500 text-white hover:bg-info-600",
         accent:
-          "border-transparent bg-accent-400 text-accent-inverse hover:bg-accent-500",
+          "border-transparent bg-accent text-accent-foreground hover:bg-accent/90",
+        // Role-specific variants with better contrast
+        admin: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        organizer: "border-transparent bg-accent text-accent-foreground hover:bg-accent/90",
+        player: "border-transparent bg-muted text-muted-foreground hover:bg-muted/90",
         // Status variants
-        upcoming: "border-transparent bg-status-upcoming text-white",
-        active: "border-transparent bg-status-active text-white",
-        completed: "border-transparent bg-status-completed text-white",
+        upcoming: "border-transparent bg-info-500 text-white hover:bg-info-600",
+        active: "border-transparent bg-success-500 text-white hover:bg-success-600",
+        completed: "border-transparent bg-muted text-muted-foreground hover:bg-muted/90",
         // Tier variants
-        bronze: "border-transparent bg-tier-bronze text-white",
-        silver: "border-transparent bg-tier-silver text-gray-800",
-        gold: "border-transparent bg-tier-gold text-gray-800",
-        platinum: "border-transparent bg-tier-platinum text-gray-800",
-        diamond: "border-transparent bg-tier-diamond text-gray-800",
+        bronze: "border-transparent bg-orange-600 text-white hover:bg-orange-700",
+        silver: "border-transparent bg-gray-400 text-gray-900 hover:bg-gray-500",
+        gold: "border-transparent bg-yellow-500 text-gray-900 hover:bg-yellow-600",
+        platinum: "border-transparent bg-gray-200 text-gray-900 hover:bg-gray-300",
+        diamond: "border-transparent bg-blue-300 text-gray-900 hover:bg-blue-400",
       },
     },
     defaultVariants: {

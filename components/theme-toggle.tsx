@@ -1,17 +1,11 @@
 "use client";
 
-import { useContext, useState, useEffect } from "react";
-import { ThemeContext } from "./theme-provider";
+import { useTheme } from "@/stores/app-store";
 
 export function ThemeToggle() {
-  const [mounted, setMounted] = useState(false);
-  const themeContext = useContext(ThemeContext);
+  const { theme, mounted, toggleTheme } = useTheme();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted || !themeContext) {
+  if (!mounted) {
     // Return a placeholder button to prevent layout shift
     return (
       <button
@@ -23,8 +17,6 @@ export function ThemeToggle() {
       </button>
     );
   }
-
-  const { theme, toggleTheme } = themeContext;
 
   return (
     <button
