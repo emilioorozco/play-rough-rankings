@@ -3,11 +3,11 @@ import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { TRPCProvider } from "@/lib/trpc/provider";
 import { SessionProvider } from "@/components/auth/session-provider";
-import { SessionManager } from "@/components/auth/session-manager";
 import { Header } from "@/components/header";
-import { ThemeProvider } from "@/components/theme-provider";
 import { ViewTransitionsProvider } from "@/components/view-transitions-provider";
-import { ActivityProvider } from "@/components/activity-provider";
+import { AppProvider } from "@/components/app-provider";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { LoadingProvider } from "@/components/loading-provider";
 
 // Font configurations
 const inter = Inter({
@@ -49,31 +49,32 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${poppins.variable}`}>
-        <ThemeProvider>
-          <ActivityProvider>
+      <body className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
+        <ErrorBoundary>
+          <AppProvider>
             <ViewTransitionsProvider>
               <SessionProvider>
                 <TRPCProvider>
-                  <SessionManager />
-                  <div className="app-layout">
-                    <Header />
-                    <main className="main-content">{children}</main>
-                    <footer className="main-footer">
-                      <div className="container">
-                        <p>
-                          <small>
-                            © 2024 Play Rough Rankings. All rights reserved.
-                          </small>
-                        </p>
-                      </div>
-                    </footer>
-                  </div>
+                  <LoadingProvider>
+                    <div className="app-layout">
+                      <Header />
+                      <main className="main-content">{children}</main>
+                      <footer className="main-footer">
+                        <div className="container">
+                          <p>
+                            <small>
+                              © 2024 Play Rough Rankings. All rights reserved.
+                            </small>
+                          </p>
+                        </div>
+                      </footer>
+                    </div>
+                  </LoadingProvider>
                 </TRPCProvider>
               </SessionProvider>
             </ViewTransitionsProvider>
-          </ActivityProvider>
-        </ThemeProvider>
+          </AppProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

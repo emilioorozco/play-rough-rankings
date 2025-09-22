@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Users,
   Trophy,
   Calendar,
   TrendingUp,
+  User as UserIcon,
+  Award as AwardIcon,
+  Settings,
+  PlusCircle,
+  Shield,
   Plus,
   Filter,
   SortAsc,
@@ -23,22 +28,56 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "@/components/dashboard/stats-card";
-import { TournamentCard } from "@/components/dashboard/tournament-card";
+import { TournamentCard } from "@/components/tournaments/tournament-card";
 import { PlayerCard } from "@/components/dashboard/player-card";
 import { LeaderboardTable } from "@/components/dashboard/leaderboard-table";
 import Link from "next/link";
-import type { Tournament } from "@/components/dashboard/tournament-card";
+import type { ApiTournament } from "@/lib/types/api";
 import type { Player } from "@/components/dashboard/player-card";
 import type { LeaderboardEntry } from "@/components/dashboard/leaderboard-table";
 
 // Mock data - replace with real data from your API
-const mockTournaments: Tournament[] = [];
+const mockTournaments: ApiTournament[] = [];
 const mockPlayers: Player[] = [];
 const mockLeaderboardData: LeaderboardEntry[] = [];
 
 export default function Home() {
   const { user } = useSession();
   const [activeTab, setActiveTab] = useState("overview");
+  const mobileScrollRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const container = mobileScrollRef.current;
+    if (!container) return;
+    const idMap: Record<string, string> = {
+      overview: "dash-tab-overview",
+      tournaments: "dash-tab-tournaments",
+      leaderboards: "dash-tab-leaderboards",
+      players: "dash-tab-players",
+    };
+    const el = container.querySelector<HTMLButtonElement>(`#${idMap[activeTab]}`);
+    if (el) {
+      const elRect = el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const currentLeft = container.scrollLeft;
+      const offsetLeft = elRect.left - containerRect.left + currentLeft;
+      const targetLeft = Math.max(0, offsetLeft - (container.clientWidth - elRect.width) / 2);
+      container.scrollTo({ left: targetLeft, behavior: "smooth" });
+    }
+  }, [activeTab]);
+
+  // Smooth vertical scroll to keep tabs visible when changing to shorter tab content
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const headerOffset = 72; // adjust if header height changes
+    const anchorTop = anchor.getBoundingClientRect().top + window.scrollY;
+    const targetTop = Math.max(0, anchorTop - headerOffset);
+    if (window.scrollY > targetTop) {
+      window.scrollTo({ top: targetTop, behavior: "smooth" });
+    }
+  }, [activeTab]);
+
 
   const healthQuery = trpc.health.useQuery();
   const gamesQuery = trpc.games.list.useQuery({ includeInactive: false });
@@ -64,7 +103,7 @@ export default function Home() {
   // Authentication-aware helper functions
   const getWelcomeMessage = () => {
     if (!user) {
-      return "Track tournaments, view leaderboards, and connect with the fighting game community";
+      return "Track tournaments, view leaderboards, and connect with the gaming community";
     }
     // For logged-in users, don't show any generic message - we have the personalized one below
     return "";
@@ -77,19 +116,19 @@ export default function Home() {
       {
         href: "/profile",
         label: "View Profile",
-        icon: "👤",
+        icon: UserIcon,
         description: "Manage your account settings",
       },
       {
         href: "/leaderboards",
         label: "Leaderboards",
-        icon: "🏆",
+        icon: AwardIcon,
         description: "See current rankings",
       },
       {
         href: "/tournaments",
         label: "Tournaments",
-        icon: "🎯",
+        icon: Trophy,
         description: "Browse tournaments",
       },
     ];
@@ -99,13 +138,13 @@ export default function Home() {
         {
           href: "/tournaments/manage",
           label: "Manage Tournaments",
-          icon: "⚙️",
+          icon: Settings,
           description: "Organize tournaments",
         },
         {
           href: "/tournaments/create",
           label: "Create Tournament",
-          icon: "➕",
+          icon: PlusCircle,
           description: "Start a new tournament",
         },
       );
@@ -116,19 +155,19 @@ export default function Home() {
         {
           href: "/admin",
           label: "Admin Panel",
-          icon: "🛠️",
+          icon: Shield,
           description: "System administration",
         },
         {
           href: "/admin/users",
           label: "Manage Users",
-          icon: "👥",
+          icon: Users,
           description: "User management",
         },
         {
           href: "/admin/stores",
           label: "Manage Stores",
-          icon: "🏪",
+          icon: Store,
           description: "Store management",
         },
       );
@@ -175,7 +214,7 @@ export default function Home() {
                 title="Active Tournaments"
                 value={
                   tournamentsData?.data?.tournaments?.filter(
-                    (t) => t.status === "ACTIVE",
+                    (t: any) => t.status === "ACTIVE",
                   ).length || 0
                 }
                 icon={Activity}
@@ -287,7 +326,7 @@ export default function Home() {
               <StatsCard
                 title="Active Tournaments"
                 value={
-                  mockTournaments.filter((t) => t.status === "active").length ||
+                  mockTournaments.filter((t: any) => t.status === "active").length ||
                   0
                 }
                 change={{ value: 8, type: "increase" }}
@@ -308,7 +347,7 @@ export default function Home() {
               <StatsCard
                 title="Upcoming Events"
                 value={
-                  mockTournaments.filter((t) => t.status === "upcoming")
+                  mockTournaments.filter((t: any) => t.status === "upcoming")
                     .length || 0
                 }
                 change={{ value: 3, type: "decrease" }}
@@ -341,7 +380,7 @@ export default function Home() {
               <Link key={action.href} href={action.href}>
                 <Card className="hover:shadow-md hover:shadow-primary/10 transition-all duration-200 hover:-translate-y-1 cursor-pointer">
                   <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                    <div className="text-2xl">{action.icon}</div>
+                    {(() => { const Icon = action.icon as any; return <Icon className="h-5 w-5" /> })()}
                     <CardTitle className="text-lg ml-3">
                       {action.label}
                     </CardTitle>
@@ -365,34 +404,32 @@ export default function Home() {
           <div className="space-y-4 mb-8">
             <h3 className="text-xl font-semibold">Upcoming Tournaments</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {upcomingTournaments.data.slice(0, 3).map((tournament) => (
+              {(upcomingTournaments.data as any[]).slice(0, 3).map((tournament) => (
                 <TournamentCard
                   key={tournament.id}
                   tournament={{
                     id: tournament.id,
                     name: tournament.name,
-                    game: tournament.game.name,
-                    status: tournament.status.toLowerCase() as
-                      | "upcoming"
-                      | "active"
-                      | "completed",
+                    description: tournament.description || "Tournament description",
                     date: tournament.date,
-                    venue: tournament.store.name,
-                    organizer: tournament.organizer.displayName || "Organizer",
-                    participants: 0, // TODO: Get actual participant count from API
-                    maxParticipants: tournament.maxPlayers || undefined,
-                    prizePool:
-                      typeof tournament.prizePool === "string"
-                        ? parseFloat(
-                            tournament.prizePool.replace(/[^0-9.]/g, ""),
-                          ) || undefined
-                        : tournament.prizePool || undefined,
-                  }}
+                    status: tournament.status,
+                    format: tournament.format || "Standard",
+                    maxPlayers: tournament.maxPlayers || 32,
+                    entryFee: tournament.entryFee || 0,
+                    prizePool: tournament.prizePool || "0",
+                    tournamentLevel: tournament.tournamentLevel || "LOCAL",
+                    game: tournament.game || { id: "1", name: "Unknown Game", shortName: "UNK" },
+                    store: tournament.store || { id: "1", name: "Unknown Store", city: "", state: "", address: "", contactEmail: "", website: "" },
+                    organizer: tournament.organizer || { id: "1", name: "Unknown Organizer" },
+                    matchCount: tournament.matchCount || 0,
+                    participants: tournament.participants || []
+                  } as any}
                 />
               ))}
             </div>
           </div>
         )}
+
 
       {/* Role-specific tools for non-player authenticated users */}
       {user && user.role !== "player" && (
@@ -428,32 +465,37 @@ export default function Home() {
         </div>
       )}
 
+      <div ref={anchorRef} />
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
         className="space-y-6"
       >
-        <div className="overflow-x-auto scrollbar-hide">
+        <div className="overflow-x-auto scrollbar-hide" ref={mobileScrollRef}>
           <TabsList className="inline-flex w-full min-w-max md:w-fit md:grid md:grid-cols-4">
             <TabsTrigger 
+              id="dash-tab-overview"
               value="overview"
               className="flex-1 md:flex-none whitespace-nowrap text-sm"
             >
               Overview
             </TabsTrigger>
             <TabsTrigger 
+              id="dash-tab-tournaments"
               value="tournaments"
               className="flex-1 md:flex-none whitespace-nowrap text-sm"
             >
               Tournaments
             </TabsTrigger>
             <TabsTrigger 
+              id="dash-tab-leaderboards"
               value="leaderboards"
               className="flex-1 md:flex-none whitespace-nowrap text-sm"
             >
               Leaderboards
             </TabsTrigger>
             <TabsTrigger 
+              id="dash-tab-players"
               value="players"
               className="flex-1 md:flex-none whitespace-nowrap text-sm"
             >
@@ -471,7 +513,7 @@ export default function Home() {
                   variant="outline"
                   className="bg-green-50 text-green-700 border-green-200"
                 >
-                  {mockTournaments.filter((t) => t.status === "active").length}{" "}
+                  {mockTournaments.filter((t: any) => t.status === "active").length}{" "}
                   Active
                 </Badge>
               </div>
@@ -486,7 +528,12 @@ export default function Home() {
                       />
                     ))
                 ) : (
-                  <TournamentCard isLoading={gamesQuery.isLoading} />
+                  <div className="col-span-full">
+                    <div className="text-center py-12">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-muted-foreground">Loading tournaments...</p>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -562,7 +609,15 @@ export default function Home() {
               ))
             ) : (
               <div className="col-span-full">
-                <TournamentCard />
+                <div className="text-center py-12">
+                  <div className="mx-auto w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-6">
+                    <Trophy className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">No tournaments yet</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                    Check back later for upcoming tournaments!
+                  </p>
+                </div>
               </div>
             )}
           </div>
