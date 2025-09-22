@@ -15,10 +15,31 @@ const customJestConfig = {
   
   testEnvironment: 'jest-environment-jsdom',
   
+  // Use the TypeScript webcompat resolver for ES modules
+  resolver: 'jest-ts-webcompat-resolver',
+  
+  // Treat .js files as ES modules
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  
+  // Module name mapping for ES modules
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
+  
   // Test file patterns
   testMatch: [
     '<rootDir>/**/__tests__/**/*.{js,jsx,ts,tsx}',
     '<rootDir>/**/*.{test,spec}.{js,jsx,ts,tsx}'
+  ],
+  
+  // Ignore test utility files
+  testPathIgnorePatterns: [
+    '<rootDir>/.next/',
+    '<rootDir>/node_modules/',
+    '<rootDir>/coverage/',
+    '<rootDir>/dist/',
+    '<rootDir>/__tests__/utils/'
   ],
   
   // Coverage configuration
@@ -46,10 +67,6 @@ const customJestConfig = {
     }
   },
   
-  // Module name mapping for absolute imports
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1',
-  },
   
   // Transform files
   transform: {
@@ -58,16 +75,9 @@ const customJestConfig = {
   
   // Transform ignore patterns - allow transformation of specific node_modules
   transformIgnorePatterns: [
-    'node_modules/(?!(nanostores|better-auth)/)',
+    'node_modules/(?!(nanostores|better-auth|@nanostores|nanostores/.*|@better-auth)/)',
   ],
   
-  // Ignore patterns
-  testPathIgnorePatterns: [
-    '<rootDir>/.next/',
-    '<rootDir>/node_modules/',
-    '<rootDir>/coverage/',
-    '<rootDir>/dist/'
-  ],
   
   // Global setup and teardown
   globalSetup: '<rootDir>/jest.global-setup.js',

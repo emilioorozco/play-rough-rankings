@@ -86,3 +86,34 @@ beforeAll(() => {
 afterAll(() => {
   console.error = originalError
 })
+
+// Polyfill for browser APIs not available in Node.js
+global.Request = global.Request || class Request {
+  constructor(url, options = {}) {
+    this.url = url
+    this.method = options.method || 'GET'
+    this.headers = new Map(Object.entries(options.headers || {}))
+    this.body = options.body
+  }
+}
+
+global.Response = global.Response || class Response {
+  constructor(body, options = {}) {
+    this.body = body
+    this.status = options.status || 200
+    this.statusText = options.statusText || 'OK'
+    this.headers = new Map(Object.entries(options.headers || {}))
+  }
+  
+  async json() {
+    return JSON.parse(this.body)
+  }
+  
+  async text() {
+    return this.body
+  }
+}
+
+global.fetch = global.fetch || jest.fn(() => 
+  Promise.resolve(new global.Response('{}', { status: 200 }))
+)
