@@ -1,7 +1,8 @@
 'use client'
 
 import { useSession } from './session-provider'
-import { LoginForm } from './login-form'
+import { LoginModal } from './login-modal'
+import { useModal } from '@/hooks/stores/use-ui-store'
 import Link from 'next/link'
 
 interface ProtectedRouteProps {
@@ -18,6 +19,7 @@ export function ProtectedRoute({
   showLoginForm = true
 }: ProtectedRouteProps) {
   const { user, isLoading } = useSession()
+  const { isOpen: isLoginModalOpen, openModal, closeModal } = useModal('login')
 
   if (isLoading) {
     return (
@@ -41,24 +43,54 @@ export function ProtectedRoute({
     
     if (showLoginForm) {
       return (
-        <div className="login-page">
-          <LoginForm />
-        </div>
+        <>
+          <div className="container">
+            <div className="access-denied">
+              <header>
+                <h2>Authentication Required</h2>
+              </header>
+              <p>You need to be signed in to access this page.</p>
+              <button
+                onClick={() => openModal({})}
+                className="btn btn-primary"
+                role="button"
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
+          <LoginModal
+            isOpen={isLoginModalOpen}
+            onClose={closeModal}
+            onSuccess={closeModal}
+          />
+        </>
       )
     }
 
     return (
-      <div className="container">
-        <div className="access-denied">
-          <header>
-            <h2>Authentication Required</h2>
-          </header>
-          <p>You need to be signed in to access this page.</p>
-          <Link href="/login" role="button">
-            Sign In
-          </Link>
+      <>
+        <div className="container">
+          <div className="access-denied">
+            <header>
+              <h2>Authentication Required</h2>
+            </header>
+            <p>You need to be signed in to access this page.</p>
+            <button
+              onClick={() => openModal({})}
+              className="btn btn-primary"
+              role="button"
+            >
+              Sign In
+            </button>
+          </div>
         </div>
-      </div>
+        <LoginModal
+          isOpen={isLoginModalOpen}
+          onClose={closeModal}
+          onSuccess={closeModal}
+        />
+      </>
     )
   }
 
@@ -85,7 +117,7 @@ export function ProtectedRoute({
             <p><strong>Your role:</strong> {user.role}</p>
           </div>
           <div style={{ marginTop: '1.5rem' }}>
-            <Link href="/dashboard" role="button" className="outline">
+            <Link href="/" role="button" className="outline">
               Go to Dashboard
             </Link>
           </div>

@@ -7,6 +7,7 @@ import {
   TournamentListQuerySchema,
   CreateTournamentSchema,
   UpdateTournamentSchema,
+  CreateStoreSchema,
 } from "@/lib/schemas";
 import type {
   GameUpdateData,
@@ -2072,6 +2073,42 @@ export const appRouter = router({
           total,
           hasMore: input.offset + input.limit < total,
         };
+      }),
+
+    // Create a new store (admin only)
+    create: adminProcedure
+      .input(CreateStoreSchema)
+      .mutation(async ({ ctx, input }) => {
+        // Check for duplicate store name in same city/state
+        const existingStore = await ctx.prisma.store.findFirst({
+          where: {
+            name: input.name,
+            city: input.city,
+            state: input.state,
+          },
+        });
+
+        if (existingStore) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'A store with this name already exists in this city and state'
+          });
+        }
+
+        const store = await ctx.prisma.store.create({
+          data: {
+            name: input.name,
+            address: input.address,
+            city: input.city,
+            state: input.state,
+            zipCode: input.zipCode,
+            contactEmail: input.contactEmail || null,
+            website: input.website || null,
+            isActive: true,
+          },
+        });
+
+        return store;
       }),
   }),
 

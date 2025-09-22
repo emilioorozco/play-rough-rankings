@@ -2,6 +2,7 @@
 
 import { useSession } from "./session-provider";
 import Link from "next/link";
+import { User as UserIcon, Award as AwardIcon, Settings, PlusCircle, Shield, Users, Store, Trophy } from "lucide-react";
 
 export function RoleDashboard() {
   const { user } = useSession();
@@ -26,19 +27,19 @@ export function RoleDashboard() {
       {
         href: "/profile",
         label: "View Profile",
-        icon: "👤",
+        icon: UserIcon,
         description: "Manage your account settings",
       },
       {
         href: "/leaderboards",
         label: "Leaderboards",
-        icon: "🏆",
+        icon: AwardIcon,
         description: "See current rankings",
       },
       {
         href: "/tournaments",
         label: "Tournaments",
-        icon: "🎯",
+        icon: Trophy,
         description: "Browse tournaments",
       },
     ];
@@ -48,13 +49,13 @@ export function RoleDashboard() {
         {
           href: "/tournaments/manage",
           label: "Manage Tournaments",
-          icon: "⚙️",
+          icon: Settings,
           description: "Organize tournaments",
         },
         {
           href: "/tournaments/create",
           label: "Create Tournament",
-          icon: "➕",
+          icon: PlusCircle,
           description: "Start a new tournament",
         },
       );
@@ -65,19 +66,19 @@ export function RoleDashboard() {
         {
           href: "/admin",
           label: "Admin Panel",
-          icon: "🛠️",
+          icon: Shield,
           description: "System administration",
         },
         {
           href: "/admin/users",
           label: "Manage Users",
-          icon: "👥",
+          icon: Users,
           description: "User management",
         },
         {
           href: "/admin/stores",
           label: "Manage Stores",
-          icon: "🏪",
+          icon: Store,
           description: "Store management",
         },
       );
@@ -178,11 +179,11 @@ export function RoleDashboard() {
             <Link
               key={action.href}
               href={
-                action.href as `/dashboard` | `/tournaments` | `/leaderboards`
+                action.href as `/` | `/tournaments` | `/leaderboards`
               }
               className="action-card"
             >
-              <div className="action-icon">{action.icon}</div>
+              <div className="action-icon">{(() => { const Icon = action.icon as any; return <Icon className="h-5 w-5" /> })()}</div>
               <div className="action-content">
                 <h4>{action.label}</h4>
                 <p>{action.description}</p>

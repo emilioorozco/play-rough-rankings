@@ -125,13 +125,10 @@ export const auth = betterAuth({
         console.log(`Email registration with firstName: "${user.firstName}", lastName: "${user.lastName}"`);
       }
       
-      return user;
-    },
-    async afterSignUp({ user, account }: { user: any; account: any }) {
-      console.log("afterSignUp callback triggered for user:", user.id, "account:", account?.providerId);
-      
-      // Create Player record for new user
+      // Create Player and UserPreferences records immediately during signup
+      // This ensures they exist regardless of email verification status
       try {
+        // Create Player record for new user
         await prisma.player.create({
           data: {
             userId: user.id,
@@ -142,8 +139,8 @@ export const auth = betterAuth({
         console.error("Error creating Player record for new user:", error);
       }
       
-      // Create UserPreferences record for new user
       try {
+        // Create UserPreferences record for new user
         await prisma.userPreferences.create({
           data: {
             id: user.id, // Use user ID as the preferences ID for 1:1 relationship
@@ -156,6 +153,43 @@ export const auth = betterAuth({
         console.log(`Created UserPreferences record for new user ${user.id}`);
       } catch (error) {
         console.error("Error creating UserPreferences record for new user:", error);
+      }
+      
+      return user;
+    },
+    async afterSignUp({ user, account }: { user: any; account: any }) {
+      console.log("afterSignUp callback triggered for user:", user.id, "account:", account?.providerId);
+      
+      // Ensure Player record exists (may already exist from beforeSignUp)
+      try {
+        await prisma.player.upsert({
+          where: { userId: user.id },
+          update: {}, // No updates needed if player already exists
+          create: {
+            userId: user.id,
+          },
+        });
+        console.log(`Ensured Player record exists for user ${user.id}`);
+      } catch (error) {
+        console.error("Error ensuring Player record exists:", error);
+      }
+      
+      // Ensure UserPreferences record exists (may already exist from beforeSignUp)
+      try {
+        await prisma.userPreferences.upsert({
+          where: { userId: user.id },
+          update: {}, // No updates needed if preferences already exist
+          create: {
+            id: user.id, // Use user ID as the preferences ID for 1:1 relationship
+            userId: user.id,
+            nameDisplayPreference: user.nameDisplayPreference || 'DISPLAY_NAME',
+            optInCommunications: user.optInCommunications || false,
+            subscribeToUpdates: user.subscribeToUpdates || false,
+          },
+        });
+        console.log(`Ensured UserPreferences record exists for user ${user.id}`);
+      } catch (error) {
+        console.error("Error ensuring UserPreferences record exists:", error);
       }
       
       return user;

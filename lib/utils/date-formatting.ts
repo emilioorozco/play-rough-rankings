@@ -2,7 +2,30 @@
  * Date formatting utilities for tournament display
  */
 
+/**
+ * Validates if a date is valid
+ */
+export function isValidDate(date: Date): boolean {
+  return date instanceof Date && !isNaN(date.getTime());
+}
+
+/**
+ * Creates a safe date from various input types
+ */
+export function createSafeDate(dateInput: string | Date | null | undefined): Date {
+  if (!dateInput) {
+    return new Date(); // Return current date as fallback
+  }
+  
+  const date = new Date(dateInput);
+  return isValidDate(date) ? date : new Date(); // Return current date if invalid
+}
+
 export function formatDate(date: Date): string {
+  if (!isValidDate(date)) {
+    return 'Date TBD';
+  }
+  
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     year: 'numeric',
@@ -12,6 +35,10 @@ export function formatDate(date: Date): string {
 }
 
 export function formatDateTime(date: Date): string {
+  if (!isValidDate(date)) {
+    return 'Time TBD';
+  }
+  
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -20,6 +47,10 @@ export function formatDateTime(date: Date): string {
 }
 
 export function formatDateShort(date: Date): string {
+  if (!isValidDate(date)) {
+    return 'Date TBD';
+  }
+  
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -28,6 +59,10 @@ export function formatDateShort(date: Date): string {
 }
 
 export function formatTimeShort(date: Date): string {
+  if (!isValidDate(date)) {
+    return 'Time TBD';
+  }
+  
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -36,17 +71,29 @@ export function formatTimeShort(date: Date): string {
 }
 
 export function isToday(date: Date): boolean {
+  if (!isValidDate(date)) {
+    return false;
+  }
+  
   const today = new Date()
   return date.toDateString() === today.toDateString()
 }
 
 export function isTomorrow(date: Date): boolean {
+  if (!isValidDate(date)) {
+    return false;
+  }
+  
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   return date.toDateString() === tomorrow.toDateString()
 }
 
 export function isThisWeek(date: Date): boolean {
+  if (!isValidDate(date)) {
+    return false;
+  }
+  
   const today = new Date()
   const weekFromNow = new Date()
   weekFromNow.setDate(today.getDate() + 7)
@@ -55,6 +102,10 @@ export function isThisWeek(date: Date): boolean {
 }
 
 export function getRelativeTimeString(date: Date): string {
+  if (!isValidDate(date)) {
+    return 'Date TBD';
+  }
+  
   const now = new Date()
   const diffInMs = date.getTime() - now.getTime()
   const diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24))

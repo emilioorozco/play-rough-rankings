@@ -56,7 +56,10 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
     if (!authLoading) {
       // Only invalidate queries when user actually changes (login/logout)
       // Not on every auth state update
-      queryClient.invalidateQueries()
+      // Use a more gentle invalidation approach
+      queryClient.invalidateQueries({
+        refetchType: 'none', // Don't immediately refetch, just mark as stale
+      })
     }
   }, [user?.id, authLoading, queryClient]) // Only depend on user.id, not the entire user object
 

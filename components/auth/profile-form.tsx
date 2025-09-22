@@ -1,47 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import React, { useEffect } from "react";
 import { useSession } from "./session-provider";
+import { useFormState } from "@/hooks/useFormState";
+import { profileUpdateSchema, type ProfileUpdateFormData } from "@/lib/validation/schemas";
+import { ModalForm, FormInput, FormSelect, FormActions, FormStatus } from "../ui/form-components";
+import { Modal } from "../ui/modal";
+import { useTRPCMutationWithLoading } from "@/hooks/useTRPCWithLoading";
+import { trpc } from "@/lib/trpc/client";
 
 interface ProfileFormProps {
+  isOpen: boolean;
+  onClose: () => void;
   onSave?: () => void;
 }
 
-export function ProfileForm({ onSave }: ProfileFormProps) {
+export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
   const { user, updateSession } = useSession();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  // Form state
-  const [displayName, setDisplayName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [profileVisibility, setProfileVisibility] = useState<
-    "PUBLIC" | "PRIVATE"
-  >("PUBLIC");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      // TODO: Implement profile update API call
-      // This would typically call a tRPC mutation to update the user profile
-
-      // For now, simulate the API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      setSuccess("Profile updated successfully!");
-      await updateSession();
-      onSave?.();
-    } catch (error: unknown) {
-      setError((error as Error).message || "Failed to update profile");
-    } finally {
-      setIsLoading(false);
+  // Profile update mutation with enhanced error handling
+  const updateProfile = useTRPCMutationWithLoading(
+    'update-profile',
+    () => trpc.user.updateProfile.useMutation(),
+    {
+      onSuccess: () => {
+        updateSession();
+        onSave?.();
+        onClose();
+      },
+      onError: (error) => {
+        console.error(`Failed to update profile: ${error instanceof Error ? error.message : String(error)}`);
+      },
     }
-  };
+  );
+
+  // Initialize form state
+  const formState = useFormState<ProfileUpdateFormData>({
+    initialData: {
+      name: '',
+      email: '',
+      firstName: '',
+      lastName: '',
+      location: '',
+      phone: '',
+      bio: '',
+    },
+    validationSchema: profileUpdateSchema,
+    onSubmit: async (data) => {
+      await updateProfile.mutateAsync(data);
+    },
+    onSuccess: () => {
+      // Success is handled by the mutation's onSuccess callback
+    },
+    onError: (error) => {
+      console.error("Form submission error:", error);
+    },
+    showLoadingBar: true,
+  });
+
+  // Update form data when user data is available
+  useEffect(() => {
+    if (user) {
+      formState.setFields({
+        name: user.name || '',
+        email: user.email || '',
+        firstName: (user as any).firstName || '',
+        lastName: (user as any).lastName || '',
+        location: (user as any).location || '',
+        phone: (user as any).phone || '',
+        bio: (user as any).bio || '',
+      });
+    }
+  }, [user, formState.setFields]);
 
   if (!user) {
     return (
@@ -52,112 +82,101 @@ export function ProfileForm({ onSave }: ProfileFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <header className="mb-3">
-        <h2>Profile Settings</h2>
-        <p>Manage your account information and privacy settings</p>
-      </header>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      closeOnOverlayClick={!formState.isSubmitting && !updateProfile.isLoading}
+    >
+      <ModalForm
+        title="Profile Settings"
+        description="Update your profile information and preferences"
+        onSubmit={formState.handleSubmit}
+      >
+      <FormStatus 
+        success={updateProfile.isSuccess ? "Profile updated successfully!" : undefined}
+        error={updateProfile.error?.message}
+      />
 
-      {error && (
-        <div className="p-3 mb-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
-          {error}
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormInput
+          label="First Name"
+          value={formState.data.firstName}
+          onChange={(e) => formState.setField('firstName', e.target.value)}
+          error={formState.errors.firstName}
+          placeholder="Enter your first name"
+        />
 
-      {success && (
-        <div className="p-3 mb-4 bg-accent/10 border border-accent/20 rounded-lg text-accent-foreground">
-          {success}
-        </div>
-      )}
-
-      <div className="grid">
-        <label>
-          Display Name
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Enter your display name"
-            disabled={isLoading}
-          />
-          <small>
-            This name will be shown on leaderboards and tournament results
-          </small>
-        </label>
-
-        <label>
-          Email Address
-          <input type="email" value={email} disabled style={{ opacity: 0.6 }} />
-          <small>
-            Email cannot be changed here. Contact support if needed.
-          </small>
-        </label>
+        <FormInput
+          label="Last Name"
+          value={formState.data.lastName}
+          onChange={(e) => formState.setField('lastName', e.target.value)}
+          error={formState.errors.lastName}
+          placeholder="Enter your last name"
+        />
       </div>
 
-      <label>
-        Profile Visibility
-        <select
-          value={profileVisibility}
-          onChange={(e) =>
-            setProfileVisibility(e.target.value as "PUBLIC" | "PRIVATE")
-          }
-          disabled={isLoading}
-        >
-          <option value="PUBLIC">
-            Public - Anyone can view your statistics
-          </option>
-          <option value="PRIVATE">
-            Private - Only you can view your statistics
-          </option>
-        </select>
-        <small>
-          {profileVisibility === "PUBLIC"
-            ? "Your tournament results and statistics will be visible to other players"
-            : "Your statistics will be hidden from other players, but tournament results may still be public"}
-        </small>
-      </label>
+      <FormInput
+        label="Display Name"
+        value={formState.data.name}
+        onChange={(e) => formState.setField('name', e.target.value)}
+        error={formState.errors.name}
+        placeholder="Enter your display name"
+        description="This is how your name will appear to other users"
+      />
 
-      <div className="p-4 mb-4 bg-secondary/10 border border-secondary/20 rounded-lg">
-        <h4>Account Information</h4>
-        <p>
-          <strong>Role:</strong> {user.role}
-        </p>
-        <p>
-          <strong>Member since:</strong>{" "}
-          {user.createdAt
-            ? new Date(user.createdAt).toLocaleDateString()
-            : "Unknown"}
-        </p>
-        {user.role !== "player" && (
-          <small>
-            {user.role === "organizer" &&
-              "You have organizer privileges to create and manage tournaments."}
-            {user.role === "admin" &&
-              "You have administrator privileges with full system access."}
-          </small>
-        )}
-      </div>
+      <FormInput
+        label="Email"
+        type="email"
+        value={formState.data.email}
+        onChange={(e) => formState.setField('email', e.target.value)}
+        error={formState.errors.email}
+        placeholder="Enter your email"
+        description="We'll use this to send you important updates"
+      />
 
-      <div className="form-actions">
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? "Saving..." : "Save Changes"}
-        </button>
+      <FormInput
+        label="Location"
+        value={formState.data.location}
+        onChange={(e) => formState.setField('location', e.target.value)}
+        error={formState.errors.location}
+        placeholder="City, State/Country"
+        description="Help other players find tournaments in your area"
+      />
 
-        <button
-          type="button"
-          className="outline"
-          onClick={() => {
-            setDisplayName(user?.name || "");
-            setEmail(user?.email || "");
-            setProfileVisibility("PUBLIC");
-            setError(null);
-            setSuccess(null);
-          }}
-          disabled={isLoading}
-        >
-          Reset
-        </button>
-      </div>
-    </form>
+      <FormInput
+        label="Phone Number"
+        type="tel"
+        value={formState.data.phone}
+        onChange={(e) => formState.setField('phone', e.target.value)}
+        error={formState.errors.phone}
+        placeholder="Enter your phone number"
+        description="Optional - for tournament organizers to contact you"
+      />
+
+      <FormInput
+        label="Bio"
+        value={formState.data.bio}
+        onChange={(e) => formState.setField('bio', e.target.value)}
+        error={formState.errors.bio}
+        placeholder="Tell us about yourself..."
+        description="A brief description about yourself and your gaming interests"
+      />
+
+      <FormActions
+        onSubmit={formState.submit}
+        onReset={formState.reset}
+        onCancel={onClose}
+        isSubmitting={formState.isSubmitting || updateProfile.isLoading}
+        isValid={formState.isValid}
+        isDirty={formState.isDirty}
+        submitLabel="Save Changes"
+        resetLabel="Reset Changes"
+        cancelLabel="Cancel"
+        showReset={true}
+        showCancel={true}
+      />
+      </ModalForm>
+    </Modal>
   );
 }
