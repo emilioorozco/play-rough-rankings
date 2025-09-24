@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
@@ -8,6 +7,7 @@ import { Header } from "@/components/header";
 import { AppProvider } from "@/components/app-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { LoadingProvider } from "@/components/loading-provider";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 // Font configurations
 const inter = Inter({
@@ -73,6 +73,7 @@ export default function RootLayout({
             </SessionProvider>
           </AppProvider>
         </ErrorBoundary>
+        <SpeedInsights />
       </body>
     </html>
   );
