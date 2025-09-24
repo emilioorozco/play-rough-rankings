@@ -42,7 +42,7 @@ export const usePreferenceSelectors = {
       
       const result: Partial<typeof preferences> = {}
       categoryKeys.forEach(key => {
-        result[key] = preferences[key]
+        (result as any)[key] = preferences[key]
       })
       return result
     }, [metadata, preferences, category])
@@ -74,7 +74,7 @@ export const useCategorySelectors = {
       
       const result: Partial<typeof preferences> = {}
       categoryKeys.forEach(key => {
-        result[key] = preferences[key]
+        (result as any)[key] = preferences[key]
       })
       return result
     }, [metadata, preferences])
@@ -92,7 +92,7 @@ export const useCategorySelectors = {
       
       const result: Partial<typeof preferences> = {}
       categoryKeys.forEach(key => {
-        result[key] = preferences[key]
+        (result as any)[key] = preferences[key]
       })
       return result
     }, [metadata, preferences])
@@ -110,7 +110,7 @@ export const useCategorySelectors = {
       
       const result: Partial<typeof preferences> = {}
       categoryKeys.forEach(key => {
-        result[key] = preferences[key]
+        (result as any)[key] = preferences[key]
       })
       return result
     }, [metadata, preferences])
@@ -128,7 +128,7 @@ export const useCategorySelectors = {
       
       const result: Partial<typeof preferences> = {}
       categoryKeys.forEach(key => {
-        result[key] = preferences[key]
+        (result as any)[key] = preferences[key]
       })
       return result
     }, [metadata, preferences])
@@ -146,7 +146,7 @@ export const useCategorySelectors = {
       
       const result: Partial<typeof preferences> = {}
       categoryKeys.forEach(key => {
-        result[key] = preferences[key]
+        (result as any)[key] = preferences[key]
       })
       return result
     }, [metadata, preferences])
@@ -164,7 +164,7 @@ export const useCategorySelectors = {
       
       const result: Partial<typeof preferences> = {}
       categoryKeys.forEach(key => {
-        result[key] = preferences[key]
+        (result as any)[key] = preferences[key]
       })
       return result
     }, [metadata, preferences])
@@ -182,7 +182,7 @@ export const useCategorySelectors = {
       
       const result: Partial<typeof preferences> = {}
       categoryKeys.forEach(key => {
-        result[key] = preferences[key]
+        (result as any)[key] = preferences[key]
       })
       return result
     }, [metadata, preferences])
@@ -290,7 +290,7 @@ export const useUserPreferencesStoreSelectors = {
 
     return useMemo(() => ({
       preferences,
-      updatePreference: (key: string, value: any) => updatePreference(key, value),
+      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
     }), [preferences, updatePreference])
   },
 
@@ -301,7 +301,7 @@ export const useUserPreferencesStoreSelectors = {
 
     return useMemo(() => ({
       preferences,
-      updatePreference: (key: string, value: any) => updatePreference(key, value),
+      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
     }), [preferences, updatePreference])
   },
 
@@ -312,7 +312,7 @@ export const useUserPreferencesStoreSelectors = {
 
     return useMemo(() => ({
       preferences,
-      updatePreference: (key: string, value: any) => updatePreference(key, value),
+      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
     }), [preferences, updatePreference])
   },
 
@@ -323,7 +323,7 @@ export const useUserPreferencesStoreSelectors = {
 
     return useMemo(() => ({
       preferences,
-      updatePreference: (key: string, value: any) => updatePreference(key, value),
+      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
     }), [preferences, updatePreference])
   },
 
@@ -334,7 +334,7 @@ export const useUserPreferencesStoreSelectors = {
 
     return useMemo(() => ({
       preferences,
-      updatePreference: (key: string, value: any) => updatePreference(key, value),
+      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
     }), [preferences, updatePreference])
   },
 
@@ -345,7 +345,7 @@ export const useUserPreferencesStoreSelectors = {
 
     return useMemo(() => ({
       preferences,
-      updatePreference: (key: string, value: any) => updatePreference(key, value),
+      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
     }), [preferences, updatePreference])
   },
 }

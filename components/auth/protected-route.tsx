@@ -19,7 +19,7 @@ export function ProtectedRoute({
   showLoginForm = true
 }: ProtectedRouteProps) {
   const { user, isLoading } = useSession()
-  const { isOpen: isLoginModalOpen, openModal, closeModal } = useModal('login')
+  const { isOpen: isLoginModalOpen, open, close } = useModal('login')
 
   if (isLoading) {
     return (
@@ -51,7 +51,7 @@ export function ProtectedRoute({
               </header>
               <p>You need to be signed in to access this page.</p>
               <button
-                onClick={() => openModal({})}
+                onClick={() => open({})}
                 className="btn btn-primary"
                 role="button"
               >
@@ -61,8 +61,8 @@ export function ProtectedRoute({
           </div>
           <LoginModal
             isOpen={isLoginModalOpen}
-            onClose={closeModal}
-            onSuccess={closeModal}
+            onClose={close}
+            onSuccess={close}
           />
         </>
       )
@@ -77,7 +77,7 @@ export function ProtectedRoute({
             </header>
             <p>You need to be signed in to access this page.</p>
             <button
-              onClick={() => openModal({})}
+              onClick={() => open({})}
               className="btn btn-primary"
               role="button"
             >
@@ -87,8 +87,8 @@ export function ProtectedRoute({
         </div>
         <LoginModal
           isOpen={isLoginModalOpen}
-          onClose={closeModal}
-          onSuccess={closeModal}
+          onClose={close}
+          onSuccess={close}
         />
       </>
     )

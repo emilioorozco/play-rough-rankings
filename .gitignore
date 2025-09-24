@@ -22,3 +22,4 @@ package-lock.json
 # Temporarily ignore scripts and docs
 scripts/
 docs/
+.vercel

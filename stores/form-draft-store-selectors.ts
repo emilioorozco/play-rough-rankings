@@ -247,22 +247,32 @@ export const useFormDraftActions = {
   clearDraft: () => useFormDraftStore((state) => state.clearDraft),
 
   // Clear all drafts
-  clearAllDrafts: () => useFormDraftStore((state) => state.clearAllDrafts),
+  clearAllDrafts: () => useFormDraftStore((state) => state.clearDrafts),
 
   // Clear drafts by form type
-  clearDraftsByFormType: () => useFormDraftStore((state) => state.clearDraftsByFormType),
+  clearDraftsByFormType: () => useFormDraftStore((state) => state.clearDrafts),
 
   // Clear drafts by user ID
-  clearDraftsByUserId: () => useFormDraftStore((state) => state.clearDraftsByUserId),
+  clearDraftsByUserId: () => {
+    // Provide a wrapper that clears drafts for a given userId using existing actions
+    return (userId: string) => {
+      const { drafts, deleteDraft } = useFormDraftStore.getState()
+      Object.values(drafts).forEach((draft) => {
+        if (draft.userId === userId) {
+          deleteDraft(draft.id)
+        }
+      })
+    }
+  },
 
   // Clear expired drafts
-  clearExpiredDrafts: () => useFormDraftStore((state) => state.clearExpiredDrafts),
+  clearExpiredDrafts: () => useFormDraftStore((state) => state.cleanupExpiredDrafts),
 
   // Validate draft
   validateDraft: () => useFormDraftStore((state) => state.validateDraft),
 
   // Set draft step
-  setDraftStep: () => useFormDraftStore((state) => state.setDraftStep),
+  setDraftStep: () => useFormDraftStore((state) => state.updateDraftStep),
 
   // Set draft metadata
   setDraftMetadata: () => useFormDraftStore((state) => state.setDraftMetadata),

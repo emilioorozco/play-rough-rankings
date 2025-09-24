@@ -15,6 +15,7 @@ import type {
   TournamentWhereClause,
 } from "@/lib/types/backend";
 import { getActiveGamesAsJSON, getGameOrThrow } from "@/lib/games";
+import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPublicSelectWithPrefs } from "@/lib/utils/user";
 
 // Enhanced context type for tRPC
 export type TRPCContext = {
@@ -406,18 +407,7 @@ export const appRouter = router({
               player: {
                 select: {
                   id: true,
-                  user: {
-                    select: {
-                      name: true,
-                      firstName: true,
-                      lastName: true,
-                      userPreferences: {
-                        select: {
-                          profileVisibility: true,
-                        },
-                      },
-                    },
-                  },
+                  user: { select: userPublicSelectWithPrefs },
                 },
               },
             },
@@ -435,10 +425,7 @@ export const appRouter = router({
             completedTournaments,
             topPlayers: topPlayers.map((stat) => ({
               playerId: stat.playerId,
-              displayName:
-                stat.player.user.userPreferences?.profileVisibility === "PUBLIC"
-                  ? (stat.player.user.firstName || stat.player.user.name || "Unknown Player")
-                  : "Private Player",
+              displayName: getPublicDisplayName(stat.player.user),
               rating: stat.currentRating,
               seasonalStats: stat.seasonalStats,
             })),
@@ -478,20 +465,7 @@ export const appRouter = router({
               },
               orderBy: { currentRating: "desc" },
             },
-            user: {
-              select: {
-                email: true,
-                name: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-                userPreferences: {
-                  select: {
-                    profileVisibility: true,
-                  },
-                },
-              },
-            },
+            user: { select: { email: true, ...userPublicSelectWithPrefs } },
           },
         });
 
@@ -581,6 +555,9 @@ export const appRouter = router({
         // Get player and check privacy
         const player = await ctx.prisma.player.findUnique({
           where: { id: targetPlayerId },
+          include: {
+            user: { select: userPublicSelectWithPrefs },
+          },
         });
 
         if (!player) {
@@ -611,8 +588,7 @@ export const appRouter = router({
             game: true,
             player: {
               select: {
-                displayName: true,
-                profileVisibility: true,
+                user: { select: userPublicSelectWithPrefs },
               },
             },
           },
@@ -690,12 +666,7 @@ export const appRouter = router({
         const players = await ctx.prisma.player.findMany({
           where: whereClause,
           include: {
-            user: {
-              select: {
-                name: true,
-                role: true,
-              },
-            },
+            user: { select: userPublicSelectMinimal },
             gameStats: input.gameId
               ? {
                   where: { gameId: input.gameId },
@@ -719,7 +690,7 @@ export const appRouter = router({
 
         return players.map((player) => ({
           id: player.id,
-          displayName: player.user.firstName || player.user.name || "Unknown Player",
+          displayName: getDisplayName(player.user),
           userName: player.user.name,
           role: player.user.role,
           gameStats: player.gameStats,
@@ -793,10 +764,10 @@ export const appRouter = router({
         if (input.startDate || input.endDate) {
           where.date = {} as DateFilterClause;
           if (input.startDate) {
-            where.date.gte = input.startDate;
+            (where.date as DateFilterClause).gte = input.startDate;
           }
           if (input.endDate) {
-            where.date.lte = input.endDate;
+            (where.date as DateFilterClause).lte = input.endDate;
           }
         }
 
@@ -820,6 +791,9 @@ export const appRouter = router({
                   name: true,
                   city: true,
                   state: true,
+                  address: true,
+                  contactEmail: true,
+                  website: true,
                 },
               },
               organizer: {
@@ -832,6 +806,7 @@ export const appRouter = router({
               _count: {
                 select: {
                   matches: true,
+                  entries: true,
                 },
               },
             },
@@ -843,6 +818,7 @@ export const appRouter = router({
           tournaments: tournaments.map((tournament) => ({
             ...tournament,
             matchCount: tournament._count.matches,
+            entryCount: tournament._count.entries,
           })),
           total,
           hasMore: input.offset + input.limit < total,
@@ -1039,7 +1015,7 @@ export const appRouter = router({
           );
 
           processedParticipants = await Promise.all(
-            tournament.entries.map(async (entry) => {
+            tournament.entries.map(async (entry: any) => {
               const rating = ratingMap.get(entry.playerId) || 1200;
               const participantCalculations = calculateParticipantData(
                 entry.playerId,
@@ -1050,12 +1026,9 @@ export const appRouter = router({
               );
 
               return {
-                id: entry.player.id,
-                displayName:
-                  entry.player.user.userPreferences?.profileVisibility === "PUBLIC"
-                    ? (entry.player.user.firstName || entry.player.user.name || "Unknown Player")
-                    : "Private Player",
-                isPublic: entry.player.user.userPreferences?.profileVisibility === "PUBLIC",
+                id: (entry as any).player?.id,
+                displayName: getPublicDisplayName((entry as any).player?.user),
+                isPublic: (entry as any).player?.user?.userPreferences?.profileVisibility === "PUBLIC",
                 seed: entry.seed || undefined,
                 wins: participantCalculations.wins,
                 losses: participantCalculations.losses,
@@ -1063,8 +1036,8 @@ export const appRouter = router({
                 tier: participantCalculations.tier,
                 rating,
                 registrationDate: entry.registrationDate,
-                deck: entry.deck && entry.player.user.userPreferences?.profileVisibility === "PUBLIC"
-                  ? entry.deck
+                deck: (entry as any).deck && (entry as any).player?.user?.userPreferences?.profileVisibility === "PUBLIC"
+                  ? (entry as any).deck
                   : null,
               };
             })
@@ -1081,34 +1054,23 @@ export const appRouter = router({
             }>
           | undefined = undefined;
         if (input.includeMatches && tournament.matches) {
-          processedMatches = tournament.matches.map(
-            (match: Record<string, unknown>) => ({
-              ...match,
-              player1: {
-                ...match.player1,
-                displayName:
-                  match.player1?.user?.userPreferences?.profileVisibility === "PUBLIC"
-                    ? (match.player1?.user?.firstName || match.player1?.user?.name || "Unknown Player")
-                    : "Private Player",
-              },
-              player2: {
-                ...match.player2,
-                displayName:
-                  match.player2?.user?.userPreferences?.profileVisibility === "PUBLIC"
-                    ? (match.player2?.user?.firstName || match.player2?.user?.name || "Unknown Player")
-                    : "Private Player",
-              },
-              winner: match.winner
-                ? {
-                    ...match.winner,
-                    displayName:
-                      match.winner?.user?.userPreferences?.profileVisibility === "PUBLIC"
-                        ? (match.winner?.user?.firstName || match.winner?.user?.name || "Unknown Player")
-                        : "Private Player",
-                  }
-                : null,
-            }),
-          );
+          processedMatches = tournament.matches.map((match: any) => ({
+            ...match,
+            player1: {
+              ...match.player1,
+              displayName: getPublicDisplayName(match.player1?.user),
+            },
+            player2: {
+              ...match.player2,
+              displayName: getPublicDisplayName(match.player2?.user),
+            },
+            winner: match.winner
+              ? {
+                  ...match.winner,
+                  displayName: getPublicDisplayName(match.winner?.user),
+                }
+              : null,
+          }));
         }
 
         return {

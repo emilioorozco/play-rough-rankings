@@ -1,162 +1,211 @@
-"use client";
+'use client'
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { trpc } from "@/lib/trpc/client";
-import { useSession } from "./session-provider";
-import { useFormDraft } from "@/hooks/useFormDraft";
-import { useAsyncOperationEnhanced } from "@/hooks/stores/use-loading-store-enhanced";
+import React, { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useFormDraft } from '@/hooks/useFormDraft'
+import { profileCompletionSchema } from '@/lib/validation/schemas'
+import type { ProfileCompletionFormData } from '@/lib/validation/schemas'
+import { 
+  EnhancedForm, 
+  EnhancedFormActions, 
+  EnhancedFormStatus,
+  EnhancedFormField 
+} from '@/components/forms/enhanced-form-components'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
+import { trpc } from '@/lib/trpc/client'
+import { useSession } from './session-provider'
+import { useUserPreferencesActions } from '@/stores/user-preferences-store-selectors'
 
 interface ProfileCompletionProps {
-  className?: string;
+  className?: string
 }
 
 export function ProfileCompletion({ className }: ProfileCompletionProps) {
-  const { user, refetch, signOut } = useSession();
-  const router = useRouter();
-  
-  // Use form draft store for auto-save functionality
-  const { draft, save, update } = useFormDraft('profile-completion');
-  const { execute, isLoading, error } = useAsyncOperationEnhanced('profile-completion');
-  
-  // Initialize form data from draft or user data
-  const formData = draft?.data || { 
-    firstName: user?.firstName || "", 
-    lastName: user?.lastName || "" 
-  };
-  const firstName = formData.firstName;
-  const lastName = formData.lastName;
-  
-  // Auto-save form data
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (firstName || lastName) {
-        save({ firstName, lastName }, 'profile-completion');
-      }
-    }, 1000);
-    
-    return () => clearTimeout(timeoutId);
-  }, [firstName, lastName, save]);
+  const { user, refetch } = useSession()
+  const router = useRouter()
+
+  // Load available games
+  const { data: games } = trpc.games.list.useQuery({ includeInactive: false })
 
   // Update user profile mutation
-  const updateProfile = trpc.user.updateProfile.useMutation({
+  const updateProfile = useTRPCMutationWithLoading(
+    'update-profile-completion',
+    () => trpc.user.updateProfile.useMutation(),
+    {
+      onSuccess: () => {
+        refetch()
+        router.push("/")
+      },
+      onError: (error) => {
+        console.error(`Failed to complete profile: ${error instanceof Error ? error.message : String(error)}`)
+      },
+    }
+  )
+
+  // Use user preferences store for form behavior
+  const updatePreference = useUserPreferencesActions.updatePreference()
+
+  // Enhanced form state with auto-save and draft persistence
+  const formState = useFormDraft<ProfileCompletionFormData>({
+    initialData: {
+      firstName: '',
+      lastName: '',
+      location: '',
+      favoriteGame: '',
+    },
+    validationSchema: profileCompletionSchema,
+    onSubmit: async (data) => {
+      await updateProfile.mutateAsync(data)
+    },
     onSuccess: () => {
-      refetch();
-      router.push("/");
+      // Success is handled by the mutation's onSuccess callback
     },
     onError: (error) => {
-      console.error("Profile update error:", error);
+      console.error("Form submission error:", error)
     },
-  });
+    showLoadingBar: true,
+    // Enhanced features
+    formId: `profile-completion-${user?.id || 'anonymous'}`,
+    enableAutoSave: true,
+    autoSaveDelay: 2000, // 2 seconds for profile completion
+    enableDraftPersistence: true,
+    enableUserPreferences: true,
+    onAutoSave: (data) => {
+      console.log('Auto-saved profile completion draft:', data)
+    },
+    onDraftRestore: (data) => {
+      console.log('Restored profile completion draft:', data)
+    },
+  })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!firstName.trim()) {
-      throw new Error("First name is required");
+  // Update form data when user data is available
+  useEffect(() => {
+    if (user) {
+      formState.setFields({
+        firstName: (user as any).firstName || '',
+        lastName: (user as any).lastName || '',
+        location: (user as any).location || '',
+        favoriteGame: (user as any).favoriteGame || '',
+      })
     }
-
-    if (!lastName.trim()) {
-      throw new Error("Last name is required");
-    }
-
-    await execute(async () => {
-      // Date of birth validation removed
-      console.log("Sending profile data:", { firstName, lastName });
-      await updateProfile.mutateAsync({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-      });
-      // Add a 1 second delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    });
-  };
+  }, [user, formState.setFields])
 
   if (!user) {
     return (
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle>Access Denied</CardTitle>
-          <CardDescription>Please sign in to complete your profile.</CardDescription>
-        </CardHeader>
-      </Card>
-    );
+      <div className="text-center">
+        <p>Please sign in to complete your profile.</p>
+      </div>
+    )
   }
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle>Complete Your Profile</CardTitle>
-        <CardDescription>
-          Welcome, {user.name || user.email}! To provide the best experience and ensure privacy protection, 
-          we need a few more details from you.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First Name</Label>
-              <Input
-                id="firstName"
-                type="text"
-                value={firstName}
-                onChange={(e) => save({ ...formData, firstName: e.target.value }, 'profile-completion')}
-                required
-                className="w-full"
-                placeholder="Enter your first name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
-              <Input
-                id="lastName"
-                type="text"
-                value={lastName}
-                onChange={(e) => save({ ...formData, lastName: e.target.value }, 'profile-completion')}
-                required
-                className="w-full"
-                placeholder="Enter your last name"
-              />
-            </div>
-          </div>
+    <div className={`max-w-2xl mx-auto ${className}`}>
+      <EnhancedForm
+        title="Complete Your Profile"
+        description="Help us get to know you better by completing your profile information"
+        onSubmit={formState.handleSubmit}
+        showAutoSaveStatus={true}
+        isAutoSaving={formState.isAutoSaving}
+        lastSaved={formState.lastSaved}
+        hasUnsavedChanges={formState.hasUnsavedChanges}
+        onSaveDraft={formState.saveDraftManually}
+        onClearDraft={formState.clearDraftManually}
+        hasDraft={formState.hasDraft}
+      >
+        <EnhancedFormStatus 
+          success={updateProfile.isSuccess ? "Profile completed successfully!" : undefined}
+          error={updateProfile.error?.message}
+        />
 
-          {/* Date of birth input removed */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <EnhancedFormField
+            label="First Name"
+            required
+            error={formState.errors.firstName}
+            hasUnsavedChanges={formState.hasUnsavedChanges}
+          >
+            <Input
+              value={formState.data.firstName}
+              onChange={(e) => formState.setField('firstName', e.target.value)}
+              placeholder="Enter your first name"
+              className={formState.errors.firstName ? 'border-destructive' : ''}
+            />
+          </EnhancedFormField>
 
-          {error && (
-            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
-              {error instanceof Error ? error.message : String(error)}
-            </div>
-          )}
+          <EnhancedFormField
+            label="Last Name"
+            required
+            error={formState.errors.lastName}
+            hasUnsavedChanges={formState.hasUnsavedChanges}
+          >
+            <Input
+              value={formState.data.lastName}
+              onChange={(e) => formState.setField('lastName', e.target.value)}
+              placeholder="Enter your last name"
+              className={formState.errors.lastName ? 'border-destructive' : ''}
+            />
+          </EnhancedFormField>
+        </div>
 
-          {/* Draft indicator */}
-          {draft && (
-            <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
-              💾 Draft saved {draft.lastSaved ? new Date(draft.lastSaved).toLocaleTimeString() : 'just now'}
-            </div>
-          )}
+        <EnhancedFormField
+          label="Location"
+          error={formState.errors.location}
+          hasUnsavedChanges={formState.hasUnsavedChanges}
+        >
+          <Input
+            value={formState.data.location}
+            onChange={(e) => formState.setField('location', e.target.value)}
+            placeholder="City, State/Country"
+            className={formState.errors.location ? 'border-destructive' : ''}
+          />
+          <p className="text-sm text-muted-foreground mt-1">
+            Help other players find tournaments in your area
+          </p>
+        </EnhancedFormField>
 
-          <div className="flex justify-end space-x-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={async () => {
-                await signOut();
-                router.push("/");
-              }}
-            >
-              Sign Out
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Completing..." : "Complete Profile"}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
-  );
+        <EnhancedFormField
+          label="Favorite Game"
+          required
+          error={formState.errors.favoriteGame}
+          hasUnsavedChanges={formState.hasUnsavedChanges}
+        >
+          <Select
+            value={formState.data.favoriteGame}
+            onValueChange={(value) => formState.setField('favoriteGame', value)}
+          >
+            <SelectTrigger className={formState.errors.favoriteGame ? 'border-destructive' : ''}>
+              <SelectValue placeholder="Select your favorite game" />
+            </SelectTrigger>
+            <SelectContent>
+              {games?.map((game) => (
+                <SelectItem key={game.id} value={game.id}>
+                  {game.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-muted-foreground mt-1">
+            This helps us recommend relevant tournaments and content
+          </p>
+        </EnhancedFormField>
+
+        <EnhancedFormActions
+          onSubmit={formState.submit}
+          onSaveDraft={formState.saveDraftManually}
+          onClearDraft={formState.clearDraftManually}
+          isSubmitting={formState.isSubmitting || updateProfile.isLoading}
+          isValid={formState.isValid}
+          isDirty={formState.isDirty}
+          hasUnsavedChanges={formState.hasUnsavedChanges}
+          hasDraft={formState.hasDraft}
+          submitLabel="Complete Profile"
+          saveDraftLabel="Save Draft"
+          clearDraftLabel="Clear Draft"
+          showDraftActions={true}
+        />
+      </EnhancedForm>
+    </div>
+  )
 }

@@ -9,6 +9,8 @@ import { Modal } from "../ui/modal";
 import { useTRPCMutationWithLoading } from "@/hooks/useTRPCWithLoading";
 import { trpc } from "@/lib/trpc/client";
 import { useSession } from "@/components/auth/session-provider";
+import { useModal } from "@/stores/ui-store";
+import { useTournamentOperations } from "@/stores/tournament-store";
 
 interface TournamentCreateFormProps {
   isOpen: boolean;
@@ -25,17 +27,20 @@ export function TournamentCreateForm({
 }: TournamentCreateFormProps) {
   const router = useRouter();
   const { user } = useSession();
+  const { invalidateTournamentList } = useTournamentOperations();
 
-  // Load available games and venues
+  // Load available games and stores
   const { data: games } = trpc.games.list.useQuery({ includeInactive: false });
-  const { data: venues } = trpc.venues.list.useQuery();
+  const { data: stores } = trpc.stores.list.useQuery({});
 
   // Create tournament mutation
-  const createTournament = useTRPCMutationWithLoading(
+  const createTournament = useTRPCMutationWithLoading<{ id: string }, unknown, TournamentCreateFormData>(
     'create-tournament',
     () => trpc.tournaments.create.useMutation(),
     {
       onSuccess: (data) => {
+        // Invalidate tournament list to refresh data
+        invalidateTournamentList();
         onSuccess?.();
         onClose();
         router.push(`/tournaments/${data.id}`);
@@ -48,52 +53,66 @@ export function TournamentCreateForm({
 
   // Multi-step form state
   const formState = useFormSteps<TournamentCreateFormData>({
-    steps: ['basic-info', 'details', 'settings', 'confirmation'],
+    steps: ['basic-info', 'description', 'details', 'settings', 'confirmation'],
     initialData: {
       name: '',
       description: '',
       gameId: '',
-      venueId: '',
-      startDate: '',
-      endDate: '',
-      maxParticipants: 32,
-      entryFee: 0,
-      prizePool: 0,
-      level: 'LOCAL',
-      format: 'SWISS',
-      isPublic: true,
-      allowRegistration: true,
-      requireApproval: false,
-      rules: '',
-      contactInfo: '',
+      storeId: '',
+      date: '',
+      format: 'swiss',
+      maxPlayers: '32',
+      entryFee: '0',
+      prizePool: '0',
+      tournamentLevel: 'LOCAL',
     },
     validationSchemas: {
       'basic-info': tournamentCreateSchema.pick({
         name: true,
-        description: true,
         gameId: true,
-        venueId: true,
+        storeId: true,
+      }),
+      'description': tournamentCreateSchema.pick({
+        description: true,
       }),
       'details': tournamentCreateSchema.pick({
-        startDate: true,
-        endDate: true,
-        maxParticipants: true,
+        date: true,
+        maxPlayers: true,
         entryFee: true,
         prizePool: true,
-        level: true,
-        format: true,
       }),
       'settings': tournamentCreateSchema.pick({
-        isPublic: true,
-        allowRegistration: true,
-        requireApproval: true,
-        rules: true,
-        contactInfo: true,
+        format: true,
+        tournamentLevel: true,
       }),
-      'confirmation': tournamentCreateSchema,
+      'confirmation': tournamentCreateSchema.pick({
+        name: true,
+        description: true,
+        gameId: true,
+        storeId: true,
+        date: true,
+        maxPlayers: true,
+        entryFee: true,
+        prizePool: true,
+        format: true,
+        tournamentLevel: true,
+      }),
     },
     onSubmit: async (data) => {
-      await createTournament.mutateAsync(data);
+      const transformed = {
+        name: data.name,
+        description: data.description,
+        gameId: data.gameId,
+        storeId: data.storeId,
+        organizerId: user?.id || '',
+        date: new Date(data.date).toISOString(),
+        format: data.format,
+        maxPlayers: parseInt(data.maxPlayers),
+        entryFee: parseFloat(data.entryFee),
+        prizePool: data.prizePool,
+        tournamentLevel: data.tournamentLevel,
+      };
+      await createTournament.mutateAsync(transformed as any);
     },
     onSuccess: () => {
       console.log("Tournament created successfully!");
@@ -149,15 +168,15 @@ export function TournamentCreateForm({
         />
 
         <FormSelect
-          label="Venue"
-          value={formState.data.venueId}
-          onValueChange={(value) => formState.setField('venueId', value)}
-          error={formState.errors.venueId}
+          label="Store"
+          value={formState.data.storeId}
+          onValueChange={(value) => formState.setField('storeId', value)}
+          error={formState.errors.storeId}
           required
-          placeholder="Select a venue"
-          options={venues?.map((venue) => ({
-            value: venue.id,
-            label: venue.name
+          placeholder="Select a store"
+          options={stores?.stores?.map((store) => ({
+            value: store.id,
+            label: store.name
           })) || []}
         />
       </div>
@@ -173,74 +192,46 @@ export function TournamentCreateForm({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormInput
-          label="Start Date & Time"
-          type="datetime-local"
-          value={formState.data.startDate}
-          onChange={(e) => formState.setField('startDate', e.target.value)}
-          error={formState.errors.startDate}
-          required
-        />
-
-        <FormInput
-          label="End Date & Time"
-          type="datetime-local"
-          value={formState.data.endDate}
-          onChange={(e) => formState.setField('endDate', e.target.value)}
-          error={formState.errors.endDate}
-          required
-        />
-      </div>
+      <FormInput
+        label="Tournament Date & Time"
+        type="datetime-local"
+        value={formState.data.date}
+        onChange={(e) => formState.setField('date', e.target.value)}
+        error={formState.errors.date}
+        required
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <FormInput
-          label="Max Participants"
-          type="number"
-          value={formState.data.maxParticipants}
-          onChange={(e) => formState.setField('maxParticipants', parseInt(e.target.value))}
-          error={formState.errors.maxParticipants}
+          label="Max Players"
+          type="text"
+          value={formState.data.maxPlayers}
+          onChange={(e) => formState.setField('maxPlayers', e.target.value)}
+          error={formState.errors.maxPlayers}
           required
-          min={2}
-          max={256}
+          placeholder="32"
         />
 
         <FormInput
           label="Entry Fee ($)"
-          type="number"
+          type="text"
           value={formState.data.entryFee}
-          onChange={(e) => formState.setField('entryFee', parseFloat(e.target.value))}
+          onChange={(e) => formState.setField('entryFee', e.target.value)}
           error={formState.errors.entryFee}
-          min={0}
-          step={0.01}
+          placeholder="0"
         />
 
         <FormInput
           label="Prize Pool ($)"
-          type="number"
+          type="text"
           value={formState.data.prizePool}
-          onChange={(e) => formState.setField('prizePool', parseFloat(e.target.value))}
+          onChange={(e) => formState.setField('prizePool', e.target.value)}
           error={formState.errors.prizePool}
-          min={0}
-          step={0.01}
+          placeholder="0"
         />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormSelect
-          label="Tournament Level"
-          value={formState.data.level}
-          onValueChange={(value) => formState.setField('level', value)}
-          error={formState.errors.level}
-          required
-          options={[
-            { value: "LOCAL", label: "Local" },
-            { value: "REGIONAL", label: "Regional" },
-            { value: "NATIONAL", label: "National" },
-            { value: "INTERNATIONAL", label: "International" }
-          ]}
-        />
-
         <FormSelect
           label="Tournament Format"
           value={formState.data.format}
@@ -248,10 +239,24 @@ export function TournamentCreateForm({
           error={formState.errors.format}
           required
           options={[
-            { value: "SWISS", label: "Swiss" },
-            { value: "SINGLE_ELIMINATION", label: "Single Elimination" },
-            { value: "DOUBLE_ELIMINATION", label: "Double Elimination" },
-            { value: "ROUND_ROBIN", label: "Round Robin" }
+            { value: 'swiss', label: 'Swiss' },
+            { value: 'single-elimination', label: 'Single Elimination' },
+            { value: 'double-elimination', label: 'Double Elimination' },
+            { value: 'round-robin', label: 'Round Robin' }
+          ]}
+        />
+
+        <FormSelect
+          label="Tournament Level"
+          value={formState.data.tournamentLevel}
+          onValueChange={(value) => formState.setField('tournamentLevel', value)}
+          error={formState.errors.tournamentLevel}
+          required
+          options={[
+            { value: 'LOCAL', label: 'Local' },
+            { value: 'REGIONAL', label: 'Regional' },
+            { value: 'NATIONAL', label: 'National' },
+            { value: 'INTERNATIONAL', label: 'International' }
           ]}
         />
       </div>
@@ -263,54 +268,11 @@ export function TournamentCreateForm({
       <div className="space-y-4">
         <h3 className="text-lg font-medium">Tournament Settings</h3>
         <p className="text-sm text-muted-foreground">
-          Configure visibility, registration, and other settings.
+          Configure format and level.
         </p>
       </div>
 
-      <div className="space-y-4">
-        <FormCheckbox
-          label="Public Tournament"
-          description="Make this tournament visible to all users"
-          checked={formState.data.isPublic}
-          onCheckedChange={(checked) => formState.setField('isPublic', checked)}
-          error={formState.errors.isPublic}
-        />
-
-        <FormCheckbox
-          label="Allow Registration"
-          description="Allow players to register for this tournament"
-          checked={formState.data.allowRegistration}
-          onCheckedChange={(checked) => formState.setField('allowRegistration', checked)}
-          error={formState.errors.allowRegistration}
-        />
-
-        <FormCheckbox
-          label="Require Approval"
-          description="Manually approve all registrations"
-          checked={formState.data.requireApproval}
-          onCheckedChange={(checked) => formState.setField('requireApproval', checked)}
-          error={formState.errors.requireApproval}
-        />
-      </div>
-
-      <FormTextarea
-        label="Tournament Rules"
-        value={formState.data.rules}
-        onChange={(e) => formState.setField('rules', e.target.value)}
-        error={formState.errors.rules}
-        placeholder="Enter tournament rules and regulations..."
-        rows={4}
-        description="Specify any special rules, deck restrictions, or tournament-specific regulations"
-      />
-
-      <FormInput
-        label="Contact Information"
-        value={formState.data.contactInfo}
-        onChange={(e) => formState.setField('contactInfo', e.target.value)}
-        error={formState.errors.contactInfo}
-        placeholder="Email or phone number for questions"
-        description="How players can contact you with questions about the tournament"
-      />
+      {/* Additional settings can be added here if schema expands */}
     </div>
   );
 
@@ -328,16 +290,13 @@ export function TournamentCreateForm({
         <div className="text-sm space-y-2">
           <p><strong>Name:</strong> {formState.data.name}</p>
           <p><strong>Game:</strong> {games?.find(g => g.id === formState.data.gameId)?.name}</p>
-          <p><strong>Venue:</strong> {venues?.find(v => v.id === formState.data.venueId)?.name}</p>
-          <p><strong>Start:</strong> {new Date(formState.data.startDate).toLocaleString()}</p>
-          <p><strong>End:</strong> {new Date(formState.data.endDate).toLocaleString()}</p>
-          <p><strong>Max Participants:</strong> {formState.data.maxParticipants}</p>
+          <p><strong>Store:</strong> {stores?.stores?.find(s => s.id === formState.data.storeId)?.name}</p>
+          <p><strong>Date:</strong> {formState.data.date ? new Date(formState.data.date).toLocaleString() : ''}</p>
+          <p><strong>Max Players:</strong> {formState.data.maxPlayers}</p>
           <p><strong>Entry Fee:</strong> ${formState.data.entryFee}</p>
           <p><strong>Prize Pool:</strong> ${formState.data.prizePool}</p>
-          <p><strong>Level:</strong> {formState.data.level}</p>
+          <p><strong>Level:</strong> {formState.data.tournamentLevel}</p>
           <p><strong>Format:</strong> {formState.data.format}</p>
-          <p><strong>Public:</strong> {formState.data.isPublic ? 'Yes' : 'No'}</p>
-          <p><strong>Allow Registration:</strong> {formState.data.allowRegistration ? 'Yes' : 'No'}</p>
         </div>
       </div>
     </div>

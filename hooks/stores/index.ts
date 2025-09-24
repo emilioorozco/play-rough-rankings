@@ -27,7 +27,7 @@ export {
   usePreferenceCategory,
   useDisplayPreferences,
   useCommunicationPreferences,
-  useFormBehaviorPreferences,
+  useAccessibilityPreferences,
   usePreferenceMetadata,
   useUserPreferencesStoreActions,
   useUserPreferencesStoreState,
@@ -41,10 +41,10 @@ export {
 
 // Loading Store Hooks
 export {
-  useLoading,
-  useError,
-  useProgress,
-  useLoadingBar,
+  useLoadingState,
+  useErrorState,
+  useProgressState,
+  useLoadingBarState,
   useAsyncOperation,
   useLoadingStoreActions,
   useLoadingStoreState,

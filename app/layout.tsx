@@ -1,10 +1,10 @@
+export const dynamic = "force-dynamic";
 import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { TRPCProvider } from "@/lib/trpc/provider";
 import { SessionProvider } from "@/components/auth/session-provider";
 import { Header } from "@/components/header";
-import { ViewTransitionsProvider } from "@/components/view-transitions-provider";
 import { AppProvider } from "@/components/app-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { LoadingProvider } from "@/components/loading-provider";
@@ -52,27 +52,25 @@ export default function RootLayout({
       <body className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
         <ErrorBoundary>
           <AppProvider>
-            <ViewTransitionsProvider>
-              <SessionProvider>
-                <TRPCProvider>
-                  <LoadingProvider>
-                    <div className="app-layout">
-                      <Header />
-                      <main className="main-content">{children}</main>
-                      <footer className="main-footer">
-                        <div className="container">
-                          <p>
-                            <small>
-                              © 2024 Play Rough Rankings. All rights reserved.
-                            </small>
-                          </p>
-                        </div>
-                      </footer>
-                    </div>
-                  </LoadingProvider>
-                </TRPCProvider>
-              </SessionProvider>
-            </ViewTransitionsProvider>
+            <SessionProvider>
+              <TRPCProvider>
+                <LoadingProvider>
+                  <div className="app-layout">
+                    <Header />
+                    <main className="main-content">{children}</main>
+                    <footer className="main-footer">
+                      <div className="container">
+                        <p>
+                          <small>
+                            © 2024 Play Rough Rankings. All rights reserved.
+                          </small>
+                        </p>
+                      </div>
+                    </footer>
+                  </div>
+                </LoadingProvider>
+              </TRPCProvider>
+            </SessionProvider>
           </AppProvider>
         </ErrorBoundary>
       </body>

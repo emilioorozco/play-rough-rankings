@@ -1,25 +1,4 @@
-// Export all store types
-
-// UI Store Types
-export * from './ui-store'
-
-// Tournament Store Types
-export * from './tournament-store'
-
-// User Preferences Store Types
-export * from './user-preferences-store'
-
-// Form Draft Store Types
-export * from './form-draft-store'
-
-// Loading Store Types
-export * from './loading-store'
-
-// App Store Types
-export * from './app-store'
-
-// Comprehensive Store Types
-export * from './stores'
+// Export consolidated store types
 
 // Re-export commonly used types for convenience
 export type {
@@ -68,7 +47,11 @@ export type {
   
   // App Store
   AppStore,
+} from './stores'
+
+// App Store hook return types (defined only in app-store.ts)
+export type {
   UseThemeReturn,
   UseActivityReturn,
   UseRealtimeReturn,
-} from './stores'
+} from './app-store'

@@ -9,7 +9,7 @@ interface TournamentListProps {
   filters: {
     gameId: string
     storeId: string
-    status: string
+    status: "UPCOMING" | "ACTIVE" | "COMPLETED" | ""
     startDate: string
     endDate: string
     search: string

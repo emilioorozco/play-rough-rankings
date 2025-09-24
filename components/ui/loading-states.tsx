@@ -2,7 +2,7 @@ import React from 'react'
 import { Skeleton } from './skeleton'
 import { Card, CardContent, CardHeader } from './card'
 import { Button } from './button'
-import { AlertCircle, RefreshCw, Loader2 } from 'lucide-react'
+import { AlertCircle, RefreshCw, Loader2, Copy, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Loading spinner component
@@ -79,8 +79,37 @@ export function ErrorDisplay({
   showDetails?: boolean
   className?: string
 }) {
+  const [copied, setCopied] = React.useState(false)
   const errorMessage = typeof error === 'string' ? error : error?.message
   const errorDetails = error instanceof Error ? error.stack : undefined
+
+  const copyErrorDetails = async () => {
+    const errorInfo = {
+      title,
+      description,
+      message: errorMessage,
+      details: errorDetails,
+      timestamp: new Date().toISOString(),
+      url: typeof window !== 'undefined' ? window.location.href : 'Unknown',
+    }
+
+    const textToCopy = `Error Report
+Title: ${errorInfo.title}
+Description: ${errorInfo.description || 'N/A'}
+Message: ${errorInfo.message || 'N/A'}
+URL: ${errorInfo.url}
+Timestamp: ${errorInfo.timestamp}
+
+${errorInfo.details ? `Technical Details:\n${errorInfo.details}` : ''}`
+
+    try {
+      await navigator.clipboard.writeText(textToCopy)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy error details:', err)
+    }
+  }
 
   return (
     <div className={cn('text-center space-y-4 p-6', className)}>
@@ -109,12 +138,33 @@ export function ErrorDisplay({
         </details>
       )}
 
-      {onRetry && (
-        <Button onClick={onRetry} variant="outline" className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Try Again
+      <div className="flex gap-3 justify-center">
+        <Button 
+          onClick={copyErrorDetails} 
+          variant="outline" 
+          size="sm"
+          className="gap-2"
+        >
+          {copied ? (
+            <>
+              <Check className="h-4 w-4" />
+              Copied!
+            </>
+          ) : (
+            <>
+              <Copy className="h-4 w-4" />
+              Copy Error
+            </>
+          )}
         </Button>
-      )}
+        
+        {onRetry && (
+          <Button onClick={onRetry} variant="outline" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Try Again
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

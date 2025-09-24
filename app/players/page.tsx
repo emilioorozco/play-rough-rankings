@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { PlayerComparison } from '@/components/leaderboards/player-comparison'
 import { PlayerCard } from '@/components/player/player-card'
+import type { ApiPlayerSearchResult } from '@/lib/types/api'
 
 export default function PlayersPage() {
   const [selectedGameId, setSelectedGameId] = useState<string>('')
@@ -28,6 +29,8 @@ export default function PlayersPage() {
     }
   )
 
+  // Narrow tRPC's inferred type to a simple shape to avoid deep type instantiation
+  const results = (searchResults ?? []) as unknown as ApiPlayerSearchResult[]
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -146,25 +149,21 @@ export default function PlayersPage() {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-4"></div>
                 <p className="text-gray-500">Searching for players...</p>
               </div>
-            ) : searchResults && searchResults.length > 0 ? (
+            ) : results && results.length > 0 ? (
               <div>
                 <div className="text-center mb-6">
                   <h3 className="text-xl font-semibold text-secondary-500 mb-2">
-                    Found {searchResults.length} player{searchResults.length !== 1 ? 's' : ''}
+                    Found {results.length} player{results.length !== 1 ? 's' : ''}
                   </h3>
                   <p className="text-gray-500">
                     {selectedGameId ? `in ${games?.find(g => g.id === selectedGameId)?.name}` : 'across all games'}
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                  {searchResults.map((player) => (
+                  {results.map((player) => (
                     <PlayerCard
                       key={player.id}
-                      player={{
-                        ...player,
-                        displayName: player.displayName || 'Unknown Player',
-                        userName: player.userName || undefined
-                      }}
+                      player={player as any}
                       gameId={selectedGameId}
                       rank={undefined}
                       showActions={true}

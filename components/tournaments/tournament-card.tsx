@@ -17,7 +17,6 @@ import { Button } from "../ui/button";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { formatDate, formatDateTime } from "@/lib/utils/date-formatting";
 import { useActivity } from "@/stores/app-store";
-import { useViewTransitions } from "@/hooks/use-view-transitions";
 
 import type { ApiTournament } from "@/lib/types/api";
 
@@ -29,7 +28,6 @@ interface TournamentCardProps {
 
 export function TournamentCard({ tournament }: TournamentCardProps) {
   const { setViewing } = useActivity();
-  const { transitionToTournament } = useViewTransitions();
   const [isHovered, setIsHovered] = useState(false);
   const [viewerCount] = useState(Math.floor(Math.random() * 5) + 1); // Mock viewer count
 
@@ -49,9 +47,8 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
   }, [setViewing]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    transitionToTournament(tournament.id);
-  }, [transitionToTournament, tournament.id]);
+    // Let the Link handle navigation naturally
+  }, []);
 
   const statusBadgeVariant = useMemo(() => {
     switch (tournament.status) {

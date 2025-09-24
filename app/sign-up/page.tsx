@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/components/auth/session-provider";
-import { useFormSteps } from "@/hooks/useFormState";
+import { useFormDraft } from "@/hooks/useFormDraft";
 import { registerSchema, type RegisterFormData } from "@/lib/validation/schemas";
 import { FormInput, FormSelect, FormCheckbox, FormActions, FormStatus } from "@/components/ui/form-components";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,12 @@ export default function RegisterPage() {
   const { signUp } = useSession();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
 
+  const steps = ['personal-info', 'account-info', 'preferences'];
 
-  // Initialize multi-step form state
-  const formState = useFormSteps<RegisterFormData>({
-    steps: ['personal-info', 'account-info', 'preferences'],
+  // Initialize modern form draft state with auto-save and store integration
+  const formState = useFormDraft<RegisterFormData>({
     initialData: {
       email: '',
       password: '',
@@ -33,24 +34,7 @@ export default function RegisterPage() {
       nameDisplayPreference: 'DISPLAY_NAME',
       optInCommunications: false,
     },
-    // Remove step-specific validation schemas to prevent data loss
-    // validationSchemas: {
-    //   'personal-info': registerSchema.pick({
-    //     username: true,
-    //     firstName: true,
-    //     lastName: true,
-    //   }),
-    //   'account-info': registerSchema.pick({
-    //     email: true,
-    //     password: true,
-    //     confirmPassword: true,
-    //   }),
-    //   'preferences': registerSchema.pick({
-    //     agreeToTerms: true,
-    //     nameDisplayPreference: true,
-    //     optInCommunications: true,
-    //   }),
-    // },
+    validationSchema: registerSchema,
     onSubmit: async (data) => {
       console.log("Registration data:", { 
         email: data.email, 
@@ -116,11 +100,49 @@ export default function RegisterPage() {
       console.error("Registration error:", error);
     },
     showLoadingBar: true,
+    // Enhanced features
+    formId: 'user-registration',
+    enableAutoSave: true,
+    autoSaveDelay: 2000, // 2 seconds for registration form
+    enableDraftPersistence: true,
+    enableUserPreferences: true,
+    onAutoSave: (data) => {
+      console.log('Auto-saved registration draft:', { 
+        username: data.username, 
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName 
+      });
+    },
+    onDraftRestore: (data) => {
+      console.log('Restored registration draft:', { 
+        username: data.username, 
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName 
+      });
+    },
   });
+
+  // Step management functions
+  const goToNextStep = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(prev => prev + 1);
+    }
+  };
+
+  const goToPreviousStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(prev => prev - 1);
+    }
+  };
+
+  const currentStepName = steps[currentStep];
+  const isFirstStep = currentStep === 0;
+  const isLastStep = currentStep === steps.length - 1;
 
   // Check if all required fields are filled for the current step
   const isCurrentStepValid = () => {
-    const currentStepName = formState.currentStepName;
     const data = formState.data;
     
     if (currentStepName === 'personal-info') {
@@ -151,7 +173,6 @@ export default function RegisterPage() {
 
   // Manual step validation since we removed step-specific schemas
   const handleStepValidation = () => {
-    const currentStepName = formState.currentStepName;
     const data = formState.data;
     
     // Validate current step fields
@@ -190,7 +211,7 @@ export default function RegisterPage() {
     
     // Clear any errors and proceed to next step
     formState.clearErrors();
-    formState.goToNextStep();
+    goToNextStep();
   };
 
   const renderPersonalInfoStep = () => (
@@ -372,7 +393,7 @@ export default function RegisterPage() {
   );
 
   const renderCurrentStep = () => {
-    switch (formState.currentStepName) {
+    switch (currentStepName) {
       case 'personal-info':
         return renderPersonalInfoStep();
       case 'account-info':
@@ -394,23 +415,23 @@ export default function RegisterPage() {
 
         <form onSubmit={(e) => e.preventDefault()}>
           <FormStatus 
-            error={formState.submissionError}
+            error={formState.errors.email || formState.errors.password || formState.errors.username || (formState.errors as any).general}
           />
 
           {renderCurrentStep()}
 
           <FormActions
-            onSubmit={formState.isLastStep ? formState.submit : handleStepValidation}
-            onCancel={formState.goToPreviousStep}
+            onSubmit={isLastStep ? formState.submit : handleStepValidation}
+            onCancel={goToPreviousStep}
             isSubmitting={formState.isSubmitting}
-            isValid={formState.isLastStep ? isFormValid() : isCurrentStepValid()}
+            isValid={isLastStep ? !!isFormValid() : !!isCurrentStepValid()}
             isDirty={formState.isDirty}
             submitLabel={
-              formState.isLastStep ? "Create Account" : "Continue"
+              isLastStep ? "Create Account" : "Continue"
             }
             cancelLabel="Back"
             showReset={false}
-            showCancel={!formState.isFirstStep}
+            showCancel={!isFirstStep}
           />
 
         </form>

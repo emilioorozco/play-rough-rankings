@@ -2,10 +2,14 @@
 
 import { TournamentList } from '@/components/tournaments/tournament-list'
 import { TournamentFilters } from '@/components/tournaments/tournament-filters'
-import { useFilter } from '@/hooks/stores'
+import { useTournamentFilters } from '@/hooks/stores/use-tournament-store'
 
 export default function TournamentsPage() {
-  const { filters, setFilter } = useFilter('tournament-list')
+  const { filters, setFilters } = useTournamentFilters()
+
+  const handleFiltersChange = (newFilters: any) => {
+    setFilters(newFilters)
+  }
 
   return (
     <div className="container mx-auto px-4 py-6 sm:py-8">
@@ -18,7 +22,7 @@ export default function TournamentsPage() {
         <aside className="lg:col-span-1 order-2 lg:order-1">
           <TournamentFilters 
             filters={filters} 
-            onFiltersChange={setFilter} 
+            onFiltersChange={handleFiltersChange} 
           />
         </aside>
         

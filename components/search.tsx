@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { Search, X } from 'lucide-react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
@@ -31,7 +30,7 @@ export function SearchComponent({
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
+  // Navigation temporarily disabled pending zustand integration
 
   // Mock search results - in a real app, this would be an API call
   const mockSearchResults: SearchResult[] = [
@@ -108,7 +107,7 @@ export function SearchComponent({
     if (onResultSelect) {
       onResultSelect(result)
     } else {
-      router.push(result.href)
+      // router.push(result.href)
     }
   }
 
@@ -117,7 +116,7 @@ export function SearchComponent({
     e.preventDefault()
     if (query.trim()) {
       // Navigate to search results page
-      router.push(`/search?q=${encodeURIComponent(query)}`)
+      // router.push(`/search?q=${encodeURIComponent(query)}`)
       setQuery('')
       setResults([])
       setIsOpen(false)

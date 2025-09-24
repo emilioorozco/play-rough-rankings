@@ -2,7 +2,6 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { z } from 'zod'
 import { useLoadingBar } from '@/stores/loading-store'
 import { useFormDraftStore } from '@/stores/form-draft-store'
-import { useUserPreferencesStore } from '@/stores/user-preferences-store'
 
 interface FormState<T> {
   data: T
@@ -60,7 +59,6 @@ export function useFormDraft<T extends Record<string, any>>({
     hasDraft, 
     getDraftLastSaved 
   } = useFormDraftStore()
-  const { getPreference } = useUserPreferencesStore()
   
   // Memoize initialData to prevent unnecessary re-renders
   const memoizedInitialData = useMemo(() => initialData, [JSON.stringify(initialData)])
@@ -77,13 +75,9 @@ export function useFormDraft<T extends Record<string, any>>({
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // Load user preferences for form behavior
-  const autoSaveEnabled = enableUserPreferences 
-    ? getPreference('forms.autoSave', enableAutoSave)
-    : enableAutoSave
+  const autoSaveEnabled = enableAutoSave
   
-  const draftPersistenceEnabled = enableUserPreferences
-    ? getPreference('forms.draftPersistence', enableDraftPersistence)
-    : enableDraftPersistence
+  const draftPersistenceEnabled = enableDraftPersistence
 
   // Load draft on mount if enabled
   useEffect(() => {
@@ -93,7 +87,7 @@ export function useFormDraft<T extends Record<string, any>>({
         setData(draftData)
         setIsDirty(true)
         setHasUnsavedChanges(true)
-        setLastSaved(getDraftLastSaved(formId))
+        setLastSaved(getDraftLastSaved(formId) ?? undefined)
         onDraftRestore?.(draftData)
       }
     }
@@ -447,6 +441,7 @@ export function useFormStepsEnhanced<T extends Record<string, any>>({
 
   return {
     ...formState,
+    steps, // Include the steps array
     currentStep,
     currentStepName: steps[currentStep],
     isFirstStep,

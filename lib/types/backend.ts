@@ -1,4 +1,5 @@
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient, Prisma } from '@prisma/client'
+import type { GameMetadata } from '../games/base-game'
 import type { DefaultArgs } from '@prisma/client/runtime/library'
 
 // ============================================================================
@@ -10,7 +11,7 @@ import type { DefaultArgs } from '@prisma/client/runtime/library'
  * This replaces the `any` type used in match-processor.ts
  */
 export type PrismaTransaction = Omit<
-  PrismaClient<DefaultArgs>, 
+  Prisma.TransactionClient,
   '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
 >
 
@@ -119,7 +120,7 @@ export interface TournamentFileMetadata {
   maxPlayers?: number
   entryFee?: number
   prizePool?: string
-  tournamentLevel?: string
+  tournamentLevel?: 'LOCAL' | 'REGIONAL' | 'NATIONAL' | 'INTERNATIONAL'
 }
 
 /**

@@ -14,8 +14,8 @@ export function PrivacyControls({ playerId, currentVisibility }: PrivacyControls
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Mutation for updating profile visibility
-  const updateProfileMutation = trpc.players.updateProfile.useMutation({
+  // Mutation for updating profile visibility (via user preferences)
+  const updateProfileMutation = trpc.userPreferences.update.useMutation({
     onSuccess: () => {
       setSuccess('Privacy settings updated successfully!')
       setError(null)

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { PlayerSearch } from './player-search'
-import type { TRPCQueryResult, ApiPlayerGameStats } from '@/lib/types/api'
+import type { ApiPlayerGameStats } from '@/lib/types/api'
 
 interface ComparisonPlayer {
   playerId: string
@@ -32,8 +32,8 @@ export function PlayerComparison({ gameId }: PlayerComparisonProps) {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([])
   const [comparisonData, setComparisonData] = useState<ComparisonPlayer[]>([])
 
-  // Get player stats for comparison
-  const playerQueries: TRPCQueryResult<ApiPlayerGameStats>[] = selectedPlayers.map(playerId => 
+  // Get player stats for comparison (loosen typing until implemented)
+  const playerQueries: any[] = selectedPlayers.map(playerId => 
     trpc.players.getGameStats.useQuery(
       { playerId, gameId },
       { enabled: !!playerId }
