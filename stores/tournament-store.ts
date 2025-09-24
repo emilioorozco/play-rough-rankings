@@ -6,7 +6,7 @@ import type { ApiTournament } from '@/lib/types/api'
 interface TournamentFilters {
   gameId: string
   storeId: string
-  status: string
+  status: "UPCOMING" | "ACTIVE" | "COMPLETED" | ""
   startDate: string
   endDate: string
   search: string

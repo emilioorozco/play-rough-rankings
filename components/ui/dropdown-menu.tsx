@@ -2,27 +2,37 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { useDropdown } from "@/stores/ui-store"
 
-interface DropdownMenuContextType {
-  isOpen: boolean
-  setIsOpen: (open: boolean) => void
+// Create a context for dropdown ID management
+const DropdownContext = React.createContext<{
+  dropdownId: string
+} | null>(null)
+
+// Custom hook to use dropdown context
+function useDropdownContext() {
+  const context = React.useContext(DropdownContext)
+  if (!context) {
+    throw new Error("Dropdown components must be used within a DropdownMenu")
+  }
+  return context
 }
-
-const DropdownMenuContext = React.createContext<DropdownMenuContextType | undefined>(undefined)
 
 interface DropdownMenuProps {
   children: React.ReactNode
+  id?: string
 }
 
-const DropdownMenu: React.FC<DropdownMenuProps> = ({ children }) => {
-  const [isOpen, setIsOpen] = React.useState(false)
+const DropdownMenu: React.FC<DropdownMenuProps> = ({ children, id }) => {
+  const dropdownId = React.useId()
+  const finalId = id || `dropdown-${dropdownId}`
 
   return (
-    <DropdownMenuContext.Provider value={{ isOpen, setIsOpen }}>
+    <DropdownContext.Provider value={{ dropdownId: finalId }}>
       <div className="relative inline-block text-left">
         {children}
       </div>
-    </DropdownMenuContext.Provider>
+    </DropdownContext.Provider>
   )
 }
 
@@ -32,29 +42,30 @@ interface DropdownMenuTriggerProps extends React.ButtonHTMLAttributes<HTMLButton
 
 const DropdownMenuTrigger = React.forwardRef<HTMLButtonElement, DropdownMenuTriggerProps>(
   ({ className, children, asChild = false, ...props }, ref) => {
-    const context = React.useContext(DropdownMenuContext)
-    if (!context) {
-      throw new Error("DropdownMenuTrigger must be used within a DropdownMenu component")
-    }
-    
-    const { isOpen, setIsOpen } = context
+    const { dropdownId } = useDropdownContext()
+    const { isOpen, toggle } = useDropdown(dropdownId)
 
     if (asChild && React.isValidElement(children)) {
+      // Type-safe clone element with proper onClick handling
+      const childProps = children.props as React.HTMLAttributes<HTMLElement> & {
+        onClick?: (e: React.MouseEvent) => void
+      }
+      
       return React.cloneElement(children, {
         ...props,
-        ref,
+        ...(ref && { ref }),
         onClick: (e: React.MouseEvent) => {
-          setIsOpen(!isOpen)
-          children.props.onClick?.(e)
+          toggle()
+          childProps.onClick?.(e)
         }
-      })
+      } as React.HTMLAttributes<HTMLElement>)
     }
 
     return (
       <button
         ref={ref}
         className={cn(className)}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={toggle}
         {...props}
       >
         {children}
@@ -71,12 +82,8 @@ interface DropdownMenuContentProps extends React.HTMLAttributes<HTMLDivElement> 
 
 const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContentProps>(
   ({ className, align = "end", sideOffset = 4, children, ...props }, ref) => {
-    const context = React.useContext(DropdownMenuContext)
-    if (!context) {
-      throw new Error("DropdownMenuContent must be used within a DropdownMenu component")
-    }
-    
-    const { isOpen } = context
+    const { dropdownId } = useDropdownContext()
+    const { isOpen } = useDropdown(dropdownId)
 
     if (!isOpen) return null
 

@@ -93,14 +93,21 @@ export const calculateSeasonalRankings = async (
     where: {
       gameId,
       player: {
-        profileVisibility: 'PUBLIC',
+        user: {
+          is: {
+            userPreferences: {
+              is: {
+                profileVisibility: 'PUBLIC',
+              },
+            },
+          },
+        },
       },
     },
     include: {
       player: {
         select: {
           id: true,
-          displayName: true,
         },
       },
     },

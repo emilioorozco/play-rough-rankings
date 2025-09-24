@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import {
   Clock,
   Play,
@@ -51,6 +51,13 @@ export function TournamentHeroSection({
   isRegistered,
   currentUser,
 }: TournamentHeroSectionProps) {
+  // Ensure tournament has required properties to prevent undefined errors
+  const safeTournament = {
+    ...tournament,
+    participants: tournament.participants || [],
+    matches: tournament.matches || [],
+  }
+  
   // Use UI store for modal management
   const registrationModal = useModal('tournamentRegistration')
   const managementModal = useModal('tournamentManagement')
@@ -65,23 +72,20 @@ export function TournamentHeroSection({
     resetInteractions 
   } = useInteractions()
   
-  // Local UI state for immediate registration status feedback
-  const [localRegistrationStatus, setLocalRegistrationStatus] = useState<{
-    isRegistered?: boolean
-    canRegister?: boolean
-    canWithdraw?: boolean
-  }>({})
 
   // Use Tournament Store for state management
   const { setRegistrationStatus, invalidateTournament } = useTournamentStore()
   
+  // Get registration status from tournament store
+  const storeRegistrationStatus = useTournamentStore(state => 
+    state.getRegistrationStatus(tournament.id)
+  )
+  
   // Get tRPC utils for query invalidation
   const utils = trpc.useUtils()
   
-  // Computed registration status - use local state for immediate feedback, fallback to server state
-  const effectiveIsRegistered = localRegistrationStatus.isRegistered !== undefined 
-    ? localRegistrationStatus.isRegistered 
-    : isRegistered
+  // Computed registration status - use store state (primary), fallback to prop
+  const effectiveIsRegistered = storeRegistrationStatus?.isRegistered ?? isRegistered
 
   // Withdraw mutation
   const withdrawMutation = trpc.tournaments.unregister.useMutation({
@@ -89,20 +93,13 @@ export function TournamentHeroSection({
       setInteraction('isWithdrawing', false)
       setInteraction('withdrawSuccess', true)
       
-      // Immediately update local UI state for instant feedback
-      setLocalRegistrationStatus({
-        isRegistered: false,
-        canRegister: true,
-        canWithdraw: false,
-      })
-      
       // Update tournament store state
       setRegistrationStatus(tournament.id, {
         isRegistered: false,
         canRegister: true,
         canWithdraw: false,
         isFull: false,
-        participantCount: tournament.participants?.length || 0,
+        participantCount: safeTournament.participants?.length || 0,
         maxPlayers: tournament.maxPlayers || undefined,
       })
       invalidateTournament(tournament.id)
@@ -125,10 +122,6 @@ export function TournamentHeroSection({
     }
   }, [tournament.id, resetInteractions])
   
-  // Reset local registration status when tournament changes
-  useEffect(() => {
-    setLocalRegistrationStatus({})
-  }, [tournament.id])
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -190,17 +183,13 @@ export function TournamentHeroSection({
   }
 
   const handleWithdraw = () => {
-    confirmationModal.open({
+    confirmationModal.openWithdraw({
       title: "Withdraw from Tournament",
       message: "Are you sure you want to withdraw from this tournament? Once the tournament registration closes, you will not be able to rejoin.",
       confirmLabel: "Withdraw",
       cancelLabel: "Cancel",
       variant: "destructive",
       onConfirm: confirmWithdraw,
-      isLoading: isWithdrawing,
-      error: withdrawMutation.error?.message,
-      success: withdrawSuccess ? "Successfully withdrew from tournament!" : undefined,
-      autoCloseDelay: withdrawSuccess ? 3 : 0,
     })
   }
 
@@ -215,31 +204,6 @@ export function TournamentHeroSection({
     }
   }
 
-  const handleRegistrationSuccess = () => {
-    registrationModal.close()
-    
-    // Immediately update local UI state for instant feedback
-    setLocalRegistrationStatus({
-      isRegistered: true,
-      canRegister: false,
-      canWithdraw: true,
-    })
-    
-    // Update tournament store state
-    setRegistrationStatus(tournament.id, {
-      isRegistered: true,
-      canRegister: false,
-      canWithdraw: true,
-      isFull: false,
-      participantCount: (tournament.participants?.length || 0) + 1,
-      maxPlayers: tournament.maxPlayers || undefined,
-    })
-    invalidateTournament(tournament.id)
-    
-    // Invalidate tRPC queries to trigger refetch
-    utils.tournaments.getRegistrationStatus.invalidate({ tournamentId: tournament.id })
-    utils.tournaments.getById.invalidate({ id: tournament.id })
-  }
 
   const handleManagementSuccess = () => {
     managementModal.close()
@@ -306,7 +270,7 @@ export function TournamentHeroSection({
                 className={effectiveIsRegistered ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : ''}
                 variant={effectiveIsRegistered ? 'destructive' : 'default'}
                 disabled={(() => {
-                  const participantsCount = tournament.participants?.length ?? 0
+                  const participantsCount = safeTournament.participants?.length ?? 0
                   const maxPlayers = tournament.maxPlayers
                   const isCapacityLimited = typeof maxPlayers === 'number' && maxPlayers > 0
                   const isFull = isCapacityLimited && participantsCount >= maxPlayers
@@ -357,11 +321,8 @@ export function TournamentHeroSection({
 
       {/* Registration Modal */}
       <TournamentRegistration
-        isOpen={registrationModal.isOpen}
-        onClose={registrationModal.close}
         tournamentId={tournament.id}
         currentUser={currentUser}
-        onSuccess={handleRegistrationSuccess}
       />
 
       {/* Management Modal */}

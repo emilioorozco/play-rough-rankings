@@ -92,7 +92,7 @@ export const userPreferencesSchema = z.object({
 export const searchSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
   type: z.enum(['tournaments', 'players', 'all']).optional(),
-  filters: z.record(z.any()).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(),
 })
 
 // Contact form schema

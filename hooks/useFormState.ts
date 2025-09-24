@@ -264,6 +264,7 @@ export function useFormSteps<T extends Record<string, any>>({
 
   return {
     ...formState,
+    steps, // Include the steps array
     currentStep,
     currentStepName: steps[currentStep],
     isFirstStep,

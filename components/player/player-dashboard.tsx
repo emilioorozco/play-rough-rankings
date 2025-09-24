@@ -1,19 +1,25 @@
 'use client'
 
+import { useState } from 'react'
 import { useSession } from '@/components/auth/session-provider'
 import { trpc } from '@/lib/trpc/client'
 import { PlayerStatsDisplay } from './player-stats-display'
 import { ExternalPlayerIdManager } from './external-player-id-manager'
 import { PrivacyControls } from './privacy-controls'
 import { UserPreferences } from '@/components/auth/user-preferences'
-import { useTab } from '@/hooks/stores/use-ui-store'
 
 export function PlayerDashboard() {
   const { user } = useSession()
-  const { activeTab, setTab } = useTab('playerDashboard')
+  const [activeTab, setTab] = useState('overview')
 
   // Get available games for filtering
   const { data: games } = trpc.games.list.useQuery({ includeInactive: false })
+  // Normalize to include required fields for ApiGame shape
+  const safeGames = (games || []).map((g: any) => ({
+    ...g,
+    createdAt: g?.createdAt ?? '',
+    updatedAt: g?.updatedAt ?? '',
+  }))
   
   // Get player profile data (this will be implemented when auth is fully set up)
   // For now, we'll show placeholder data
@@ -139,7 +145,7 @@ export function PlayerDashboard() {
         {activeTab === 'stats' && (
           <PlayerStatsDisplay 
             playerId={playerProfile.id}
-            games={games || []}
+            games={safeGames}
           />
         )}
 
@@ -147,7 +153,7 @@ export function PlayerDashboard() {
           <ExternalPlayerIdManager 
             playerId={playerProfile.id}
             externalPlayerIds={playerProfile.externalPlayerIds}
-            games={games || []}
+            games={safeGames}
           />
         )}
 

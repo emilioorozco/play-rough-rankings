@@ -32,17 +32,22 @@ type UIState = {
     userPreferences: ModalConfig
     login: ModalConfig
     confirmation: ModalConfig & { config?: any }
+    storeCreate: ModalConfig
   }
   tabs: {
     tournamentDetails: TabState
     tournamentManage: TabState
+    'leaderboard-view': TabState
   }
   filters: {
     tournaments: FilterState
+    'tournament-list': FilterState
+    'tournament-participants': { status: string }
   }
   interactions: {
     isWithdrawing: boolean
     withdrawSuccess: boolean
+    userMenu: boolean
   }
 }
 

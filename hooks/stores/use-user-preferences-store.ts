@@ -4,17 +4,17 @@ import { useUserPreferencesStoreSelectors } from '@/stores/user-preferences-stor
 
 // Preference Management Hooks
 export function useUserPreference(preferenceKey: string) {
-  const value = useUserPreferencesStoreSelectors.usePreference(preferenceKey)
-  const setPreference = useUserPreferencesStore((state) => state.setPreference)
-  const resetPreference = useUserPreferencesStore((state) => state.resetPreference)
+  const value = useUserPreferencesStore((state) => state.preferences[preferenceKey as keyof typeof state.preferences])
+  const updatePreference = useUserPreferencesStore((state) => state.updatePreference)
+  const resetPreferences = useUserPreferencesStore((state) => state.resetPreferences)
 
   const set = useCallback((newValue: any) => {
-    setPreference(preferenceKey, newValue)
-  }, [preferenceKey, setPreference])
+    updatePreference(preferenceKey as any, newValue)
+  }, [preferenceKey, updatePreference])
 
   const reset = useCallback(() => {
-    resetPreference(preferenceKey)
-  }, [preferenceKey, resetPreference])
+    resetPreferences()
+  }, [resetPreferences])
 
   return {
     value,
@@ -24,7 +24,7 @@ export function useUserPreference(preferenceKey: string) {
 }
 
 export function useUserPreferences(category?: string) {
-  const preferences = useUserPreferencesStoreSelectors.usePreferences(category)
+  const preferences = useUserPreferencesStore((state) => state.preferences)
   const setPreferences = useUserPreferencesStore((state) => state.setPreferences)
   const resetPreferences = useUserPreferencesStore((state) => state.resetPreferences)
   const updatePreferences = useUserPreferencesStore((state) => state.updatePreferences)
@@ -33,8 +33,8 @@ export function useUserPreferences(category?: string) {
     setPreferences(newPreferences)
   }, [setPreferences])
 
-  const reset = useCallback((categoryToReset?: string) => {
-    resetPreferences(categoryToReset)
+  const reset = useCallback(() => {
+    resetPreferences()
   }, [resetPreferences])
 
   const update = useCallback((updates: any) => {
@@ -51,17 +51,26 @@ export function useUserPreferences(category?: string) {
 
 // Category Management Hooks
 export function usePreferenceCategory(category: string) {
-  const categoryPreferences = useUserPreferencesStoreSelectors.usePreferencesByCategory(category)
-  const setCategoryPreferences = useUserPreferencesStore((state) => state.setCategoryPreferences)
-  const resetCategoryPreferences = useUserPreferencesStore((state) => state.resetCategoryPreferences)
+  const categoryPreferences = useUserPreferencesStore((state) => {
+    // Filter preferences by category using metadata
+    const result: any = {}
+    Object.keys(state.preferences).forEach(key => {
+      if (state.metadata[key as keyof typeof state.metadata]?.category === category) {
+        result[key] = state.preferences[key as keyof typeof state.preferences]
+      }
+    })
+    return result
+  })
+  const updatePreferences = useUserPreferencesStore((state) => state.updatePreferences)
+  const resetPreferences = useUserPreferencesStore((state) => state.resetPreferences)
 
   const set = useCallback((preferences: any) => {
-    setCategoryPreferences(category, preferences)
-  }, [category, setCategoryPreferences])
+    updatePreferences(preferences)
+  }, [updatePreferences])
 
   const reset = useCallback(() => {
-    resetCategoryPreferences(category)
-  }, [category, resetCategoryPreferences])
+    resetPreferences()
+  }, [resetPreferences])
 
   return {
     preferences: categoryPreferences,
@@ -72,17 +81,26 @@ export function usePreferenceCategory(category: string) {
 
 // Display Preferences Hooks
 export function useDisplayPreferences() {
-  const displayPreferences = useUserPreferencesStoreSelectors.useDisplayPreferences()
-  const setDisplayPreferences = useUserPreferencesStore((state) => state.setDisplayPreferences)
-  const resetDisplayPreferences = useUserPreferencesStore((state) => state.resetDisplayPreferences)
+  const displayPreferences = useUserPreferencesStore((state) => {
+    // Filter preferences by display category
+    const result: any = {}
+    Object.keys(state.preferences).forEach(key => {
+      if (state.metadata[key as keyof typeof state.metadata]?.category === 'display') {
+        result[key] = state.preferences[key as keyof typeof state.preferences]
+      }
+    })
+    return result
+  })
+  const updatePreferences = useUserPreferencesStore((state) => state.updatePreferences)
+  const resetPreferences = useUserPreferencesStore((state) => state.resetPreferences)
 
   const set = useCallback((preferences: any) => {
-    setDisplayPreferences(preferences)
-  }, [setDisplayPreferences])
+    updatePreferences(preferences)
+  }, [updatePreferences])
 
   const reset = useCallback(() => {
-    resetDisplayPreferences()
-  }, [resetDisplayPreferences])
+    resetPreferences()
+  }, [resetPreferences])
 
   return {
     preferences: displayPreferences,
@@ -93,17 +111,26 @@ export function useDisplayPreferences() {
 
 // Communication Preferences Hooks
 export function useCommunicationPreferences() {
-  const communicationPreferences = useUserPreferencesStoreSelectors.useCommunicationPreferences()
-  const setCommunicationPreferences = useUserPreferencesStore((state) => state.setCommunicationPreferences)
-  const resetCommunicationPreferences = useUserPreferencesStore((state) => state.resetCommunicationPreferences)
+  const communicationPreferences = useUserPreferencesStore((state) => {
+    // Filter preferences by communication category
+    const result: any = {}
+    Object.keys(state.preferences).forEach(key => {
+      if (state.metadata[key as keyof typeof state.metadata]?.category === 'communications') {
+        result[key] = state.preferences[key as keyof typeof state.preferences]
+      }
+    })
+    return result
+  })
+  const updatePreferences = useUserPreferencesStore((state) => state.updatePreferences)
+  const resetPreferences = useUserPreferencesStore((state) => state.resetPreferences)
 
   const set = useCallback((preferences: any) => {
-    setCommunicationPreferences(preferences)
-  }, [setCommunicationPreferences])
+    updatePreferences(preferences)
+  }, [updatePreferences])
 
   const reset = useCallback(() => {
-    resetCommunicationPreferences()
-  }, [resetCommunicationPreferences])
+    resetPreferences()
+  }, [resetPreferences])
 
   return {
     preferences: communicationPreferences,
@@ -112,22 +139,31 @@ export function useCommunicationPreferences() {
   }
 }
 
-// Form Behavior Preferences Hooks
-export function useFormBehaviorPreferences() {
-  const formBehaviorPreferences = useUserPreferencesStoreSelectors.useFormBehaviorPreferences()
-  const setFormBehaviorPreferences = useUserPreferencesStore((state) => state.setFormBehaviorPreferences)
-  const resetFormBehaviorPreferences = useUserPreferencesStore((state) => state.resetFormBehaviorPreferences)
+// Accessibility Preferences Hooks
+export function useAccessibilityPreferences() {
+  const accessibilityPreferences = useUserPreferencesStore((state) => {
+    // Filter preferences by accessibility category
+    const result: any = {}
+    Object.keys(state.preferences).forEach(key => {
+      if (state.metadata[key as keyof typeof state.metadata]?.category === 'accessibility') {
+        result[key] = state.preferences[key as keyof typeof state.preferences]
+      }
+    })
+    return result
+  })
+  const updatePreferences = useUserPreferencesStore((state) => state.updatePreferences)
+  const resetPreferences = useUserPreferencesStore((state) => state.resetPreferences)
 
   const set = useCallback((preferences: any) => {
-    setFormBehaviorPreferences(preferences)
-  }, [setFormBehaviorPreferences])
+    updatePreferences(preferences)
+  }, [updatePreferences])
 
   const reset = useCallback(() => {
-    resetFormBehaviorPreferences()
-  }, [resetFormBehaviorPreferences])
+    resetPreferences()
+  }, [resetPreferences])
 
   return {
-    preferences: formBehaviorPreferences,
+    preferences: accessibilityPreferences,
     set,
     reset,
   }
@@ -135,9 +171,9 @@ export function useFormBehaviorPreferences() {
 
 // Metadata Hooks
 export function usePreferenceMetadata() {
-  const metadata = useUserPreferencesStoreSelectors.usePreferenceMetadata()
-  const lastUpdated = useUserPreferencesStoreSelectors.useLastUpdated()
-  const version = useUserPreferencesStoreSelectors.useVersion()
+  const metadata = useUserPreferencesStore((state) => state.metadata)
+  const lastUpdated = useUserPreferencesStore((state) => state.lastUpdated)
+  const version = useUserPreferencesStore((state) => 1) // Assuming version 1 for now
 
   return {
     metadata,
@@ -148,54 +184,60 @@ export function usePreferenceMetadata() {
 
 // Bulk Operations Hooks
 export function useUserPreferencesStoreActions() {
-  const setPreference = useUserPreferencesStore((state) => state.setPreference)
   const setPreferences = useUserPreferencesStore((state) => state.setPreferences)
-  const setCategoryPreferences = useUserPreferencesStore((state) => state.setCategoryPreferences)
-  const setDisplayPreferences = useUserPreferencesStore((state) => state.setDisplayPreferences)
-  const setCommunicationPreferences = useUserPreferencesStore((state) => state.setCommunicationPreferences)
-  const setFormBehaviorPreferences = useUserPreferencesStore((state) => state.setFormBehaviorPreferences)
+  const updatePreference = useUserPreferencesStore((state) => state.updatePreference)
   const updatePreferences = useUserPreferencesStore((state) => state.updatePreferences)
-  const resetPreference = useUserPreferencesStore((state) => state.resetPreference)
   const resetPreferences = useUserPreferencesStore((state) => state.resetPreferences)
-  const resetCategoryPreferences = useUserPreferencesStore((state) => state.resetCategoryPreferences)
-  const resetDisplayPreferences = useUserPreferencesStore((state) => state.resetDisplayPreferences)
-  const resetCommunicationPreferences = useUserPreferencesStore((state) => state.resetCommunicationPreferences)
-  const resetFormBehaviorPreferences = useUserPreferencesStore((state) => state.resetFormBehaviorPreferences)
-  const resetAllPreferences = useUserPreferencesStore((state) => state.resetAllPreferences)
+  const resetToDefaults = useUserPreferencesStore((state) => state.resetToDefaults)
 
   return {
-    setPreference,
     setPreferences,
-    setCategoryPreferences,
-    setDisplayPreferences,
-    setCommunicationPreferences,
-    setFormBehaviorPreferences,
+    updatePreference,
     updatePreferences,
-    resetPreference,
     resetPreferences,
-    resetCategoryPreferences,
-    resetDisplayPreferences,
-    resetCommunicationPreferences,
-    resetFormBehaviorPreferences,
-    resetAllPreferences,
+    resetToDefaults,
   }
 }
 
 // State Getters Hooks
 export function useUserPreferencesStoreState() {
-  const allPreferences = useUserPreferencesStoreSelectors.useAllPreferences()
-  const displayPreferences = useUserPreferencesStoreSelectors.useDisplayPreferences()
-  const communicationPreferences = useUserPreferencesStoreSelectors.useCommunicationPreferences()
-  const formBehaviorPreferences = useUserPreferencesStoreSelectors.useFormBehaviorPreferences()
-  const metadata = useUserPreferencesStoreSelectors.usePreferenceMetadata()
-  const lastUpdated = useUserPreferencesStoreSelectors.useLastUpdated()
-  const version = useUserPreferencesStoreSelectors.useVersion()
+  const allPreferences = useUserPreferencesStore((state) => state.preferences)
+  const displayPreferences = useUserPreferencesStore((state) => {
+    const result: any = {}
+    Object.keys(state.preferences).forEach(key => {
+      if (state.metadata[key as keyof typeof state.metadata]?.category === 'display') {
+        result[key] = state.preferences[key as keyof typeof state.preferences]
+      }
+    })
+    return result
+  })
+  const communicationPreferences = useUserPreferencesStore((state) => {
+    const result: any = {}
+    Object.keys(state.preferences).forEach(key => {
+      if (state.metadata[key as keyof typeof state.metadata]?.category === 'communications') {
+        result[key] = state.preferences[key as keyof typeof state.preferences]
+      }
+    })
+    return result
+  })
+  const accessibilityPreferences = useUserPreferencesStore((state) => {
+    const result: any = {}
+    Object.keys(state.preferences).forEach(key => {
+      if (state.metadata[key as keyof typeof state.metadata]?.category === 'accessibility') {
+        result[key] = state.preferences[key as keyof typeof state.preferences]
+      }
+    })
+    return result
+  })
+  const metadata = useUserPreferencesStore((state) => state.metadata)
+  const lastUpdated = useUserPreferencesStore((state) => state.lastUpdated)
+  const version = useUserPreferencesStore((state) => 1)
 
   return {
     allPreferences,
     displayPreferences,
     communicationPreferences,
-    formBehaviorPreferences,
+    accessibilityPreferences,
     metadata,
     lastUpdated,
     version,

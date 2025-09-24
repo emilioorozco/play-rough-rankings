@@ -125,10 +125,6 @@ function ErrorFallback({ error, onReset }: ErrorFallbackProps) {
         />
         
         <div className="flex gap-3 justify-center mt-6">
-          <Button onClick={onReset} variant="outline" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Try Again
-          </Button>
           <Button onClick={handleGoHome} className="gap-2">
             <Home className="h-4 w-4" />
             Go Home

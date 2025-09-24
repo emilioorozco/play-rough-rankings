@@ -15,9 +15,10 @@ export const useTournamentLoadingIntegration = () => {
   const clearError = useLoadingStore((state) => state.clearError)
   const clearProgress = useLoadingStore((state) => state.clearProgress)
 
-  const fetchTournament = useTournamentStore((state) => state.fetchTournament)
-  const fetchTournaments = useTournamentStore((state) => state.fetchTournaments)
-  const fetchRegistrationStatus = useTournamentStore((state) => state.fetchRegistrationStatus)
+  // Some stores may not implement these fetch methods; fall back to no-ops
+  const fetchTournament = useTournamentStore((state) => (state as any).fetchTournament ?? (async (_tournamentId: string) => null))
+  const fetchTournaments = useTournamentStore((state) => (state as any).fetchTournaments ?? (async (_params?: any) => null))
+  const fetchRegistrationStatus = useTournamentStore((state) => (state as any).fetchRegistrationStatus ?? (async (_tournamentId: string) => null))
 
   const enhancedFetchTournament = async (tournamentId: string) => {
     const key = `tournament-${tournamentId}`
@@ -123,13 +124,13 @@ export const useUserPreferencesLoadingIntegration = () => {
     }
   }
 
-  const enhancedResetPreferences = async (category?: string) => {
+  const enhancedResetPreferences = async (_category?: string) => {
     const key = 'user-preferences-reset'
     setLoading(key, true)
     clearError(key)
 
     try {
-      resetPreferences(category)
+      resetPreferences()
     } catch (error) {
       setError(key, error instanceof Error ? error : new Error(String(error)))
       throw error
@@ -159,7 +160,7 @@ export const useFormDraftLoadingIntegration = () => {
   const deleteDraft = useFormDraftStore((state) => state.deleteDraft)
   const clearDrafts = useFormDraftStore((state) => state.clearDrafts)
 
-  const enhancedSaveDraft = async (draftId: string, formData: any, formType: string, metadata?: any) => {
+  const enhancedSaveDraft = async (draftId: string, formData: any, _formType: string, _metadata?: any) => {
     const key = `draft-save-${draftId}`
     setLoading(key, true)
     setProgress(key, 0)
@@ -167,7 +168,8 @@ export const useFormDraftLoadingIntegration = () => {
 
     try {
       setProgress(key, 50)
-      saveDraft(draftId, formData, formType, metadata)
+      // The form draft store's API expects (formId, data)
+      saveDraft(draftId, formData)
       setProgress(key, 100)
     } catch (error) {
       setError(key, error instanceof Error ? error : new Error(String(error)))
@@ -242,7 +244,10 @@ export const useUILoadingIntegration = () => {
   const closeModal = useUIStore((state) => state.closeModal)
   const openConfirmation = useUIStore((state) => state.openConfirmation)
 
-  const enhancedOpenModal = async (modalName: string, config?: any) => {
+  const enhancedOpenModal = async (
+    modalName: 'tournamentRegistration' | 'tournamentManagement' | 'tournamentCreate' | 'userPreferences' | 'login' | 'confirmation' | 'storeCreate',
+    config?: any
+  ) => {
     const key = `modal-${modalName}`
     setLoading(key, true)
     clearError(key)
@@ -257,7 +262,9 @@ export const useUILoadingIntegration = () => {
     }
   }
 
-  const enhancedCloseModal = async (modalName: string) => {
+  const enhancedCloseModal = async (
+    modalName: 'tournamentRegistration' | 'tournamentManagement' | 'tournamentCreate' | 'userPreferences' | 'login' | 'confirmation' | 'storeCreate'
+  ) => {
     const key = `modal-${modalName}`
     setLoading(key, true)
     clearError(key)

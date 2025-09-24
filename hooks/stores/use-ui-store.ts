@@ -3,9 +3,9 @@ import { useUIStore } from '@/stores/ui-store'
 import { useModalSelectors, useUIStoreSelectors } from '@/stores/ui-store-selectors'
 
 // Modal Management Hooks
-export function useModal(modalName: string) {
-  const isOpen = useModalSelectors.isModalOpen(modalName as any)
-  const config = useModalSelectors.getModalData(modalName as any)
+export function useModal(modalName: 'userPreferences' | 'confirmation' | 'tournamentRegistration' | 'tournamentManagement' | 'tournamentCreate' | 'login' | 'storeCreate') {
+  const isOpen = useModalSelectors.isModalOpen(modalName)
+  const config = useModalSelectors.getModalData(modalName)
   const openModal = useUIStore((state) => state.openModal)
   const closeModal = useUIStore((state) => state.closeModal)
 
@@ -47,8 +47,8 @@ export function useConfirmationModal() {
 }
 
 // Tab Management Hooks
-export function useTab(tabName: string) {
-  const { activeTab, setActiveTab } = useUIStoreSelectors.getTabState(tabName as any)
+export function useTab(tabName: 'tournamentDetails' | 'tournamentManage' | 'leaderboard-view') {
+  const { activeTab, setActiveTab } = useUIStoreSelectors.getTabState(tabName)
   const setTab = useUIStore((state) => state.setActiveTab)
 
   const setTabCallback = useCallback((tab: string) => {
@@ -62,18 +62,18 @@ export function useTab(tabName: string) {
 }
 
 // Filter Management Hooks
-export function useFilter(filterName: string) {
-  const { filters, setFilters, resetFilters } = useUIStoreSelectors.getFilterState(filterName as any)
+export function useFilter(filterName: 'tournaments' | 'tournament-list' | 'tournament-participants') {
+  const { filters, setFilters, resetFilters } = useUIStoreSelectors.getFilterState(filterName)
   const setFilter = useUIStore((state) => state.setFilters)
-  const clearFilters = useUIStore((state) => state.clearFilters)
+  const resetFiltersAction = useUIStore((state) => state.resetFilters)
 
   const setFilterCallback = useCallback((newFilters: any) => {
     setFilter(filterName, newFilters)
   }, [filterName, setFilter])
 
   const clear = useCallback(() => {
-    clearFilters(filterName)
-  }, [filterName, clearFilters])
+    resetFiltersAction(filterName)
+  }, [filterName, resetFiltersAction])
 
   return {
     filters,
@@ -83,8 +83,8 @@ export function useFilter(filterName: string) {
 }
 
 // Interaction Management Hooks
-export function useInteraction(interactionName: string) {
-  const isActive = useUIStore((state) => state.interactions[interactionName as keyof typeof state.interactions] || false)
+export function useInteraction(interactionName: 'isWithdrawing' | 'withdrawSuccess' | 'userMenu') {
+  const isActive = useUIStore((state) => state.interactions[interactionName] || false)
   const setInteraction = useUIStore((state) => state.setInteraction)
 
   const activate = useCallback(() => {
@@ -116,7 +116,7 @@ export function useUIStoreActions() {
   const closeConfirmation = useUIStore((state) => state.closeConfirmation)
   const setActiveTab = useUIStore((state) => state.setActiveTab)
   const setFilters = useUIStore((state) => state.setFilters)
-  const clearFilters = useUIStore((state) => state.clearFilters)
+  const resetFilters = useUIStore((state) => state.resetFilters)
   const setInteraction = useUIStore((state) => state.setInteraction)
   const resetUI = useUIStore((state) => state.resetUI)
 
@@ -128,7 +128,7 @@ export function useUIStoreActions() {
     closeConfirmation,
     setActiveTab,
     setFilters,
-    clearFilters,
+    resetFilters,
     setInteraction,
     resetUI,
   }
@@ -136,10 +136,10 @@ export function useUIStoreActions() {
 
 // State Getters Hooks
 export function useUIStoreState() {
-  const modals = useUIStoreSelectors.useAllModals()
-  const tabs = useUIStoreSelectors.useAllTabs()
-  const filters = useUIStoreSelectors.useAllFilters()
-  const interactions = useUIStoreSelectors.useAllInteractions()
+  const modals = useUIStore((state) => state.modals)
+  const tabs = useUIStore((state) => state.tabs)
+  const filters = useUIStore((state) => state.filters)
+  const interactions = useUIStore((state) => state.interactions)
 
   return {
     modals,

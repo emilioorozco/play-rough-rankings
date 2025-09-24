@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure, protectedProcedure, organizerProcedure } from '../router-factory'
+import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPublicSelectWithPrefs } from '@/lib/utils/user'
 import { CreateTournamentEntrySchema, UpdateTournamentEntrySchema } from '@/lib/schemas'
 
 export const tournamentEntriesRouter = router({
@@ -30,8 +31,7 @@ export const tournamentEntriesRouter = router({
           player: {
             select: {
               id: true,
-              displayName: true,
-              profileVisibility: true,
+              user: { select: userPublicSelectWithPrefs },
             },
           },
           deck: input.includeDeckInfo ? {
@@ -45,7 +45,7 @@ export const tournamentEntriesRouter = router({
         },
         orderBy: [
           { placement: 'asc' },
-          { player: { displayName: 'asc' } },
+          { player: { user: { name: 'asc' } } },
         ],
       })
 
@@ -54,12 +54,10 @@ export const tournamentEntriesRouter = router({
         ...entry,
         player: {
           id: entry.player.id,
-          displayName: entry.player.profileVisibility === 'PUBLIC' 
-            ? entry.player.displayName 
-            : 'Private Player',
-          isPublic: entry.player.profileVisibility === 'PUBLIC',
+          displayName: getPublicDisplayName(entry.player.user),
+          isPublic: entry.player.user?.userPreferences?.profileVisibility === 'PUBLIC',
         },
-        deck: entry.deck && entry.player.profileVisibility === 'PUBLIC' 
+        deck: entry.deck && (entry.player.user?.userPreferences?.profileVisibility === 'PUBLIC') 
           ? entry.deck 
           : null,
       }))
@@ -83,6 +81,9 @@ export const tournamentEntriesRouter = router({
       // Verify player exists and check privacy
       const player = await ctx.prisma.player.findUnique({
         where: { id: input.playerId },
+        include: {
+          user: { select: userPublicSelectWithPrefs },
+        },
       })
 
       if (!player) {
@@ -92,7 +93,7 @@ export const tournamentEntriesRouter = router({
         })
       }
 
-      if (player.profileVisibility !== 'PUBLIC') {
+      if (player.user.userPreferences?.profileVisibility !== 'PUBLIC') {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'This player profile is private'
@@ -146,7 +147,7 @@ export const tournamentEntriesRouter = router({
       return {
         player: {
           id: player.id,
-          displayName: player.displayName,
+          displayName: getDisplayName(player.user),
         },
         entries,
         totalEntries: entries.length,
@@ -238,7 +239,7 @@ export const tournamentEntriesRouter = router({
           },
           player: {
             select: {
-              displayName: true,
+              user: { select: userPublicSelectMinimal },
             },
           },
           deck: {
@@ -316,7 +317,7 @@ export const tournamentEntriesRouter = router({
           },
           player: {
             select: {
-              displayName: true,
+              user: { select: userPublicSelectMinimal },
             },
           },
           deck: {
@@ -449,7 +450,12 @@ export const tournamentEntriesRouter = router({
             include: {
               player: {
                 select: {
-                  displayName: true,
+                  user: {
+                    select: {
+                      firstName: true,
+                      name: true,
+                    },
+                  },
                 },
               },
               deck: {

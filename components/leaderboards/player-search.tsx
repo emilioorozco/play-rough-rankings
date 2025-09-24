@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
+import type { ApiPlayerSearchResult } from '@/lib/types/api'
 
 interface PlayerSearchProps {
   gameId: string
@@ -37,6 +37,9 @@ export function PlayerSearch({
       refetchOnWindowFocus: false,
     }
   )
+
+  // Narrow tRPC's inferred type to a simple shape to avoid deep instantiation
+  const results = (searchResults ?? []) as unknown as ApiPlayerSearchResult[]
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -100,20 +103,20 @@ export function PlayerSearch({
     }
   }
 
-  const getPlayerRating = (player: Record<string, unknown>) => {
-    const gameStats = (player.gameStats as Array<Record<string, unknown>>)?.find((stat: Record<string, unknown>) => stat.gameId === gameId)
-    return (gameStats?.currentRating as number) || 1200
+  const getPlayerRating = (player: ApiPlayerSearchResult) => {
+    const gameStats = player.gameStats?.find((stat) => stat.gameId === gameId)
+    return gameStats?.currentRating || 1200
   }
 
-  const getPlayerStats = (player: Record<string, unknown>) => {
-    const gameStats = (player.gameStats as Array<Record<string, unknown>>)?.find((stat: Record<string, unknown>) => stat.gameId === gameId)
+  const getPlayerStats = (player: ApiPlayerSearchResult) => {
+    const gameStats = player.gameStats?.find((stat) => stat.gameId === gameId)
     if (!gameStats) return null
     
-    const stats = gameStats.seasonalStats as Record<string, unknown>
+    const stats = gameStats.seasonalStats as unknown as { wins?: number; losses?: number; tournaments?: number }
     return {
-      wins: (stats?.wins as number) || 0,
-      losses: (stats?.losses as number) || 0,
-      tournaments: (stats?.tournaments as number) || 0,
+      wins: stats?.wins || 0,
+      losses: stats?.losses || 0,
+      tournaments: stats?.tournaments || 0,
     }
   }
 
@@ -146,9 +149,9 @@ export function PlayerSearch({
                 <span>Searching players...</span>
               </div>
             </div>
-          ) : searchResults && searchResults.length > 0 ? (
+          ) : results && results.length > 0 ? (
             <div className="search-results">
-              {searchResults.map((player, index) => {
+              {results.map((player, index) => {
                 const rating = getPlayerRating(player)
                 const stats = getPlayerStats(player)
                 const isSelected = selectedPlayers.includes(player.id)
@@ -190,11 +193,10 @@ export function PlayerSearch({
                     </div>
                   )
                 } else {
-                  // Default mode - link to profile
+                  // Default mode - non-link item until route is implemented
                   return (
-                    <Link
+                    <div
                       key={player.id}
-                      href={`/players/${player.id}?game=${gameId}` as `/players/${string}?game=${string}`}
                       className={`search-result-item ${
                         index === selectedIndex ? 'selected' : ''
                       }`}
@@ -218,7 +220,7 @@ export function PlayerSearch({
                         </div>
                       </div>
                       <div className="result-arrow">→</div>
-                    </Link>
+                    </div>
                   )
                 }
               })}

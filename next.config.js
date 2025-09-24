@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: {
+    ignoreBuildErrors: false, // keep strict; set true only temporarily
+  },
   experimental: {
     typedRoutes: true,
     // Enable React experimental features

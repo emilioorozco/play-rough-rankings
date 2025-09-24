@@ -42,7 +42,7 @@ export {
   ModalForm,
   ModalMultiStepForm,
 } from "./form-components"
-export { Modal, FormModal, useModal } from "./modal"
+export { Modal, FormModal } from "./modal"
 export { ConfirmationModal } from "./confirmation-modal"
 export { StatusMessage, SuccessMessage } from "./status-message"
 export { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs"

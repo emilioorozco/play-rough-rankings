@@ -57,12 +57,6 @@ export function LoadingProvider({ children }: LoadingProviderProps) {
           showDetails={process.env.NODE_ENV === 'development'}
           className="mb-4"
         />
-        <div className="flex gap-3 justify-center">
-          <Button onClick={clearGlobalError} variant="outline" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Try Again
-          </Button>
-        </div>
       </Modal>
       
       {/* Global Loading Bar */}

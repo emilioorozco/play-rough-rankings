@@ -34,6 +34,7 @@ export interface ApiPlayerGameStats {
 export interface ApiTournament {
   id: string
   name: string
+  description?: string | null
   date: string | Date
   status: string
   format: string

@@ -214,7 +214,7 @@ export class PersistenceManager {
       const uiStore = useUIStore.getState()
 
       userPreferencesStore.resetPreferences()
-      formDraftStore.clearAllDrafts()
+      formDraftStore.clearDrafts()
       uiStore.resetUI()
 
       console.log('All store data cleared')

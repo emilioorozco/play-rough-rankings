@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { useMemo } from 'react'
 import type { UserPreferencesFormData } from '@/lib/validation/schemas'
 import { storageConfigs } from './persistence-config'
@@ -434,8 +434,8 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
       hasUnsavedChanges: false,
       
       // Actions
-      setPreferences: (preferences) => {
-        set((state) => ({
+      setPreferences: (preferences: Partial<ExtendedUserPreferences>) => {
+        set((state: UserPreferencesState) => ({
           preferences: { ...state.preferences, ...preferences },
           isDirty: true,
           hasUnsavedChanges: true,
@@ -443,8 +443,8 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
         }))
       },
       
-      updatePreference: (key, value) => {
-        set((state) => ({
+      updatePreference: <K extends keyof ExtendedUserPreferences>(key: K, value: ExtendedUserPreferences[K]) => {
+        set((state: UserPreferencesState) => ({
           preferences: { ...state.preferences, [key]: value },
           isDirty: true,
           hasUnsavedChanges: true,
@@ -452,8 +452,8 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
         }))
       },
       
-      updatePreferences: (updates) => {
-        set((state) => ({
+      updatePreferences: (updates: Partial<ExtendedUserPreferences>) => {
+        set((state: UserPreferencesState) => ({
           preferences: { ...state.preferences, ...updates },
           isDirty: true,
           hasUnsavedChanges: true,
@@ -480,8 +480,8 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
       },
       
       // Loading actions
-      setLoading: (key, isLoading) => {
-        set((state) => ({
+      setLoading: (key: keyof UserPreferencesState['loading'], isLoading: boolean) => {
+        set((state: UserPreferencesState) => ({
           loading: {
             ...state.loading,
             [key]: isLoading,
@@ -490,8 +490,8 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
       },
       
       // Error actions
-      setError: (key, error) => {
-        set((state) => ({
+      setError: (key: keyof UserPreferencesState['errors'], error: string | null) => {
+        set((state: UserPreferencesState) => ({
           errors: {
             ...state.errors,
             [key]: error,
@@ -499,8 +499,8 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
         }))
       },
       
-      clearError: (key) => {
-        set((state) => ({
+      clearError: (key: keyof UserPreferencesState['errors']) => {
+        set((state: UserPreferencesState) => ({
           errors: {
             ...state.errors,
             [key]: null,
@@ -533,22 +533,22 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
         })
       },
       
-      setLastUpdated: (date) => {
+      setLastUpdated: (date: Date) => {
         set({ lastUpdated: date })
       },
       
       // Utility actions
-      getPreference: (key) => {
+      getPreference: <K extends keyof ExtendedUserPreferences>(key: K) => {
         const state = get()
-        return state.preferences[key]
+        return state.preferences[key] as ExtendedUserPreferences[K]
       },
       
-      hasPreference: (key) => {
+      hasPreference: (key: keyof ExtendedUserPreferences) => {
         const state = get()
         return key in state.preferences
       },
       
-      getPreferencesByCategory: (category) => {
+      getPreferencesByCategory: (category: keyof PreferenceCategories) => {
         const state = get()
         const categoryKeys = Object.keys(state.metadata).filter(
           key => state.metadata[key as keyof ExtendedUserPreferences].category === category
@@ -556,13 +556,13 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
         
         const result: Partial<ExtendedUserPreferences> = {}
         categoryKeys.forEach(key => {
-          result[key] = state.preferences[key]
+          ;(result as any)[key] = state.preferences[key]
         })
         
         return result
       },
       
-      validatePreferences: (preferences) => {
+      validatePreferences: (preferences: Partial<ExtendedUserPreferences>) => {
         const state = get()
         const errors: Record<string, string> = {}
         
@@ -617,7 +617,7 @@ export const useUserPreferencesStore = create<UserPreferencesState>()(
     }),
     {
       name: storageConfigs.userPreferences.name,
-      storage: storageConfigs.userPreferences.storage,
+      storage: createJSONStorage(() => storageConfigs.userPreferences.storage),
       partialize: storageConfigs.userPreferences.partialize,
       onRehydrateStorage: storageConfigs.userPreferences.onRehydrateStorage,
     }
@@ -669,7 +669,7 @@ export const useUserPreferencesByCategory = (category: keyof PreferenceCategorie
     const categoryMetadata: Record<string, PreferenceMetadata> = {}
     
     categoryKeys.forEach(key => {
-      categoryPreferences[key] = preferences[key]
+      ;(categoryPreferences as any)[key] = preferences[key]
       categoryMetadata[key] = metadata[key]
     })
     

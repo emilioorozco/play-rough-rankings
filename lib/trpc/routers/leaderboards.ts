@@ -11,6 +11,7 @@ import {
   getCurrentSeason,
   getSeasonDateRange 
 } from '@/lib/rating/ranking-system'
+import { getDisplayName, userPublicSelectMinimal } from '@/lib/utils/user'
 import type {
   DateFilterClause,
   LeaderboardFilter,
@@ -49,8 +50,12 @@ export const leaderboardsRouter = router({
           gameId: input.gameId,
           player: {
             user: {
-              userPreferences: {
-                profileVisibility: 'PUBLIC', // Only show public profiles
+              is: {
+                userPreferences: {
+                  is: {
+                    profileVisibility: 'PUBLIC', // Only show public profiles
+                  },
+                },
               },
             },
           },
@@ -59,13 +64,7 @@ export const leaderboardsRouter = router({
           player: {
             select: {
               id: true,
-              user: {
-                select: {
-                  name: true,
-                  firstName: true,
-                  lastName: true,
-                },
-              },
+              user: { select: userPublicSelectMinimal },
             },
           },
         },
@@ -98,7 +97,7 @@ export const leaderboardsRouter = router({
         return {
           rank: index + 1,
           playerId: stat.playerId,
-          displayName: stat.player.user.firstName || stat.player.user.name || 'Anonymous Player',
+          displayName: getDisplayName(stat.player.user),
           currentRating: stat.currentRating,
           seasonalStats: {
             wins: seasonalStats.wins || 0,
@@ -162,8 +161,12 @@ export const leaderboardsRouter = router({
           gameId: input.gameId,
           player: {
             user: {
-              userPreferences: {
-                profileVisibility: 'PUBLIC',
+              is: {
+                userPreferences: {
+                  is: {
+                    profileVisibility: 'PUBLIC',
+                  },
+                },
               },
             },
           },
@@ -172,13 +175,7 @@ export const leaderboardsRouter = router({
           player: {
             select: {
               id: true,
-              user: {
-                select: {
-                  name: true,
-                  firstName: true,
-                  lastName: true,
-                },
-              },
+              user: { select: userPublicSelectMinimal },
             },
           },
         },
@@ -248,7 +245,7 @@ export const leaderboardsRouter = router({
         return {
           rank: index + 1,
           playerId: playerStat.playerId,
-          displayName: playerStat.player.displayName || 'Anonymous Player',
+          displayName: getDisplayName(playerStat.player.user),
           currentRating: playerStat.currentRating,
           seasonalStats: {
             wins: seasonalStats.wins || 0,
@@ -447,13 +444,7 @@ export const leaderboardsRouter = router({
           player: {
             select: {
               id: true,
-              user: {
-                select: {
-                  name: true,
-                  firstName: true,
-                  lastName: true,
-                },
-              },
+              user: { select: userPublicSelectMinimal },
             },
           },
         },
@@ -470,7 +461,7 @@ export const leaderboardsRouter = router({
 
           return {
             playerId: playerData.playerId,
-            displayName: playerData.player.user.firstName || playerData.player.user.name || 'Anonymous Player',
+            displayName: getDisplayName(playerData.player.user),
             currentRating: playerData.currentRating,
             periodStats: {
               wins: periodStats.wins,
@@ -786,6 +777,18 @@ export const leaderboardsRouter = router({
       // Verify player exists and check privacy
       const player = await ctx.prisma.player.findUnique({
         where: { id: input.playerId },
+        include: {
+          user: {
+            select: {
+              name: true,
+              firstName: true,
+              lastName: true,
+              userPreferences: {
+                select: { profileVisibility: true },
+              },
+            },
+          },
+        },
       })
 
       if (!player) {
@@ -795,7 +798,7 @@ export const leaderboardsRouter = router({
         })
       }
 
-      if (player.profileVisibility !== 'PUBLIC') {
+      if (player.user.userPreferences?.profileVisibility !== 'PUBLIC') {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'This player profile is private'
@@ -814,7 +817,7 @@ export const leaderboardsRouter = router({
         game,
         player: {
           id: player.id,
-          displayName: player.user.firstName || player.user.name,
+          displayName: getDisplayName(player.user),
         },
         trends,
       }
@@ -1026,6 +1029,18 @@ export const leaderboardsRouter = router({
       // Verify player exists and check privacy
       const player = await ctx.prisma.player.findUnique({
         where: { id: input.playerId },
+        include: {
+          user: {
+            select: {
+              name: true,
+              firstName: true,
+              lastName: true,
+              userPreferences: {
+                select: { profileVisibility: true },
+              },
+            },
+          },
+        },
       })
 
       if (!player) {
@@ -1035,7 +1050,7 @@ export const leaderboardsRouter = router({
         })
       }
 
-      if (player.profileVisibility !== 'PUBLIC') {
+      if (player.user.userPreferences?.profileVisibility !== 'PUBLIC') {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'This player profile is private'

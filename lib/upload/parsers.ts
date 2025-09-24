@@ -14,6 +14,21 @@ import type {
 const TournamentLevelEnum = TournamentSchema.shape.tournamentLevel
 type TournamentLevel = z.infer<typeof TournamentLevelEnum>
 
+// Normalize and validate tournament level strings from files
+const parseTournamentLevel = (raw?: string): TournamentLevel | undefined => {
+  if (!raw) return undefined
+  const value = raw.toString().trim().toUpperCase()
+  switch (value) {
+    case 'LOCAL':
+    case 'REGIONAL':
+    case 'NATIONAL':
+    case 'INTERNATIONAL':
+      return value as TournamentLevel
+    default:
+      return undefined
+  }
+}
+
 // External tournament data schemas for file uploads
 export const TournamentPlayerSchema = z.object({
   playerId: z.string().uuid().optional(), // Internal player ID (if known)
@@ -116,7 +131,8 @@ const parseMatchResultsCSV = (rows: CSVRowData[]): TournamentData => {
     maxPlayers: firstRow.max_players ? parseInt(firstRow.max_players as string) : undefined,
     entryFee: firstRow.entry_fee ? parseFloat(firstRow.entry_fee as string) : undefined,
     prizePool: (firstRow.prize_pool as string) || (firstRow.prizePool as string) || undefined,
-    tournamentLevel: (firstRow.tournament_level as string) || (firstRow.tournamentLevel as string) || 'LOCAL',
+    tournamentLevel:
+      parseTournamentLevel((firstRow.tournament_level as string) || (firstRow.tournamentLevel as string)) || 'LOCAL',
   }
 
   // Process each match

@@ -143,17 +143,15 @@ export function useTournamentFilters() {
   const activeFilterCount = useTournamentFilterSelectors.getActiveFilterCount()
   
   const setFilters = useTournamentActions.setFilters()
-  const setFilter = useTournamentActions.setFilter()
-  const clearFilters = useTournamentActions.clearFilters()
   const resetFilters = useTournamentActions.resetFilters()
 
   const setFilterValue = useCallback((key: keyof typeof filters, value: any) => {
-    setFilter(key, value)
-  }, [setFilter])
+    setFilters({ [key]: value })
+  }, [setFilters])
 
   const clear = useCallback(() => {
-    clearFilters()
-  }, [clearFilters])
+    resetFilters()
+  }, [resetFilters])
 
   const reset = useCallback(() => {
     resetFilters()
@@ -230,8 +228,6 @@ export function useTournamentStoreActions() {
   const clearRegistrationStatus = useTournamentActions.clearRegistrationStatus()
   const clearAllRegistrationStatus = useTournamentStore((state) => state.clearAllRegistrationStatus)
   const setFilters = useTournamentActions.setFilters()
-  const setFilter = useTournamentActions.setFilter()
-  const clearFilters = useTournamentActions.clearFilters()
   const resetFilters = useTournamentActions.resetFilters()
   const invalidateTournament = useTournamentStore((state) => state.invalidateTournament)
   const invalidateTournamentList = useTournamentStore((state) => state.invalidateTournamentList)
@@ -267,8 +263,6 @@ export function useTournamentStoreActions() {
     
     // Filter actions
     setFilters,
-    setFilter,
-    clearFilters,
     resetFilters,
     
     // Utility actions
