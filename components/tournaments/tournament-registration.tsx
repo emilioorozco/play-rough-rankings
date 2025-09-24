@@ -1,65 +1,98 @@
-"use client";
+'use client'
 
-import React, { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useFormSteps } from "@/hooks/useFormState";
-import { tournamentRegistrationSchema, type TournamentRegistrationFormData } from "@/lib/validation/schemas";
-import { ModalMultiStepForm, FormInput, FormTextarea, FormSelect, FormCombobox, FormCheckbox, FormActions, FormStatus } from "../ui/form-components";
-import { Modal } from "../ui/modal";
-import { useTRPCMutationWithLoading } from "@/hooks/useTRPCWithLoading";
-import { trpc } from "@/lib/trpc/client";
-import { z } from "zod";
-import { useModal } from "@/stores/ui-store";
-import { useFormDraft } from "@/hooks/useFormDraft";
+import React, { useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { trpc } from '@/lib/trpc/client'
+import { useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
+import { useFormStepsEnhanced } from '@/hooks/useFormDraft'
+import { useFormDraftStore } from '@/stores/form-draft-store'
+import { useModal } from '@/stores/ui-store'
+import { useTournamentStore } from '@/stores/tournament-store'
+import { tournamentRegistrationSchema, type TournamentRegistrationFormData } from '@/lib/validation/schemas'
+import { ModalForm } from '@/components/ui/form-components'
+import { Modal } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react'
 
 interface TournamentRegistrationProps {
-  isOpen: boolean;
-  onClose: () => void;
-  tournamentId: string;
-  currentUser?: any;
-  onSuccess?: () => void;
-  className?: string;
+  tournamentId: string
+  currentUser?: {
+    id: string
+    role: string
+    displayName?: string | null
+    firstName?: string | null
+    lastName?: string | null
+    email?: string | null
+  } | null
+  className?: string
 }
 
 export function TournamentRegistration({ 
-  isOpen,
-  onClose,
   tournamentId, 
   currentUser, 
-  onSuccess, 
   className 
 }: TournamentRegistrationProps) {
-  const router = useRouter();
-  const hasResetOnOpen = useRef(false);
-  const hasResetOnClose = useRef(false);
+  const router = useRouter()
+  const hasResetOnOpen = useRef(false)
+  const hasResetOnClose = useRef(false)
 
   // Use UI store for modal management
-  const modal = useModal('tournamentRegistration');
+  const modal = useModal('tournamentRegistration')
+  const { hasDraft, clearDraft } = useFormDraftStore()
+  
+  // Use tournament store for state management
+  const { setRegistrationStatus, invalidateTournament } = useTournamentStore()
 
-  // Registration mutation - always call this hook first
+  // tRPC utils for invalidation
+  const utils = trpc.useUtils()
+
+  // Registration mutation
   const registerMutation = useTRPCMutationWithLoading(
     'tournament-registration',
     () => trpc.tournaments.register.useMutation(),
     {
-      onSuccess: () => {
-        // Success is handled by the form's onSubmit callback
+      onSuccess: async () => {
+        // Update tournament store state
+        setRegistrationStatus(tournamentId, {
+          isRegistered: true,
+          canRegister: false,
+          canWithdraw: true,
+          isFull: false,
+          participantCount: 0, // Will be updated by the parent component
+          maxPlayers: undefined,
+        })
+        invalidateTournament(tournamentId)
+        // Invalidate relevant queries to refresh server state
+        await Promise.all([
+          utils.tournaments.getRegistrationStatus.invalidate({ tournamentId }),
+          utils.tournaments.getById.invalidate({ id: tournamentId }),
+        ])
       },
-      // Remove onError to let errors propagate to the component
+      onError: (error) => {
+        console.error("Registration failed:", error)
+      },
     }
-  );
+  )
 
-  // Always define the same steps array to ensure consistent hook order
-  // We'll handle the conditional logic inside the form rendering
-  const allSteps = ['personal-info', 'deck-info', 'confirmation'];
-  
-  // Check if we need to collect name information - after all hooks are called
-  // NOTE: The 'name' field in currentUser is actually a displayName for backwards compatibility
-  // We should check for firstName and lastName fields specifically
-  const needsNameInfo = !currentUser?.firstName || !currentUser?.lastName;
-  
+  // Reset mutation state when modal closes
+  useEffect(() => {
+    if (!modal.isOpen && registerMutation.isSuccess) {
+      registerMutation.reset()
+    }
+  }, [modal.isOpen, registerMutation])
 
-  // Multi-step form state - always use the same steps array
-  const formState = useFormSteps<TournamentRegistrationFormData>({
+  // Define steps array conditionally based on user data
+  const needsNameInfo = !currentUser?.firstName || !currentUser?.lastName
+  const allSteps = needsNameInfo 
+    ? ['personal-info', 'deck-info', 'confirmation']
+    : ['deck-info', 'confirmation']
+
+  // Enhanced multi-step form state
+  const formState = useFormStepsEnhanced<TournamentRegistrationFormData>({
     steps: allSteps,
     initialData: {
       firstName: currentUser?.firstName || '',
@@ -69,11 +102,20 @@ export function TournamentRegistration({
       shareDeckList: true,
       agreesToConduct: false,
     },
-    validationSchemas: {
+    validationSchemas: needsNameInfo ? {
       'personal-info': tournamentRegistrationSchema.pick({
         firstName: true,
         lastName: true,
       }),
+      'deck-info': tournamentRegistrationSchema.pick({
+        deckArchetype: true,
+        deckList: true,
+        shareDeckList: true,
+      }),
+      'confirmation': tournamentRegistrationSchema.pick({
+        agreesToConduct: true,
+      }),
+    } : {
       'deck-info': tournamentRegistrationSchema.pick({
         deckArchetype: true,
         deckList: true,
@@ -87,20 +129,28 @@ export function TournamentRegistration({
       await registerMutation.mutateAsync({
         tournamentId,
         ...data,
-      });
-      // Delay is handled by the form system's default loading delay
-      // Modal will auto-close after the delay, then onSuccess will be called
+      })
     },
     onSuccess: () => {
-      // Call the parent's onSuccess callback to update registration status
-      onSuccess?.();
+      // Success is handled by the mutation's onSuccess callback
     },
     onError: (error) => {
-      console.error("Registration error:", error);
+      console.error("Registration error:", error)
     },
     showLoadingBar: true,
-  });
-
+    // Enhanced features
+    formId: `tournament-registration-${tournamentId}`,
+    enableAutoSave: true,
+    autoSaveDelay: 2000,
+    enableDraftPersistence: true,
+    enableUserPreferences: true,
+    onAutoSave: (data) => {
+      console.log('Auto-saved tournament registration draft:', data)
+    },
+    onDraftRestore: (data) => {
+      console.log('Restored tournament registration draft:', data)
+    },
+  })
 
   const deckArchetypes = [
     'Aggro',
@@ -113,13 +163,13 @@ export function TournamentRegistration({
     'Mill',
     'Tribal',
     'Other',
-  ];
+  ]
 
-  // Reset form when modal opens and handle step navigation
+  // Reset form when modal opens
   useEffect(() => {
-    if (isOpen && !hasResetOnOpen.current) {
-      hasResetOnOpen.current = true;
-      hasResetOnClose.current = false;
+    if (modal.isOpen && !hasResetOnOpen.current) {
+      hasResetOnOpen.current = true
+      hasResetOnClose.current = false
       
       // Reset form data to initial values
       formState.setFields({
@@ -129,204 +179,226 @@ export function TournamentRegistration({
         deckList: '',
         shareDeckList: true,
         agreesToConduct: false,
-      });
+      })
       
-      // Determine initial step based on whether name info is needed
-      const initialStep = needsNameInfo ? 0 : 1; // Skip personal-info if not needed
-      formState.goToStep(initialStep);
-      
+      // Reset to first step
+      formState.goToStep(0)
     }
-  }, [isOpen, currentUser, formState.setFields, formState.goToStep, needsNameInfo]);
+  }, [modal.isOpen, currentUser, formState.setFields, formState.goToStep])
 
   // Reset form when modal is closed
   useEffect(() => {
-    if (!isOpen && !hasResetOnClose.current) {
-      hasResetOnClose.current = true;
-      hasResetOnOpen.current = false;
+    if (!modal.isOpen && hasResetOnOpen.current && !hasResetOnClose.current) {
+      hasResetOnClose.current = true
+      hasResetOnOpen.current = false
       
-      formState.reset();
-      registerMutation.reset();
-    } else if (isOpen) {
-      hasResetOnClose.current = false;
+      // Reset form state
+      formState.reset()
     }
-  }, [isOpen, formState.reset, registerMutation.reset]);
+  }, [modal.isOpen, formState.reset])
 
-  const handleClose = () => {
-    onClose();
-  };
-
-  const handleSubmit = () => {
-    formState.submit();
-  };
-
-  const renderPersonalInfoStep = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">Personal Information</h3>
-        <p className="text-sm text-muted-foreground">
-          Please provide your name for tournament registration.
-        </p>
-      </div>
-
-      <FormInput
-        label="First Name"
-        value={formState.data.firstName}
-        onChange={(e) => formState.setField('firstName', e.target.value)}
-        error={formState.errors.firstName}
-        required
-        placeholder="Enter your first name"
-        description="Your first name as it should appear on tournament records"
-      />
-
-      <FormInput
-        label="Last Name"
-        value={formState.data.lastName}
-        onChange={(e) => formState.setField('lastName', e.target.value)}
-        error={formState.errors.lastName}
-        required
-        placeholder="Enter your last name"
-        description="Your last name as it should appear on tournament records"
-      />
-    </div>
-  );
-
-  const renderDeckInfoStep = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">Deck Information</h3>
-        <p className="text-sm text-muted-foreground">
-          Provide information about the deck you'll be playing.
-        </p>
-      </div>
-
-      <FormSelect
-        label="Deck Archetype"
-        value={formState.data.deckArchetype}
-        onValueChange={(value) => formState.setField('deckArchetype', value)}
-        error={formState.errors.deckArchetype}
-        required
-        options={deckArchetypes.map(archetype => ({ value: archetype, label: archetype }))}
-        placeholder="Select your deck archetype"
-        description="Choose the archetype that best describes your deck"
-      />
-
-      <FormTextarea
-        label="Deck List"
-        value={formState.data.deckList}
-        onChange={(e) => formState.setField('deckList', e.target.value)}
-        error={formState.errors.deckList}
-        required
-        placeholder="Enter your deck list..."
-        description="Provide your complete deck list. This helps with tournament organization and deck verification."
-        rows={8}
-      />
-
-      <FormCheckbox
-        label="Share Deck List"
-        checked={formState.data.shareDeckList}
-        onCheckedChange={(checked) => formState.setField('shareDeckList', checked)}
-        description="Allow other players to view your deck list after the tournament"
-      />
-    </div>
-  );
-
-  const renderConfirmationStep = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">Confirmation</h3>
-        <p className="text-sm text-muted-foreground">
-          Please review your registration details and confirm your participation.
-        </p>
-      </div>
-
-      <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-        <h4 className="font-medium">Registration Summary</h4>
-        <div className="text-sm space-y-1">
-          <p><strong>Name:</strong> {formState.data.firstName} {formState.data.lastName}</p>
-          <p><strong>Deck Archetype:</strong> {formState.data.deckArchetype}</p>
-          <p><strong>Share Deck List:</strong> {formState.data.shareDeckList ? 'Yes' : 'No'}</p>
-        </div>
-      </div>
-
-      <FormCheckbox
-        label="I agree to the Code of Conduct"
-        checked={formState.data.agreesToConduct}
-        onCheckedChange={(checked) => formState.setField('agreesToConduct', checked)}
-        error={formState.errors.agreesToConduct}
-        required
-        description="By checking this box, you agree to follow the tournament's code of conduct and rules"
-      />
-    </div>
-  );
 
   const renderStep = () => {
     switch (formState.currentStepName) {
       case 'personal-info':
-        return renderPersonalInfoStep();
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Personal Information</h3>
+              <p className="text-muted-foreground">
+                Please provide your name for tournament registration.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                First Name <span className="text-destructive">*</span>
+              </label>
+              <Input
+                value={formState.data.firstName}
+                onChange={(e) => formState.setField('firstName', e.target.value)}
+                placeholder="Enter your first name"
+                className={formState.errors.firstName ? 'border-destructive' : ''}
+              />
+              {formState.errors.firstName && (
+                <p className="text-sm text-destructive">{formState.errors.firstName}</p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Last Name <span className="text-destructive">*</span>
+              </label>
+              <Input
+                value={formState.data.lastName}
+                onChange={(e) => formState.setField('lastName', e.target.value)}
+                placeholder="Enter your last name"
+                className={formState.errors.lastName ? 'border-destructive' : ''}
+              />
+              {formState.errors.lastName && (
+                <p className="text-sm text-destructive">{formState.errors.lastName}</p>
+              )}
+            </div>
+          </div>
+        )
+
       case 'deck-info':
-        return renderDeckInfoStep();
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Deck Information</h3>
+              <p className="text-muted-foreground">
+                Tell us about your deck for this tournament.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Deck Archetype <span className="text-destructive">*</span>
+              </label>
+              <Select
+                value={formState.data.deckArchetype}
+                onValueChange={(value) => formState.setField('deckArchetype', value)}
+              >
+                <SelectTrigger className={formState.errors.deckArchetype ? 'border-destructive' : ''}>
+                  <SelectValue placeholder="Select your deck archetype" />
+                </SelectTrigger>
+                <SelectContent>
+                  {deckArchetypes.map((archetype) => (
+                    <SelectItem key={archetype} value={archetype}>
+                      {archetype}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formState.errors.deckArchetype && (
+                <p className="text-sm text-destructive">{formState.errors.deckArchetype}</p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Deck List <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                value={formState.data.deckList}
+                onChange={(e) => formState.setField('deckList', e.target.value)}
+                placeholder="Paste your deck list here..."
+                rows={8}
+                className={formState.errors.deckList ? 'border-destructive' : ''}
+              />
+              {formState.errors.deckList && (
+                <p className="text-sm text-destructive">{formState.errors.deckList}</p>
+              )}
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="shareDeckList"
+                checked={formState.data.shareDeckList}
+                onCheckedChange={(checked) => formState.setField('shareDeckList', checked)}
+              />
+              <label
+                htmlFor="shareDeckList"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Share my deck list publicly
+              </label>
+            </div>
+          </div>
+        )
+
       case 'confirmation':
-        return renderConfirmationStep();
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Confirmation</h3>
+              <p className="text-muted-foreground">
+                Please review your information and confirm your registration.
+              </p>
+            </div>
+            
+            <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+              <div>
+                <span className="font-medium">Name:</span> {formState.data.firstName} {formState.data.lastName}
+              </div>
+              <div>
+                <span className="font-medium">Deck Archetype:</span> {formState.data.deckArchetype}
+              </div>
+              <div>
+                <span className="font-medium">Share Deck List:</span> {formState.data.shareDeckList ? 'Yes' : 'No'}
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="agreesToConduct"
+                checked={formState.data.agreesToConduct}
+                onCheckedChange={(checked) => formState.setField('agreesToConduct', checked)}
+                className={formState.errors.agreesToConduct ? 'border-destructive' : ''}
+              />
+              <label
+                htmlFor="agreesToConduct"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                I agree to follow the tournament code of conduct
+              </label>
+            </div>
+            {formState.errors.agreesToConduct && (
+              <p className="text-sm text-destructive">{formState.errors.agreesToConduct}</p>
+            )}
+          </div>
+        )
+
       default:
-        return null;
+        return null
     }
-  };
+  }
+
+  // Ensure form state is properly initialized before rendering
+  if (!formState || !formState.steps) {
+    return null
+  }
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
+      isOpen={modal.isOpen}
+      onClose={modal.close}
       title="Tournament Registration"
+      description="Register for the tournament by completing the steps below"
       size="lg"
-      closeOnOverlayClick={!formState.isSubmitting && !registerMutation.isLoading}
-      autoCloseDelay={registerMutation.isSuccess ? 3 : 0}
-      success={registerMutation.isSuccess ? "Registration successful!" : undefined}
+      className={className}
       isMultiStep={true}
-      currentStep={registerMutation.isSuccess ? (needsNameInfo ? 3 : 2) : (needsNameInfo ? formState.currentStep : Math.max(0, formState.currentStep - 1))}
-      totalSteps={needsNameInfo ? 3 : 2}
-      onSubmit={handleSubmit}
-      onCancel={handleClose}
-      isSubmitting={formState.isSubmitting || registerMutation.isLoading}
+      currentStep={formState.currentStep}
+      totalSteps={formState.steps?.length || 0}
+      onSubmit={registerMutation.isSuccess ? modal.close : formState.submit}
+      onCancel={registerMutation.isSuccess ? modal.close : (formState.isFirstStep ? modal.close : formState.goToPreviousStep)}
+      isSubmitting={formState.isSubmitting}
       isValid={formState.isValid}
       isDirty={formState.isDirty}
       submitLabel={
-        formState.currentStepName === 'confirmation'
-          ? "Complete Registration" 
-          : formState.currentStepName === 'success' 
-            ? "View Tournament"
+        registerMutation.isSuccess 
+          ? "Done" 
+          : formState.isLastStep 
+            ? "Complete Registration" 
             : "Continue"
       }
-      cancelLabel="Cancel"
-      showCancel={formState.currentStepName !== 'success'}
+      cancelLabel={
+        registerMutation.isSuccess 
+          ? "Close" 
+          : formState.isFirstStep 
+            ? "Cancel" 
+            : "Back"
+      }
+      showCancel={true}
+      showReset={false}
+      success={registerMutation.isSuccess ? "Registration successful!" : undefined}
+      error={registerMutation.error?.message}
+      autoCloseDelay={registerMutation.isSuccess ? 3 : 0}
     >
-      <ModalMultiStepForm
-        currentStep={needsNameInfo ? formState.currentStep : Math.max(0, formState.currentStep - 1)}
-        totalSteps={needsNameInfo ? 3 : 2}
-        className={className}
-      >
-        {/* Step Navigation - Above everything */}
-        {!formState.isFirstStep && (
-          <div className="flex justify-start mb-4">
-            <button
-              type="button"
-              onClick={formState.goToPreviousStep}
-              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
-              disabled={formState.isSubmitting}
-            >
-              ← Back to previous step
-            </button>
-          </div>
-        )}
-
-      <form onSubmit={(e) => e.preventDefault()}>
-        <FormStatus 
-          error={registerMutation.error?.message}
-        />
-
+      <ModalForm onSubmit={formState.handleSubmit}>
         {renderStep()}
-
-      </form>
-      </ModalMultiStepForm>
+      </ModalForm>
     </Modal>
-  );
+  )
 }

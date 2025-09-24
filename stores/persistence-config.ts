@@ -76,6 +76,9 @@ export const storageConfigs = {
         getItem: () => null,
         setItem: () => {},
         removeItem: () => {},
+        length: 0,
+        clear: () => {},
+        key: () => null,
       } as Storage,
       1,
       'leaderboard_'
@@ -85,7 +88,7 @@ export const storageConfigs = {
       lastUpdated: state.lastUpdated,
       version: 1,
     }),
-    onRehydrateStorage: () => (state, error) => {
+    onRehydrateStorage: () => (state: any, error: unknown) => {
       if (error) {
         console.error('Error rehydrating user preferences:', error)
       } else {
@@ -103,6 +106,9 @@ export const storageConfigs = {
         getItem: () => null,
         setItem: () => {},
         removeItem: () => {},
+        length: 0,
+        clear: () => {},
+        key: () => null,
       } as Storage,
       1,
       'leaderboard_'
@@ -113,7 +119,7 @@ export const storageConfigs = {
       autoSaveSettings: state.autoSaveSettings,
       version: 1,
     }),
-    onRehydrateStorage: () => (state, error) => {
+    onRehydrateStorage: () => (state: any, error: unknown) => {
       if (error) {
         console.error('Error rehydrating form drafts:', error)
       } else {
@@ -146,6 +152,9 @@ export const storageConfigs = {
         getItem: () => null,
         setItem: () => {},
         removeItem: () => {},
+        length: 0,
+        clear: () => {},
+        key: () => null,
       } as Storage,
       1,
       'leaderboard_'
@@ -156,7 +165,7 @@ export const storageConfigs = {
       filters: state.filters,
       version: 1,
     }),
-    onRehydrateStorage: () => (state, error) => {
+    onRehydrateStorage: () => (state: any, error: unknown) => {
       if (error) {
         console.error('Error rehydrating UI state:', error)
       } else {

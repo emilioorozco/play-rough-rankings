@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import { 
   calculateMatchRatingChanges, 
   calculateChampionshipPoints, 
@@ -174,7 +174,7 @@ export const processMatchResult = async (
         },
         data: {
           currentRating: ratingChanges.player1NewRating,
-          seasonalStats: player1StatsUpdate,
+          seasonalStats: player1StatsUpdate as unknown as Prisma.InputJsonValue,
         },
       }),
       tx.playerGameStats.update({
@@ -186,7 +186,7 @@ export const processMatchResult = async (
         },
         data: {
           currentRating: ratingChanges.player2NewRating,
-          seasonalStats: player2StatsUpdate,
+          seasonalStats: player2StatsUpdate as unknown as Prisma.InputJsonValue,
         },
       }),
     ])
@@ -312,7 +312,7 @@ export const processTournamentCompletion = async (
               },
             },
             data: {
-              seasonalStats: updatedSeasonalStats,
+              seasonalStats: updatedSeasonalStats as unknown as Prisma.InputJsonValue,
               bestFinish: playerStats.bestFinish 
                 ? Math.min(playerStats.bestFinish, placement)
                 : placement,

@@ -1,6 +1,5 @@
 'use client'
-
-import Link from 'next/link'
+// Link temporarily removed until player route is implemented
 
 import type { ApiLeaderboardEntry } from '@/lib/types/api'
 
@@ -44,12 +43,13 @@ export function PlayerRankingCard({ player, gameId, season }: PlayerRankingCardP
           </span>
         </div>
         <div className="player-section">
-          <Link 
-            href={`/players/${player.playerId}` as `/players/${string}`}
-            className="player-name"
+          <span
+            role="link"
+            tabIndex={0}
+            className="player-name cursor-pointer"
           >
             {player.displayName}
-          </Link>
+          </span>
           <div className="rating-display">
             <span className="rating-label">Rating:</span>
             <span className="rating-value">{player.currentRating}</span>
@@ -137,12 +137,13 @@ export function PlayerRankingCard({ player, gameId, season }: PlayerRankingCardP
         </div>
         
         <div className="card-actions">
-          <Link 
-            href={`/players/${player.playerId}?game=${gameId}${season ? `&season=${season}` : ''}` as `/players/${string}?game=${string}${string}`}
-            className="view-profile-btn"
+          <span
+            role="link"
+            tabIndex={0}
+            className="view-profile-btn cursor-pointer"
           >
             View Profile
-          </Link>
+          </span>
         </div>
       </div>
     </div>

@@ -7,12 +7,11 @@ import { TournamentParticipants } from './tournament-participants'
 import { TournamentResults } from './tournament-results'
 import { TournamentDiscussion } from './tournament-discussion'
 import type { ApiTournament } from '@/lib/types/api'
+import { useTab } from '@/stores/ui-store'
 import * as React from 'react'
 
 interface TournamentTabsProps {
   tournament: ApiTournament
-  activeTab: 'overview' | 'brackets' | 'participants' | 'results' | 'discussion'
-  onTabChange: (tab: 'overview' | 'brackets' | 'participants' | 'results' | 'discussion') => void
   isOrganizer: boolean
   isRegistered: boolean
   currentUser?: {
@@ -27,15 +26,19 @@ interface TournamentTabsProps {
 
 export function TournamentTabs({
   tournament,
-  activeTab,
-  onTabChange,
   isOrganizer,
   isRegistered,
   currentUser,
   userPreferences
 }: TournamentTabsProps) {
+  const { activeTab, setActiveTab, setAvailableTabs } = useTab('tournamentDetails')
   const mobileScrollRef = React.useRef<HTMLDivElement | null>(null)
   const anchorRef = React.useRef<HTMLDivElement | null>(null)
+
+  // Initialize with default tab if none is active
+  if (!activeTab) {
+    setActiveTab('overview')
+  }
 
   React.useEffect(() => {
     const container = mobileScrollRef.current
@@ -66,11 +69,14 @@ export function TournamentTabs({
     }
   }, [activeTab])
 
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+  }
 
   return (
     <>
       <div ref={anchorRef} />
-      <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
       {/* Mobile: horizontally scrollable tab list */}
       <div className="block lg:hidden -mx-4 px-4">
         <div ref={mobileScrollRef} className="flex gap-2 overflow-x-auto no-scrollbar">

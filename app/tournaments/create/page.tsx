@@ -21,9 +21,10 @@ export default function TournamentManagementPage() {
   });
 
   // Filter tournaments where the user is the organizer
-  const tournaments = tournamentsData?.tournaments?.filter(
-    tournament => tournament.organizer?.id === user?.id
-  );
+  const tournaments =
+    (tournamentsData?.tournaments as any[] | undefined)?.filter(
+      (tournament: any) => tournament?.organizer?.id === user?.id
+    );
 
   const handleCreateSuccess = () => {
     setIsModalOpen(false);
@@ -93,7 +94,7 @@ export default function TournamentManagementPage() {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Users className="h-4 w-4" />
                         <span>
-                          {tournament.entries?.length || 0} / {tournament.maxPlayers || '∞'} players
+                          {tournament.entryCount || 0} / {tournament.maxPlayers || '∞'} players
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">

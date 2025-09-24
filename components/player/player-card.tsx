@@ -6,7 +6,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Avatar, AvatarFallback } from '../ui/avatar'
 import { Progress } from '../ui/progress'
-import Link from 'next/link'
+// Link temporarily removed until players route is implemented
 
 interface PlayerCardProps {
   player: {
@@ -108,9 +108,9 @@ export function PlayerCard({ player, gameId, rank, showActions = true }: PlayerC
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-lg text-card-foreground truncate group-hover:text-primary transition-colors duration-200">
-                <Link href={`/players/${player.id}`} className="hover:underline">
+                <span className="hover:underline cursor-pointer">
                   {player.displayName}
-                </Link>
+                </span>
               </h3>
               <p className="text-sm text-muted-foreground">@{player.userName || 'player'}</p>
             </div>
@@ -193,11 +193,9 @@ export function PlayerCard({ player, gameId, rank, showActions = true }: PlayerC
               variant="outline" 
               className="hover:bg-accent hover:border-accent transition-colors duration-200"
               size="sm"
-              asChild
+              disabled
             >
-              <Link href={`/players/${player.id}`}>
-                View Profile
-              </Link>
+              View Profile
             </Button>
           </div>
         )}

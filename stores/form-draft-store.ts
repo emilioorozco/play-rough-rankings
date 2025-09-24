@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { useMemo } from 'react'
 import { z } from 'zod'
 import { storageConfigs } from './persistence-config'
@@ -263,7 +263,7 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       // Draft management actions
-      createDraft: (formType, initialData, metadata) => {
+      createDraft: (formType: string, initialData: Record<string, any>, metadata?: Partial<FormDraftMetadata>) => {
         const draftId = `${formType}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         const now = new Date()
         
@@ -285,7 +285,7 @@ export const useFormDraftStore = create<FormDraftState>()(
           isExpired: false,
         }
         
-        set((state) => ({
+        set((state: FormDraftState) => ({
           drafts: {
             ...state.drafts,
             [draftId]: draft,
@@ -296,8 +296,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         return draftId
       },
       
-      updateDraft: (draftId, updates) => {
-        set((state) => {
+      updateDraft: (draftId: string, updates: Partial<ExtendedFormDraft>) => {
+        set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
           if (!draft) return state
           
@@ -315,8 +315,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         })
       },
       
-      updateDraftData: (draftId, data) => {
-        set((state) => {
+      updateDraftData: (draftId: string, data: Record<string, any>) => {
+        set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
           if (!draft) return state
           
@@ -342,8 +342,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         })
       },
       
-      updateDraftStep: (draftId, step) => {
-        set((state) => {
+      updateDraftStep: (draftId: string, step: number) => {
+        set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
           if (!draft) return state
           
@@ -361,8 +361,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         })
       },
       
-      deleteDraft: (draftId) => {
-        set((state) => {
+      deleteDraft: (draftId: string) => {
+        set((state: FormDraftState) => {
           const newDrafts = { ...state.drafts }
           delete newDrafts[draftId]
           
@@ -373,8 +373,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         })
       },
       
-      clearDrafts: (formType) => {
-        set((state) => {
+      clearDrafts: (formType?: string) => {
+        set((state: FormDraftState) => {
           if (formType) {
             const newDrafts = { ...state.drafts }
             Object.keys(newDrafts).forEach(key => {
@@ -390,41 +390,41 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       // Active draft actions
-      setActiveDraft: (draftId) => {
+      setActiveDraft: (draftId: string | null) => {
         set({ activeDraftId: draftId })
       },
       
-      getActiveDraft: () => {
+      getActiveDraft: (): ExtendedFormDraft | null => {
         const state = get()
         return state.activeDraftId ? state.drafts[state.activeDraftId] || null : null
       },
       
       // Draft retrieval actions
-      getDraft: (draftId) => {
+      getDraft: (draftId: string): ExtendedFormDraft | null => {
         const state = get()
         return state.drafts[draftId] || null
       },
       
-      getDraftsByType: (formType) => {
+      getDraftsByType: (formType: string): ExtendedFormDraft[] => {
         const state = get()
-        return Object.values(state.drafts).filter(draft => draft.formType === formType)
+        return (Object.values(state.drafts) as ExtendedFormDraft[]).filter(draft => draft.formType === formType)
       },
       
-      getDraftsByUser: (userId) => {
+      getDraftsByUser: (userId: string): ExtendedFormDraft[] => {
         const state = get()
-        return Object.values(state.drafts).filter(draft => draft.userId === userId)
+        return (Object.values(state.drafts) as ExtendedFormDraft[]).filter(draft => draft.userId === userId)
       },
       
-      getDraftsByContext: (context) => {
+      getDraftsByContext: (context: Record<string, any>): ExtendedFormDraft[] => {
         const state = get()
-        return Object.values(state.drafts).filter(draft => {
+        return (Object.values(state.drafts) as ExtendedFormDraft[]).filter(draft => {
           if (!draft.context) return false
-          return Object.keys(context).every(key => draft.context?.[key] === context[key])
+          return Object.keys(context).every((key) => (draft.context as Record<string, any>)?.[key] === (context as Record<string, any>)[key])
         })
       },
       
       // Validation actions
-      validateDraft: (draftId) => {
+      validateDraft: (draftId: string) => {
         const state = get()
         const draft = state.drafts[draftId]
         if (!draft) return { isValid: false, errors: {} }
@@ -435,7 +435,7 @@ export const useFormDraftStore = create<FormDraftState>()(
         const validation = get().validateDraftData(draft.formType, draft.data)
         
         // Update the draft with validation results
-        set((state) => {
+        set((state: FormDraftState) => {
           const currentDraft = state.drafts[draftId]
           if (!currentDraft) return state
           
@@ -454,7 +454,7 @@ export const useFormDraftStore = create<FormDraftState>()(
         return validation
       },
       
-      validateDraftData: (formType, data) => {
+      validateDraftData: (formType: string, data: Record<string, any>) => {
         const state = get()
         const metadata = state.metadata[formType]
         console.log('🔍 FormDraftStore validateDraftData:', { formType, data, metadata })
@@ -486,8 +486,8 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       // Auto-save actions
-      enableAutoSave: (draftId, interval) => {
-        set((state) => {
+      enableAutoSave: (draftId: string, interval?: number) => {
+        set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
           if (!draft) return state
           
@@ -504,8 +504,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         })
       },
       
-      disableAutoSave: (draftId) => {
-        set((state) => {
+      disableAutoSave: (draftId: string) => {
+        set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
           if (!draft) return state
           
@@ -521,12 +521,12 @@ export const useFormDraftStore = create<FormDraftState>()(
         })
       },
       
-      autoSaveDraft: async (draftId) => {
+      autoSaveDraft: async (draftId: string) => {
         const state = get()
         const draft = state.drafts[draftId]
         if (!draft || !draft.autoSaveEnabled) return
         
-        set((state) => ({
+        set((state: FormDraftState) => ({
           loading: { ...state.loading, autoSaving: true },
           errors: { ...state.errors, autoSave: null },
         }))
@@ -535,7 +535,7 @@ export const useFormDraftStore = create<FormDraftState>()(
           // Simulate auto-save (in real implementation, this would save to server)
           await new Promise(resolve => setTimeout(resolve, 1000))
           
-          set((state) => ({
+          set((state: FormDraftState) => ({
             drafts: {
               ...state.drafts,
               [draftId]: {
@@ -547,7 +547,7 @@ export const useFormDraftStore = create<FormDraftState>()(
             loading: { ...state.loading, autoSaving: false },
           }))
         } catch (error) {
-          set((state) => ({
+          set((state: FormDraftState) => ({
             loading: { ...state.loading, autoSaving: false },
             errors: { ...state.errors, autoSave: error instanceof Error ? error.message : 'Auto-save failed' },
           }))
@@ -555,8 +555,8 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       // Draft lifecycle actions
-      markDraftAsDirty: (draftId) => {
-        set((state) => {
+      markDraftAsDirty: (draftId: string) => {
+        set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
           if (!draft) return state
           
@@ -573,8 +573,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         })
       },
       
-      markDraftAsClean: (draftId) => {
-        set((state) => {
+      markDraftAsClean: (draftId: string) => {
+        set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
           if (!draft) return state
           
@@ -591,8 +591,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         })
       },
       
-      expireDraft: (draftId) => {
-        set((state) => {
+      expireDraft: (draftId: string) => {
+        set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
           if (!draft) return state
           
@@ -610,12 +610,12 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       cleanupExpiredDrafts: () => {
-        set((state) => {
+        set((state: FormDraftState) => {
           const now = new Date()
           const newDrafts = { ...state.drafts }
           
-          Object.keys(newDrafts).forEach(key => {
-            const draft = newDrafts[key]
+          Object.keys(newDrafts).forEach((key: string) => {
+            const draft = newDrafts[key] as ExtendedFormDraft
             if (draft.expiresAt && draft.expiresAt < now) {
               delete newDrafts[key]
             }
@@ -626,8 +626,8 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       // Loading actions
-      setLoading: (key, isLoading) => {
-        set((state) => ({
+      setLoading: (key: keyof FormDraftState['loading'], isLoading: boolean) => {
+        set((state: FormDraftState) => ({
           loading: {
             ...state.loading,
             [key]: isLoading,
@@ -636,8 +636,8 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       // Error actions
-      setError: (key, error) => {
-        set((state) => ({
+      setError: (key: keyof FormDraftState['errors'], error: string | null) => {
+        set((state: FormDraftState) => ({
           errors: {
             ...state.errors,
             [key]: error,
@@ -645,8 +645,8 @@ export const useFormDraftStore = create<FormDraftState>()(
         }))
       },
       
-      clearError: (key) => {
-        set((state) => ({
+      clearError: (key: keyof FormDraftState['errors']) => {
+        set((state: FormDraftState) => ({
           errors: {
             ...state.errors,
             [key]: null,
@@ -666,8 +666,8 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       // Metadata actions
-      setDraftMetadata: (formType, metadata) => {
-        set((state) => ({
+      setDraftMetadata: (formType: string, metadata: FormDraftMetadata) => {
+        set((state: FormDraftState) => ({
           metadata: {
             ...state.metadata,
             [formType]: metadata,
@@ -675,13 +675,13 @@ export const useFormDraftStore = create<FormDraftState>()(
         }))
       },
       
-      getDraftMetadata: (formType) => {
+      getDraftMetadata: (formType: string) => {
         const state = get()
         return state.metadata[formType] || null
       },
       
       // Utility actions
-      exportDraft: (draftId) => {
+      exportDraft: (draftId: string) => {
         const state = get()
         const draft = state.drafts[draftId]
         if (!draft) return ''
@@ -689,12 +689,12 @@ export const useFormDraftStore = create<FormDraftState>()(
         return JSON.stringify(draft, null, 2)
       },
       
-      importDraft: (draftData) => {
+      importDraft: (draftData: string) => {
         try {
           const draft = JSON.parse(draftData) as ExtendedFormDraft
           const draftId = `${draft.formType}-imported-${Date.now()}`
           
-          set((state) => ({
+          set((state: FormDraftState) => ({
             drafts: {
               ...state.drafts,
               [draftId]: {
@@ -711,7 +711,7 @@ export const useFormDraftStore = create<FormDraftState>()(
         }
       },
       
-      duplicateDraft: (draftId, newFormType) => {
+      duplicateDraft: (draftId: string, newFormType?: string) => {
         const state = get()
         const draft = state.drafts[draftId]
         if (!draft) throw new Error('Draft not found')
@@ -726,14 +726,14 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       // Enhanced form management functions
-      saveDraft: (formId, data) => {
+      saveDraft: (formId: string, data: any) => {
         const existingDraft = Object.values(get().drafts).find(
-          draft => draft.metadata?.formId === formId
+          (draft: any) => draft.metadata?.formId === formId
         )
         
         if (existingDraft) {
           // Update existing draft
-          get().updateDraftData(existingDraft.id, data)
+          get().updateDraftData((existingDraft as ExtendedFormDraft).id, data)
         } else {
           // Create new draft
           get().createDraft('enhanced-form', data, {
@@ -748,34 +748,34 @@ export const useFormDraftStore = create<FormDraftState>()(
         }
       },
       
-      loadDraft: (formId) => {
+      loadDraft: (formId: string) => {
         const draft = Object.values(get().drafts).find(
-          draft => draft.metadata?.formId === formId
+          (draft: any) => draft.metadata?.formId === formId
         )
-        return draft?.data || null
+        return (draft as any)?.data || null
       },
       
-      clearDraft: (formId) => {
+      clearDraft: (formId: string) => {
         const draft = Object.values(get().drafts).find(
-          draft => draft.metadata?.formId === formId
+          (draft: any) => draft.metadata?.formId === formId
         )
         if (draft) {
-          get().deleteDraft(draft.id)
+          get().deleteDraft((draft as ExtendedFormDraft).id)
         }
       },
       
-      hasDraft: (formId) => {
+      hasDraft: (formId: string) => {
         const draft = Object.values(get().drafts).find(
-          draft => draft.metadata?.formId === formId
+          (draft: any) => draft.metadata?.formId === formId
         )
         return !!draft
       },
       
-      getDraftLastSaved: (formId) => {
+      getDraftLastSaved: (formId: string) => {
         const draft = Object.values(get().drafts).find(
-          draft => draft.metadata?.formId === formId
+          (draft: any) => draft.metadata?.formId === formId
         )
-        return draft?.lastUpdated || null
+        return (draft as any)?.lastUpdated || null
       },
       
       // Store management
@@ -800,7 +800,7 @@ export const useFormDraftStore = create<FormDraftState>()(
     }),
     {
       name: storageConfigs.formDrafts.name,
-      storage: storageConfigs.formDrafts.storage,
+      storage: createJSONStorage(() => storageConfigs.formDrafts.storage),
       partialize: storageConfigs.formDrafts.partialize,
       onRehydrateStorage: storageConfigs.formDrafts.onRehydrateStorage,
     }

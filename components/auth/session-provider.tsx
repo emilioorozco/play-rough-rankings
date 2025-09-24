@@ -23,7 +23,10 @@ const SessionContext = createContext<SessionContextType | undefined>(undefined)
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Use Better Auth's useSession hook directly
-  const { data: session, isPending, refetch } = useBetterAuthSession()
+  const sessionResponse = useBetterAuthSession()
+  const session = sessionResponse?.data ?? null
+  const isPending = sessionResponse?.isPending ?? false
+  const refetch = sessionResponse?.refetch ?? (async () => {})
   
   // Transform the session data to match our expected interface
   const user = session?.user ? {

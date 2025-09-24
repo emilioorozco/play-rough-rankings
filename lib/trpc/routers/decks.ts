@@ -13,6 +13,7 @@ import type {
   DeckStatsResult,
   TournamentWhereClause
 } from '@/lib/types/backend'
+import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPublicSelectWithPrefs } from '@/lib/utils/user'
 
 export const decksRouter = router({
   // List all decks for a game
@@ -119,8 +120,7 @@ export const decksRouter = router({
             },
             player: {
               select: {
-                displayName: true,
-                profileVisibility: true,
+                user: { select: userPublicSelectWithPrefs },
               },
             },
           },
@@ -316,7 +316,7 @@ export const decksRouter = router({
       })
 
       // Calculate deck statistics
-      const deckStats = new Map<string, DeckStatsResult & {
+      const deckStats = new Map<string, Omit<DeckStatsResult, 'uniquePlayers' | 'tournaments'> & {
         uniquePlayers: Set<string>
         tournaments: Set<string>
       }>()
@@ -438,8 +438,7 @@ export const decksRouter = router({
           player: {
             select: {
               id: true,
-              displayName: true,
-              profileVisibility: true,
+              user: { select: userPublicSelectWithPrefs },
             },
           },
         },
@@ -454,10 +453,8 @@ export const decksRouter = router({
         ...entry,
         player: {
           id: entry.player.id,
-          displayName: entry.player.profileVisibility === 'PUBLIC'
-            ? entry.player.displayName
-            : 'Private Player',
-          isPublic: entry.player.profileVisibility === 'PUBLIC',
+          displayName: getPublicDisplayName(entry.player.user),
+          isPublic: entry.player.user?.userPreferences?.profileVisibility === 'PUBLIC',
         },
       }))
 

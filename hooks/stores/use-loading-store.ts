@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
-import { useLoadingStore } from '@/stores/loading-store'
+import { useLoadingStore, useLoading, useError, useProgress, useLoadingBar } from '@/stores/loading-store'
 import { useLoadingStoreSelectors } from '@/stores/loading-store-selectors'
 
 // Loading State Hooks
-export function useLoading(key?: string) {
-  const isLoading = useLoadingStoreSelectors.useIsLoading(key)
+export function useLoadingState(key?: string) {
+  const isLoading = key ? useLoadingStore((state) => state.isLoading(key)) : false
   const setLoading = useLoadingStore((state) => state.setLoading)
   const clearLoading = useLoadingStore((state) => state.clearLoading)
 
@@ -27,8 +27,8 @@ export function useLoading(key?: string) {
   }
 }
 
-export function useError(key?: string) {
-  const error = useLoadingStoreSelectors.useError(key)
+export function useErrorState(key?: string) {
+  const error = key ? useLoadingStore((state) => state.getError(key)) : null
   const setError = useLoadingStore((state) => state.setError)
   const clearError = useLoadingStore((state) => state.clearError)
 
@@ -52,8 +52,8 @@ export function useError(key?: string) {
 }
 
 // Progress Hooks
-export function useProgress(key?: string) {
-  const progress = useLoadingStoreSelectors.useProgress(key)
+export function useProgressState(key?: string) {
+  const progress = key ? useLoadingStore((state) => state.getProgress(key)) : 0
   const setProgress = useLoadingStore((state) => state.setProgress)
   const clearProgress = useLoadingStore((state) => state.clearProgress)
 
@@ -77,9 +77,8 @@ export function useProgress(key?: string) {
 }
 
 // Loading Bar Hooks
-export function useLoadingBar() {
-  const isVisible = useLoadingStoreSelectors.useLoadingBarIsVisible()
-  const progress = useLoadingStoreSelectors.useLoadingBarProgress()
+export function useLoadingBarState() {
+  const loadingBar = useLoadingStore((state) => state.loadingBar)
   const showLoadingBar = useLoadingStore((state) => state.showLoadingBar)
   const hideLoadingBar = useLoadingStore((state) => state.hideLoadingBar)
   const setLoadingBarProgress = useLoadingStore((state) => state.setLoadingBarProgress)
@@ -97,8 +96,9 @@ export function useLoadingBar() {
   }, [setLoadingBarProgress])
 
   return {
-    isVisible,
-    progress,
+    isVisible: loadingBar.isVisible,
+    progress: loadingBar.progress,
+    message: loadingBar.message,
     show,
     hide,
     setProgress,
@@ -107,9 +107,9 @@ export function useLoadingBar() {
 
 // Async Operation Hooks
 export function useAsyncOperation(key: string) {
-  const isLoading = useLoadingStoreSelectors.useIsLoading(key)
-  const error = useLoadingStoreSelectors.useError(key)
-  const progress = useLoadingStoreSelectors.useProgress(key)
+  const isLoading = useLoadingStore((state) => state.isLoading(key))
+  const error = useLoadingStore((state) => state.getError(key))
+  const progress = useLoadingStore((state) => state.getProgress(key))
   const setLoading = useLoadingStore((state) => state.setLoading)
   const setError = useLoadingStore((state) => state.setError)
   const setProgress = useLoadingStore((state) => state.setProgress)
@@ -126,7 +126,7 @@ export function useAsyncOperation(key: string) {
       return result
     } catch (error) {
       setLoading(key, false)
-      setError(key, error)
+      setError(key, error instanceof Error ? error : new Error(String(error)))
       throw error
     }
   }, [key, setLoading, clearError, setError])
@@ -175,15 +175,19 @@ export function useLoadingStoreActions() {
 
 // State Getters Hooks
 export function useLoadingStoreState() {
-  const loadingStates = useLoadingStoreSelectors.useAllLoadingStates()
-  const errorStates = useLoadingStoreSelectors.useAllErrorStates()
-  const progressStates = useLoadingStoreSelectors.useAllProgressStates()
-  const loadingBar = useLoadingStoreSelectors.useLoadingBarState()
+  const loadingStates = useLoadingStore((state) => state.loading)
+  const errorStates = useLoadingStore((state) => state.errors)
+  const progressStates = useLoadingStore((state) => state.progress)
+  const loadingBar = useLoadingStore((state) => state.loadingBar)
+  const isGlobalLoading = useLoadingStore((state) => state.isGlobalLoading)
+  const globalError = useLoadingStore((state) => state.globalError)
 
   return {
     loadingStates,
     errorStates,
     progressStates,
     loadingBar,
+    isGlobalLoading,
+    globalError,
   }
 }

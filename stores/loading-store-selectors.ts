@@ -1,6 +1,5 @@
 import { useMemo, useCallback } from 'react'
 import { useLoadingStore } from './loading-store'
-import type { LoadingStore } from './loading-store'
 
 // Loading state selectors
 export const useLoadingSelectors = {
@@ -48,9 +47,9 @@ export const useLoadingSelectors = {
   getLoadingBarState: () => {
     return useLoadingStore(
       useCallback((state) => ({
-        isActive: state.isGlobalLoading,
-        progress: state.loadingProgress,
-        message: state.loadingMessage,
+        isActive: state.loadingBar.isVisible,
+        progress: state.loadingBar.progress,
+        message: state.loadingBar.message,
       }), [])
     )
   },
@@ -118,40 +117,37 @@ export const useErrorSelectors = {
 export const useProgressSelectors = {
   // Get loading progress
   getLoadingProgress: () => {
-    return useLoadingStore((state) => state.loadingProgress)
+    return useLoadingStore((state) => state.loadingBar.progress)
   },
 
   // Get loading message
   getLoadingMessage: () => {
-    return useLoadingStore((state) => state.loadingMessage)
+    return useLoadingStore((state) => state.loadingBar.message)
   },
 
   // Get loading duration
   getLoadingDuration: () => {
-    return useLoadingStore((state) => state.loadingDuration)
+    // Not tracked in store; provide safe default
+    return 0
   },
 
   // Get loading start time
   getLoadingStartTime: () => {
-    return useLoadingStore((state) => state.loadingStartTime)
+    // Not tracked in store; provide safe default
+    return null as number | null
   },
 
   // Check if loading is in progress
   isLoadingInProgress: () => {
-    return useLoadingStore((state) => state.isGlobalLoading && state.loadingStartTime !== null)
+    return useLoadingStore((state) => state.loadingBar.isVisible)
   },
 
   // Get loading progress percentage - memoized to prevent infinite loops
   getLoadingProgressPercentage: () => {
     return useLoadingStore(
       useCallback((state) => {
-        if (!state.isGlobalLoading || !state.loadingStartTime || !state.loadingDuration) {
-          return 0
-        }
-        
-        const elapsed = Date.now() - state.loadingStartTime
-        const progress = Math.min((elapsed / state.loadingDuration) * 100, 100)
-        return Math.round(progress)
+        // Use loading bar progress directly as percentage
+        return Math.max(0, Math.min(100, Math.round(state.loadingBar.progress)))
       }, [])
     )
   },
@@ -187,10 +183,11 @@ export const useLoadingActions = {
   hideLoadingBar: () => useLoadingStore((state) => state.hideLoadingBar),
 
   // Set loading progress
-  setLoadingProgress: () => useLoadingStore((state) => state.setLoadingProgress),
+  setLoadingProgress: () => useLoadingStore((state) => state.setLoadingBarProgress),
 
   // Set loading message
-  setLoadingMessage: () => useLoadingStore((state) => state.setLoadingMessage),
+  // Wrapper that updates just the message using current progress
+  setLoadingMessage: () => useLoadingStore((state) => (message: string) => state.setLoadingBarProgress(state.loadingBar.progress, message)),
 }
 
 // Combined selectors for common use cases
@@ -228,7 +225,7 @@ export const useLoadingStoreSelectors = {
     const showLoadingBar = useLoadingActions.showLoadingBar()
     const hideLoadingBar = useLoadingActions.hideLoadingBar()
     const setLoadingProgress = useLoadingActions.setLoadingProgress()
-    const setLoadingMessage = useLoadingActions.setLoadingMessage()
+    const setLoadingMessage = (msg: string) => setLoadingProgress(progress, msg)
 
     return useMemo(() => ({
       isGlobalLoading,
@@ -248,7 +245,7 @@ export const useLoadingStoreSelectors = {
     }), [
       isGlobalLoading, globalError, progress, message, duration, startTime, progressPercentage,
       setGlobalLoading, setGlobalError, clearGlobalError, showLoadingBar, hideLoadingBar,
-      setLoadingProgress, setLoadingMessage
+      setLoadingProgress
     ])
   },
 
@@ -285,7 +282,7 @@ export const useLoadingStoreSelectors = {
 
   // Get complete loading bar state
   getLoadingBarState: () => {
-    const isActive = useLoadingSelectors.isGlobalLoading()
+    const isActive = useLoadingStore((state) => state.loadingBar.isVisible)
     const progress = useProgressSelectors.getLoadingProgress()
     const message = useProgressSelectors.getLoadingMessage()
     const duration = useProgressSelectors.getLoadingDuration()
@@ -295,7 +292,7 @@ export const useLoadingStoreSelectors = {
     const showLoadingBar = useLoadingActions.showLoadingBar()
     const hideLoadingBar = useLoadingActions.hideLoadingBar()
     const setLoadingProgress = useLoadingActions.setLoadingProgress()
-    const setLoadingMessage = useLoadingActions.setLoadingMessage()
+    const setLoadingMessage = (msg: string) => setLoadingProgress(progress, msg)
 
     return useMemo(() => ({
       isActive,
@@ -310,7 +307,7 @@ export const useLoadingStoreSelectors = {
       setLoadingMessage,
     }), [
       isActive, progress, message, duration, startTime, progressPercentage,
-      showLoadingBar, hideLoadingBar, setLoadingProgress, setLoadingMessage
+      showLoadingBar, hideLoadingBar, setLoadingProgress
     ])
   },
 }
@@ -331,12 +328,10 @@ export const useOptimizedLoadingSelectors = {
   getLoadingBarRenderData: () => {
     return useLoadingStore(
       useCallback((state) => ({
-        isActive: state.isGlobalLoading,
-        progress: state.loadingProgress,
-        message: state.loadingMessage,
-        progressPercentage: state.isGlobalLoading && state.loadingStartTime && state.loadingDuration
-          ? Math.min(Math.round(((Date.now() - state.loadingStartTime) / state.loadingDuration) * 100), 100)
-          : 0,
+        isActive: state.loadingBar.isVisible,
+        progress: state.loadingBar.progress,
+        message: state.loadingBar.message,
+        progressPercentage: Math.max(0, Math.min(100, Math.round(state.loadingBar.progress))),
       }), [])
     )
   },

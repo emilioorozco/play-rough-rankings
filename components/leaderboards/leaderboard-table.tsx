@@ -7,9 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../ui/badge'
 import { Avatar, AvatarFallback } from '../ui/avatar'
 import { Button } from '../ui/button'
-import Link from 'next/link'
+// Link temporarily removed until player page is implemented
 import { useActivity } from '@/stores/app-store'
-import { useViewTransitions } from '@/hooks/use-view-transitions'
 import type { ApiLeaderboardEntry } from '@/lib/types/api'
 
 type LeaderboardEntry = ApiLeaderboardEntry
@@ -27,7 +26,6 @@ export function LeaderboardTable({
   leaderboard,
 }: LeaderboardTableProps) {
   const { setViewing } = useActivity()
-  const { transitionToPlayer } = useViewTransitions()
   const [sortField, setSortField] = useState<SortField>('rank')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   
@@ -37,7 +35,7 @@ export function LeaderboardTable({
   const handlePlayerClick = (playerId: string, playerName: string, e: React.MouseEvent) => {
     e.preventDefault()
     setViewing(`Player: ${playerName}`)
-    transitionToPlayer(playerId)
+    // TODO: Navigate to player page when implemented
   }
 
   const handleSort = (field: SortField) => {
@@ -225,13 +223,15 @@ export function LeaderboardTable({
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <Link 
-                            href={`/players/${entry.playerId}`}
-                            className="font-medium text-secondary-500 hover:text-primary-500 transition-colors duration-200"
+                          <span
+                            role="link"
+                            tabIndex={0}
+                            className="font-medium text-secondary-500 hover:text-primary-500 transition-colors duration-200 cursor-pointer"
                             onClick={(e) => handlePlayerClick(entry.playerId, entry.displayName, e)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handlePlayerClick(entry.playerId, entry.displayName, e as any) }}
                           >
                             {entry.displayName}
-                          </Link>
+                          </span>
                           <p className="text-sm text-gray-500">@{entry.displayName.toLowerCase().replace(/\s+/g, '')}</p>
                         </div>
                       </div>
@@ -295,13 +295,15 @@ export function LeaderboardTable({
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <Link 
-                    href={`/players/${player.playerId}`}
-                    className="font-medium text-secondary-500 hover:text-primary-500"
+                  <span
+                    role="link"
+                    tabIndex={0}
+                    className="font-medium text-secondary-500 hover:text-primary-500 cursor-pointer"
                     onClick={(e) => handlePlayerClick(player.playerId, player.displayName, e)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handlePlayerClick(player.playerId, player.displayName, e as any) }}
                   >
                     {player.displayName}
-                  </Link>
+                  </span>
                   <p className="text-sm text-gray-500">#{player.rank}</p>
                 </div>
               </div>

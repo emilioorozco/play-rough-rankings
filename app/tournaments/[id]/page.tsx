@@ -13,7 +13,8 @@ import { TournamentQuickInfo } from '@/components/tournaments/tournament-quick-i
 import { TournamentTabs } from '@/components/tournaments/tournament-tabs'
 import { 
   useCurrentTournament, 
-  useRegistrationStatus 
+  useRegistrationStatus,
+  useTournamentStore
 } from '@/stores/tournament-store'
 import { useTab } from '@/stores/ui-store'
 import { 
@@ -47,20 +48,45 @@ export default function TournamentDetailsPage() {
     setTournamentId: setStoreTournamentId
   } = useCurrentTournament()
 
-  // Get registration status from TRPC query (simplified for now)
-  const isRegistered = registrationStatusQuery.data?.isRegistered || false
-  const canRegister = registrationStatusQuery.data?.canRegister || false
+  // Get registration status from tournament store (primary) and tRPC query (fallback)
+  const storeRegistrationStatus = useTournamentStore(state => 
+    state.getRegistrationStatus(tournamentId)
+  )
+  const isRegistered = storeRegistrationStatus?.isRegistered ?? registrationStatusQuery.data?.isRegistered ?? false
+  const canRegister = storeRegistrationStatus?.canRegister ?? registrationStatusQuery.data?.canRegister ?? false
 
-  // Populate store when data loads
+  // Sync store from query results (minimal deps to avoid deep type instantiation)
   React.useEffect(() => {
     if (tournamentQuery.data) {
       setStoreTournament(tournamentQuery.data as any)
       setStoreTournamentId(tournamentId)
     }
-  }, [tournamentQuery.data, setStoreTournament, setStoreTournamentId, tournamentId])
+  }, [tournamentQuery.data?.id, tournamentId])
 
-  // Use TRPC data as primary source, fallback to store
-  const tournament = tournamentQuery.data || storeTournament
+  React.useEffect(() => {
+    const d = registrationStatusQuery.data
+    if (d) {
+      useTournamentStore.getState().setRegistrationStatus(tournamentId, {
+        isRegistered: !!d.isRegistered,
+        canRegister: !!d.canRegister,
+        canWithdraw: false,
+        isFull: false,
+        participantCount: 0,
+        maxPlayers: undefined,
+        registrationDeadline: undefined,
+      })
+    }
+  }, [registrationStatusQuery.data?.isRegistered, registrationStatusQuery.data?.canRegister, tournamentId])
+
+  // Use TRPC data as primary source, fallback to store (avoid deep type instantiation at union)
+  const tournament = (tournamentQuery.data as any) ?? storeTournament
+  
+  // Ensure tournament has required properties to prevent undefined errors
+  const safeTournament = tournament ? {
+    ...(tournament as any),
+    participants: (tournament as any).participants || [],
+    matches: (tournament as any).matches || [],
+  } : null
   const isTournamentLoading = tournamentQuery.isLoading
   const tournamentError = tournamentQuery.error?.message
   const isRegistrationLoading = registrationStatusQuery.isLoading
@@ -158,7 +184,7 @@ export default function TournamentDetailsPage() {
     )
   }
 
-  if (!tournament) {
+  if (!safeTournament) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 pt-2 pb-6">
@@ -193,7 +219,7 @@ export default function TournamentDetailsPage() {
   }
 
   // Check if user is organizer or can manage
-  const isOrganizer = user?.id === tournament.organizer?.id
+  const isOrganizer = user?.id === safeTournament.organizer?.id
   const canManage = isOrganizer || user?.role === 'ADMIN'
 
   return (
@@ -217,7 +243,7 @@ export default function TournamentDetailsPage() {
 
         {/* Hero Section */}
         <TournamentHeroSection
-          tournament={tournament as any}
+          tournament={safeTournament as any}
           isOrganizer={isOrganizer}
           canManage={canManage}
           isRegistered={isRegistered}
@@ -226,14 +252,12 @@ export default function TournamentDetailsPage() {
 
         {/* Quick Info */}
         <TournamentQuickInfo
-          tournament={tournament as any}
+          tournament={safeTournament as any}
         />
 
         {/* Tabs */}
         <TournamentTabs
-          tournament={tournament as any}
-          activeTab={activeTab as any}
-          onTabChange={setActiveTab}
+          tournament={safeTournament as any}
           isOrganizer={isOrganizer}
           isRegistered={isRegistered}
           currentUser={user}
