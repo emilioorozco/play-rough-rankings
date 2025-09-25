@@ -14,6 +14,7 @@ import type {
   DateFilterClause,
   TournamentWhereClause,
 } from "@/lib/types/backend";
+import type { ApiTournamentListResponse } from "@/lib/types/api";
 import { getActiveGamesAsJSON, getGameOrThrow } from "@/lib/games";
 import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPublicSelectWithPrefs } from "@/lib/utils/user";
 
@@ -737,7 +738,7 @@ export const appRouter = router({
     // List tournaments with comprehensive filtering
     list: publicProcedure
       .input(TournamentListQuerySchema)
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<ApiTournamentListResponse> => {
         const where: Record<string, unknown> = {};
 
         // Filter by game if specified

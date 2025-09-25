@@ -365,7 +365,7 @@ export function TournamentCreateModal({
       >
         <div className="text-center py-8">
           <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-          <p className="text-muted-foreground">You don't have permission to create tournaments.</p>
+          <p className="text-muted-foreground">You don&apos;t have permission to create tournaments.</p>
         </div>
       </Modal>
     );
