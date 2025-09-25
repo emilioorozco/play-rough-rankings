@@ -320,7 +320,7 @@ export function TournamentCreateForm({
   if (!user || user.role !== 'organizer' && user.role !== 'admin') {
     return (
       <div className="text-center py-8">
-        <p className="text-muted-foreground">You don't have permission to create tournaments.</p>
+        <p className="text-muted-foreground">You don&apos;t have permission to create tournaments.</p>
           </div>
     );
   }

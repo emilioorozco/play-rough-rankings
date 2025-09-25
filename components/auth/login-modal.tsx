@@ -152,7 +152,7 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
         {showSignUpLink && (
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <button
                 type="button"
                 className="text-primary hover:underline font-medium"

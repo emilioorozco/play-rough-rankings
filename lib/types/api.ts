@@ -1,5 +1,77 @@
 // API Response Types - These match what our tRPC endpoints actually return
 
+// ============================================================================
+// Base Types - Reusable components used across multiple API types
+// ============================================================================
+
+export interface ApiPlayer {
+  id: string
+  displayName: string
+}
+
+export interface ApiGameInfo {
+  id: string
+  name: string
+  shortName: string
+}
+
+export interface ApiStoreInfo {
+  id: string
+  name: string
+  city: string
+  state: string
+  address: string
+  contactEmail?: string | null
+  website?: string | null
+}
+
+export interface ApiOrganizerInfo {
+  id: string
+  name: string | null
+  email?: string
+}
+
+export interface ApiMatch {
+  id: string
+  round: number
+  table?: number | null
+  status: string
+  player1: ApiPlayer
+  player2: ApiPlayer
+  winner?: ApiPlayer | null
+}
+
+export interface ApiParticipant {
+  id: string
+  displayName: string
+  isPublic: boolean
+  gameStats?: Record<string, unknown> | null
+}
+
+export interface ApiSeasonalStats {
+  wins: number
+  losses: number
+  tournaments: number
+  points: number
+}
+
+export interface ApiPeriodStats {
+  wins: number
+  losses: number
+  tournaments: number
+  totalMatches: number
+}
+
+export interface ApiPerformance {
+  winRate: number
+  totalGames: number
+  winLossRatio: number
+}
+
+// ============================================================================
+// Main API Response Types
+// ============================================================================
+
 export interface ApiGame {
   id: string
   name: string
@@ -15,12 +87,7 @@ export interface ApiPlayerGameStats {
   playerId: string
   gameId: string
   currentRating: number
-  seasonalStats: {
-    wins: number
-    losses: number
-    tournaments: number
-    points: number
-  } | Record<string, unknown> | null
+  seasonalStats: ApiSeasonalStats | Record<string, unknown> | null
   bestFinish?: number | null
   totalEarnings: number
   metadata?: Record<string, unknown> | null
@@ -42,49 +109,38 @@ export interface ApiTournament {
   entryFee?: number | null
   prizePool?: string | null
   tournamentLevel?: string | null
-  game: {
-    id: string
-    name: string
-    shortName: string
-  }
-  store: {
-    id: string
-    name: string
-    city: string
-    state: string
-    address: string
-    contactEmail?: string | null
-    website?: string | null
-  }
-  organizer: {
-    id: string
-    name: string | null
-  }
+  game: ApiGameInfo
+  store: ApiStoreInfo
+  organizer: ApiOrganizerInfo
   matchCount: number
-  participants?: Array<{
-    id: string
-    displayName: string
-    isPublic: boolean
-    gameStats?: Record<string, unknown> | null
-  }>
-  matches?: Array<{
-    id: string
-    round: number
-    table?: number | null
-    status: string
-    player1: {
-      id: string
-      displayName: string
-    }
-    player2: {
-      id: string
-      displayName: string
-    }
-    winner?: {
-      id: string
-      displayName: string
-    } | null
-  }>
+  participants?: ApiParticipant[]
+  matches?: ApiMatch[]
+}
+
+// Tournament list item type for the tournaments.list endpoint
+export interface ApiTournamentListItem {
+  id: string
+  name: string
+  description: string | null
+  date: Date
+  status: string
+  format: string
+  maxPlayers: number | null
+  entryFee: number | null
+  prizePool: string | null
+  tournamentLevel: string | null
+  game: ApiGameInfo
+  store: ApiStoreInfo
+  organizer: ApiOrganizerInfo & { email: string }
+  matchCount: number
+  entryCount: number
+}
+
+// Tournament list response type for the tournaments.list endpoint
+export interface ApiTournamentListResponse {
+  tournaments: ApiTournamentListItem[]
+  total: number
+  hasMore: boolean
 }
 
 export interface ApiLeaderboardEntry {
@@ -92,23 +148,9 @@ export interface ApiLeaderboardEntry {
   playerId: string
   displayName: string
   currentRating: number
-  seasonalStats?: {
-    wins: number
-    losses: number
-    tournaments: number
-    points: number
-  }
-  periodStats?: {
-    wins: number
-    losses: number
-    tournaments: number
-    totalMatches: number
-  }
-  performance: {
-    winRate: number
-    totalGames: number
-    winLossRatio: number
-  }
+  seasonalStats?: ApiSeasonalStats
+  periodStats?: ApiPeriodStats
+  performance: ApiPerformance
   bestFinish?: number | null
   totalEarnings: number
 }
@@ -143,11 +185,6 @@ export interface TRPCQueryResult<T> {
 }
 
 // Utility Types
-export type SafeSeasonalStats = {
-  wins: number
-  losses: number
-  tournaments: number
-  points: number
-}
+export type SafeSeasonalStats = ApiSeasonalStats
 
 export type GameStatsMetadata = Record<string, string | number | boolean | null>

@@ -9,8 +9,8 @@ const nextConfig = {
     reactCompiler: false, // Keep disabled for now to avoid conflicts
   },
   eslint: {
-    // Temporarily disable ESLint during builds for deployment
-    ignoreDuringBuilds: true,
+    // ESLint enabled during builds to catch issues before deployment
+    ignoreDuringBuilds: false,
   },
 }
 
