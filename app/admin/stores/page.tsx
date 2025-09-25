@@ -43,7 +43,7 @@ export default function AdminStoresPage() {
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-primary">-</div>
-                <div className="text-sm text-muted-foreground">This Month's Tournaments</div>
+                <div className="text-sm text-muted-foreground">This Month&apos;s Tournaments</div>
                 <div className="text-xs text-muted-foreground mt-1">Coming Soon</div>
               </div>
               <div className="text-center">

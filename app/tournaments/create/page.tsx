@@ -149,7 +149,7 @@ export default function TournamentManagementPage() {
                 </div>
                 <h3 className="text-xl font-semibold mb-2">No tournaments yet</h3>
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                  You haven't created any tournaments yet. Create your first tournament to get started!
+                  You haven&apos;t created any tournaments yet. Create your first tournament to get started!
                 </p>
                 <Button
                   onClick={() => setIsModalOpen(true)}

@@ -189,7 +189,7 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
             className={formState.errors.email ? 'border-destructive' : ''}
           />
           <p className="text-sm text-muted-foreground mt-1">
-            We'll use this to send you important updates
+            We&apos;ll use this to send you important updates
           </p>
         </EnhancedFormField>
 
