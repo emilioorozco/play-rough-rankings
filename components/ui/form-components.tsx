@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Combobox } from './combobox'
 import { Checkbox } from './checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './card'
-import { Separator } from './separator'
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 
 // Form field wrapper with consistent styling
@@ -146,7 +145,6 @@ export function FormSelect({
   disabled 
 }: FormSelectProps) {
   const handleValueChange = (newValue: string) => {
-    console.log('FormSelect handleValueChange:', newValue); // Debug log
     if (onValueChange) {
       onValueChange(newValue)
     }
@@ -439,6 +437,27 @@ export function ModalForm({ title, description, children, className, ...props }:
           {children}
         </div>
       </form>
+    </div>
+  )
+}
+
+// Standalone form component with modal-like styling (for use outside of modals)
+export function StandaloneForm({ title, description, children, className, ...props }: FormProps) {
+  return (
+    <div className={className}>
+      {(title || description) && (
+        <div className="p-6 border-b">
+          {title && <h2 className="text-lg font-semibold text-foreground">{title}</h2>}
+          {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+        </div>
+      )}
+      <div className="p-6">
+        <form {...props}>
+          <div className="space-y-4">
+            {children}
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

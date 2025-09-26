@@ -3,63 +3,117 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/components/auth/session-provider";
-import { useFormDraft } from "@/hooks/useFormDraft";
-import { registerSchema, type RegisterFormData } from "@/lib/validation/schemas";
-import { FormInput, FormSelect, FormCheckbox, FormActions, FormStatus } from "@/components/ui/form-components";
-import { Button } from "@/components/ui/button";
+import { useFormDraftIntegration } from "@/stores/form-draft-integration";
+import { useFormDraftStore } from "@/stores/form-draft-store";
+import { registerSchema } from "@/lib/validation/schemas";
+import { FormInput, FormSelect, FormCheckbox, FormStatus } from "@/components/ui/form-components";
+import { Modal } from "@/components/ui/modal";
 import { Mail, Lock, User, Eye, EyeOff, Info } from "lucide-react";
-import { trpc } from "@/lib/trpc/client";
-import Link from "next/link";
 
 export default function RegisterPage() {
   const router = useRouter();
   const { signUp } = useSession();
+  
+  const formId = 'user-registration';
+  const formType = 'user-registration';
+  const steps = ['personal-info', 'account-info', 'preferences'];
+  
+  // Form integration hook
+  const {
+    formData,
+    draftErrors,
+    isDirty,
+    isSubmitting,
+    updateField,
+    submit,
+    validate,
+    saveDraft,
+    createDraft,
+    hasDraft,
+    loadDraft,
+    clearDraft,
+  } = useFormDraftIntegration(formId, formType, registerSchema);
+
+  // Import updateDraftStep from the store
+  const { updateDraftStep } = useFormDraftStore();
+
+  // UI state for password visibility (local state for now)
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
 
-  const steps = ['personal-info', 'account-info', 'preferences'];
+  // Resolve the actual draft by metadata.formId so we can use the internal draftId
+  const draftEntry = useFormDraftStore((state) => {
+    const drafts = state.drafts as Record<string, any>;
+    return Object.values(drafts).find((d: any) => d?.metadata?.formId === formId) as any;
+  });
+  const draftId = draftEntry?.id as string | undefined;
+  const currentStep = draftEntry?.currentStep || 0;
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[RegisterPage] draft resolution', { formId, draftId, currentStep, hasDraft: !!draftEntry });
+  }
 
-  // Initialize modern form draft state with auto-save and store integration
-  const formState = useFormDraft<RegisterFormData>({
-    initialData: {
-      email: '',
-      password: '',
-      confirmPassword: '',
-      username: '',
-      firstName: '',
-      lastName: '',
-      agreeToTerms: false,
-      subscribeToUpdates: false,
-      nameDisplayPreference: 'DISPLAY_NAME',
-      optInCommunications: false,
-    },
-    validationSchema: registerSchema,
-    onSubmit: async (data) => {
-      console.log("Registration data:", { 
-        email: data.email, 
-        username: data.username, 
-        firstName: data.firstName, 
-        lastName: data.lastName,
-        allData: data,
-        dataKeys: Object.keys(data),
-        emailType: typeof data.email,
-        emailValue: data.email,
-        formStateData: formState.data
-      });
-      
-      // Use formState.data instead of the passed data if it's empty
-      const formData = Object.keys(data).length === 0 ? formState.data : data;
-      
-      // Validate required fields
-      if (!formData.email) {
-        console.error("Email is missing from form data:", { data, formStateData: formState.data });
-        throw new Error("Email is required");
+  // Draft initialization is now handled by the integration hook
+  // The form will render with default values and create the draft when user starts typing
+
+  // updateField is now provided by useFormDraftIntegration
+
+  // Step management
+  const goToNextStep = () => {
+    if (currentStep < steps.length - 1) {
+      if (draftId) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[RegisterPage] update step next', { draftId, from: currentStep, to: currentStep + 1 });
+        }
+        updateDraftStep(draftId, currentStep + 1);
       }
-      if (!formData.password) {
-        console.error("Password is missing from form data:", { data, formStateData: formState.data });
-        throw new Error("Password is required");
+    }
+  };
+
+  const goToPreviousStep = () => {
+    if (currentStep > 0) {
+      if (draftId) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[RegisterPage] update step prev', { draftId, from: currentStep, to: currentStep - 1 });
+        }
+        updateDraftStep(draftId, currentStep - 1);
       }
+    }
+  };
+
+  const currentStepName = steps[currentStep];
+  const isFirstStep = currentStep === 0;
+  const isLastStep = currentStep === steps.length - 1;
+
+
+  // Validation is now handled by useFormDraftIntegration
+
+  const isFormValid = () => {
+    return formData.username && formData.username.length >= 3 &&
+           formData.firstName && formData.lastName &&
+           formData.email &&
+           formData.password && formData.password.length >= 8 &&
+           formData.password === formData.confirmPassword &&
+           formData.agreeToTerms === true;
+  };
+
+  const isCurrentStepValid = () => {
+    if (currentStepName === 'personal-info') {
+      return formData.username && formData.username.length >= 3 && 
+             formData.firstName && formData.lastName;
+    } else if (currentStepName === 'account-info') {
+      return formData.email && 
+             formData.password && formData.password.length >= 8 && 
+             formData.password === formData.confirmPassword;
+    } else if (currentStepName === 'preferences') {
+      return formData.agreeToTerms === true;
+    }
+    return true;
+  };
+
+  // Submit form
+  const handleSubmit = async () => {
+    try {
+      console.log("Registration data:", formData);
       
       const result = await signUp.email({
         email: formData.email.trim().toLowerCase(),
@@ -89,129 +143,25 @@ export default function RegisterPage() {
         
         throw new Error(errorMessage);
       } else {
-        // Redirect to dashboard on successful registration
+        // Clear draft on successful registration
+        clearDraft();
+        console.log("Registration successful");
         router.push("/");
       }
-    },
-    onSuccess: () => {
-      console.log("Registration successful");
-    },
-    onError: (error) => {
+    } catch (error) {
       console.error("Registration error:", error);
-    },
-    showLoadingBar: true,
-    // Enhanced features
-    formId: 'user-registration',
-    enableAutoSave: true,
-    autoSaveDelay: 2000, // 2 seconds for registration form
-    enableDraftPersistence: true,
-    enableUserPreferences: true,
-    onAutoSave: (data) => {
-      console.log('Auto-saved registration draft:', { 
-        username: data.username, 
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName 
-      });
-    },
-    onDraftRestore: (data) => {
-      console.log('Restored registration draft:', { 
-        username: data.username, 
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName 
-      });
-    },
-  });
-
-  // Step management functions
-  const goToNextStep = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(prev => prev + 1);
+      throw error; // Let the integration hook handle the error
     }
   };
 
-  const goToPreviousStep = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-    }
-  };
-
-  const currentStepName = steps[currentStep];
-  const isFirstStep = currentStep === 0;
-  const isLastStep = currentStep === steps.length - 1;
-
-  // Check if all required fields are filled for the current step
-  const isCurrentStepValid = () => {
-    const data = formState.data;
-    
-    if (currentStepName === 'personal-info') {
-      return data.username && data.username.length >= 3 && 
-             data.firstName && data.lastName;
-    } else if (currentStepName === 'account-info') {
-      return data.email && 
-             data.password && data.password.length >= 8 && 
-             data.password === data.confirmPassword;
-    } else if (currentStepName === 'preferences') {
-      return data.agreeToTerms === true;
-    }
-    
-    return true;
-  };
-
-  // Check if all required fields are filled for the entire form
-  const isFormValid = () => {
-    const data = formState.data;
-    
-    return data.username && data.username.length >= 3 &&
-           data.firstName && data.lastName &&
-           data.email &&
-           data.password && data.password.length >= 8 &&
-           data.password === data.confirmPassword &&
-           data.agreeToTerms === true;
-  };
-
-  // Manual step validation since we removed step-specific schemas
+  // Step validation
   const handleStepValidation = () => {
-    const data = formState.data;
+    // Use the integration hook's validate function
+    const isValid = validate(formData);
     
-    // Validate current step fields
-    if (currentStepName === 'personal-info') {
-      if (!data.username || data.username.length < 3) {
-        formState.setFieldError('username', 'Username must be at least 3 characters');
-        return;
-      }
-      if (!data.firstName) {
-        formState.setFieldError('firstName', 'First name is required');
-        return;
-      }
-      if (!data.lastName) {
-        formState.setFieldError('lastName', 'Last name is required');
-        return;
-      }
-    } else if (currentStepName === 'account-info') {
-      if (!data.email) {
-        formState.setFieldError('email', 'Email is required');
-        return;
-      }
-      if (!data.password || data.password.length < 8) {
-        formState.setFieldError('password', 'Password must be at least 8 characters');
-        return;
-      }
-      if (data.password !== data.confirmPassword) {
-        formState.setFieldError('confirmPassword', 'Passwords do not match');
-        return;
-      }
-    } else if (currentStepName === 'preferences') {
-      if (!data.agreeToTerms) {
-        formState.setFieldError('agreeToTerms', 'You must agree to the terms and conditions');
-        return;
-      }
+    if (isValid) {
+      goToNextStep();
     }
-    
-    // Clear any errors and proceed to next step
-    formState.clearErrors();
-    goToNextStep();
   };
 
   const renderPersonalInfoStep = () => (
@@ -226,9 +176,9 @@ export default function RegisterPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormInput
           label="First Name"
-          value={formState.data.firstName}
-          onChange={(e) => formState.setField('firstName', e.target.value)}
-          error={formState.errors.firstName}
+          value={formData.firstName}
+          onChange={(e) => updateField('firstName', e.target.value)}
+          error={draftErrors.firstName}
           required
           placeholder="Enter your first name"
           icon={User}
@@ -236,9 +186,9 @@ export default function RegisterPage() {
 
         <FormInput
           label="Last Name"
-          value={formState.data.lastName}
-          onChange={(e) => formState.setField('lastName', e.target.value)}
-          error={formState.errors.lastName}
+          value={formData.lastName}
+          onChange={(e) => updateField('lastName', e.target.value)}
+          error={draftErrors.lastName}
           required
           placeholder="Enter your last name"
           icon={User}
@@ -247,9 +197,9 @@ export default function RegisterPage() {
 
       <FormInput
         label="Username"
-        value={formState.data.username}
-        onChange={(e) => formState.setField('username', e.target.value)}
-        error={formState.errors.username}
+        value={formData.username}
+        onChange={(e) => updateField('username', e.target.value)}
+        error={draftErrors.username}
         required
         placeholder="Choose a username"
         icon={User}
@@ -270,53 +220,53 @@ export default function RegisterPage() {
       <FormInput
         label="Email"
         type="email"
-        value={formState.data.email}
-        onChange={(e) => formState.setField('email', e.target.value)}
-        error={formState.errors.email}
+        value={formData.email}
+        onChange={(e) => updateField('email', e.target.value)}
+        error={draftErrors.email}
         required
         placeholder="Enter your email"
         icon={Mail}
       />
 
-      <FormInput
-        label="Password"
-        type={showPassword ? "text" : "password"}
-        value={formState.data.password}
-        onChange={(e) => formState.setField('password', e.target.value)}
-        error={formState.errors.password}
-        required
-        placeholder="Create a password"
-        icon={Lock}
-        rightIcon={
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        }
-      />
+        <FormInput
+          label="Password"
+          type={showPassword ? "text" : "password"}
+          value={formData.password}
+          onChange={(e) => updateField('password', e.target.value)}
+          error={draftErrors.password}
+          required
+          placeholder="Create a password"
+          icon={Lock}
+          rightIcon={
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
+        />
 
-      <FormInput
-        label="Confirm Password"
-        type={showConfirmPassword ? "text" : "password"}
-        value={formState.data.confirmPassword}
-        onChange={(e) => formState.setField('confirmPassword', e.target.value)}
-        error={formState.errors.confirmPassword}
-        required
-        placeholder="Confirm your password"
-        icon={Lock}
-        rightIcon={
-          <button
-            type="button"
-            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        }
-      />
+        <FormInput
+          label="Confirm Password"
+          type={showConfirmPassword ? "text" : "password"}
+          value={formData.confirmPassword}
+          onChange={(e) => updateField('confirmPassword', e.target.value)}
+          error={draftErrors.confirmPassword}
+          required
+          placeholder="Confirm your password"
+          icon={Lock}
+          rightIcon={
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
+        />
     </div>
   );
 
@@ -333,9 +283,9 @@ export default function RegisterPage() {
         <FormSelect
           label="Name Display Preference"
           description="Choose how your name appears on leaderboards and in tournaments"
-          value={formState.data.nameDisplayPreference}
-          onValueChange={(value) => formState.setField('nameDisplayPreference', value)}
-          error={formState.errors.nameDisplayPreference}
+          value={formData.nameDisplayPreference}
+          onValueChange={(value) => updateField('nameDisplayPreference', value)}
+          error={draftErrors.nameDisplayPreference}
           required
           options={[
             {
@@ -359,16 +309,16 @@ export default function RegisterPage() {
 
         <FormCheckbox
           label="Subscribe to updates and notifications"
-          checked={formState.data.subscribeToUpdates}
-          onCheckedChange={(checked) => formState.setField('subscribeToUpdates', checked)}
-          error={formState.errors.subscribeToUpdates}
+          checked={formData.subscribeToUpdates}
+          onCheckedChange={(checked) => updateField('subscribeToUpdates', checked)}
+          error={draftErrors.subscribeToUpdates}
         />
 
         <FormCheckbox
           label="Receive general platform updates and announcements"
-          checked={formState.data.optInCommunications}
-          onCheckedChange={(checked) => formState.setField('optInCommunications', checked)}
-          error={formState.errors.optInCommunications}
+          checked={formData.optInCommunications}
+          onCheckedChange={(checked) => updateField('optInCommunications', checked)}
+          error={draftErrors.optInCommunications}
         />
 
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
@@ -383,9 +333,9 @@ export default function RegisterPage() {
 
         <FormCheckbox
           label="I agree to the Terms of Service and Privacy Policy"
-          checked={formState.data.agreeToTerms}
-          onCheckedChange={(checked) => formState.setField('agreeToTerms', checked)}
-          error={formState.errors.agreeToTerms}
+          checked={formData.agreeToTerms}
+          onCheckedChange={(checked) => updateField('agreeToTerms', checked)}
+          error={draftErrors.agreeToTerms}
           required
         />
       </div>
@@ -405,36 +355,40 @@ export default function RegisterPage() {
     }
   };
 
+  // Render modal children directly so form field updates re-render immediately
+
   return (
     <main className="bg-background text-foreground min-h-screen py-8 px-4">
       <div className="container mx-auto max-w-2xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Create Account</h1>
-          <p className="text-muted-foreground">Join the community and start competing</p>
-        </div>
-
-        <form onSubmit={(e) => e.preventDefault()}>
-          <FormStatus 
-            error={formState.errors.email || formState.errors.password || formState.errors.username || (formState.errors as any).general}
-          />
-
-          {renderCurrentStep()}
-
-          <FormActions
-            onSubmit={isLastStep ? formState.submit : handleStepValidation}
-            onCancel={goToPreviousStep}
-            isSubmitting={formState.isSubmitting}
-            isValid={isLastStep ? !!isFormValid() : !!isCurrentStepValid()}
-            isDirty={formState.isDirty}
-            submitLabel={
-              isLastStep ? "Create Account" : "Continue"
-            }
-            cancelLabel="Back"
-            showReset={false}
-            showCancel={!isFirstStep}
-          />
-
-        </form>
+        <Modal
+          isOpen={true}
+          onClose={() => {}} // No-op since this is a page, not a modal
+          title="Create Account"
+          description="Join the community and start competing"
+          size="lg"
+          showCloseButton={false}
+          closeOnOverlayClick={false}
+          usePortal={false}
+          isMultiStep={true}
+          currentStep={currentStep}
+          totalSteps={steps.length}
+          onSubmit={isLastStep ? () => submit(handleSubmit) : handleStepValidation}
+          onCancel={goToPreviousStep}
+          isSubmitting={isSubmitting}
+          isValid={isLastStep ? !!isFormValid() : !!isCurrentStepValid()}
+          isDirty={Object.values(formData).some(value => value !== '' && value !== false)}
+          submitLabel={isLastStep ? "Create Account" : "Continue"}
+          cancelLabel="Back"
+          showCancel={!isFirstStep}
+          showReset={false}
+        >
+          <>
+            <FormStatus 
+              error={draftErrors.email || draftErrors.password || draftErrors.username || draftErrors.general}
+            />
+            {renderCurrentStep()}
+          </>
+        </Modal>
       </div>
     </main>
   );

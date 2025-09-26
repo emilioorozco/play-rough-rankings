@@ -6,15 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { 
-  Save, 
-  AlertCircle, 
-  CheckCircle, 
-  Clock, 
-  FileText, 
-  Trash2,
-  RefreshCw
-} from 'lucide-react'
+import { Save, AlertCircle, CheckCircle, Clock, FileText, Trash2, RefreshCw } from 'lucide-react'
 
 interface EnhancedFormProps {
   title: string
@@ -45,7 +37,11 @@ export function EnhancedForm({
   onClearDraft,
   hasDraft = false,
 }: EnhancedFormProps) {
-  const formatLastSaved = (date: Date) => {
+  const formatLastSaved = (date: Date | undefined) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      return 'Unknown'
+    }
+    
     const now = new Date()
     const diff = now.getTime() - date.getTime()
     const minutes = Math.floor(diff / 60000)

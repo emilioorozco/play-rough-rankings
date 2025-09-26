@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useSession } from './session-provider'
-import { useFormDraft } from '@/hooks/useFormDraft'
+import { useFormDraftStore } from '@/stores/form-draft-store'
 import { profileUpdateSchema, type ProfileUpdateFormData } from '@/lib/validation/schemas'
 import { 
   EnhancedForm, 
@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
 import { trpc } from '@/lib/trpc/client'
 import { useUIStoreSelectors } from '@/stores/selectors'
+import { z } from 'zod'
 
 interface ProfileFormProps {
   isOpen: boolean
@@ -26,8 +27,36 @@ interface ProfileFormProps {
 export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
   const { user, updateSession } = useSession()
 
-  // Use UI store for modal management
   const modalState = useUIStoreSelectors.getModalState('userPreferences')
+
+  // Local state
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | undefined>()
+
+  const formId = `profile-form-${user?.id || 'anonymous'}`
+  
+  // Form draft store actions
+  const {
+    saveDraft,
+    loadDraft,
+    clearDraft,
+    hasDraft,
+    createDraft,
+    getDraftLastSaved,
+  } = useFormDraftStore()
+
+  // Form data state
+  const [formData, setFormData] = useState<ProfileUpdateFormData>({
+    name: '',
+    email: '',
+    firstName: '',
+    lastName: '',
+    location: '',
+    phone: '',
+    bio: '',
+  })
 
   // Profile update mutation with enhanced error handling
   const updateProfile = useTRPCMutationWithLoading(
@@ -36,55 +65,37 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
     {
       onSuccess: () => {
         updateSession()
+        // Clear draft on successful update
+        clearDraft(formId)
+        setHasUnsavedChanges(false)
         onSave?.()
         onClose()
       },
       onError: (error) => {
         console.error(`Failed to update profile: ${error instanceof Error ? error.message : String(error)}`)
+        setErrors({ general: error instanceof Error ? error.message : 'Profile update failed' })
       },
     }
   )
 
-  // Enhanced form state with auto-save and draft persistence
-  const formState = useFormDraft<ProfileUpdateFormData>({
-    initialData: {
-      name: '',
-      email: '',
-      firstName: '',
-      lastName: '',
-      location: '',
-      phone: '',
-      bio: '',
-    },
-    validationSchema: profileUpdateSchema,
-    onSubmit: async (data) => {
-      await updateProfile.mutateAsync(data)
-    },
-    onSuccess: () => {
-      // Success is handled by the mutation's onSuccess callback
-    },
-    onError: (error) => {
-      console.error("Form submission error:", error)
-    },
-    showLoadingBar: true,
-    // Enhanced features
-    formId: `profile-form-${user?.id || 'anonymous'}`,
-    enableAutoSave: true,
-    autoSaveDelay: 2000, // 2 seconds for profile forms
-    enableDraftPersistence: true,
-    enableUserPreferences: true,
-    onAutoSave: (data) => {
-      console.log('Auto-saved profile form draft:', data)
-    },
-    onDraftRestore: (data) => {
-      console.log('Restored profile form draft:', data)
-    },
-  })
+  useEffect(() => {
+    if (hasDraft(formId)) {
+      const draftData = loadDraft(formId)
+      if (draftData) {
+        setFormData(draftData)
+        setHasUnsavedChanges(true)
+        setLastSaved(getDraftLastSaved(formId) ?? undefined)
+      }
+    } else {
+      // Create initial draft
+      const draftId = createDraft('profile-update', formData)
+    }
+  }, [formId, hasDraft, loadDraft, createDraft, getDraftLastSaved])
 
   // Update form data when user data is available
   useEffect(() => {
-    if (user) {
-      formState.setFields({
+    if (user && !hasUnsavedChanges) {
+      const userData = {
         name: user.name || '',
         email: user.email || '',
         firstName: (user as any).firstName || '',
@@ -92,9 +103,99 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
         location: (user as any).location || '',
         phone: (user as any).phone || '',
         bio: (user as any).bio || '',
-      })
+      }
+      setFormData(userData)
     }
-  }, [user, formState.setFields])
+  }, [user, hasUnsavedChanges])
+
+  const autoSave = useCallback(() => {
+    if (Object.values(formData).some(value => value !== '')) {
+      saveDraft(formId, formData)
+      setLastSaved(new Date())
+    }
+  }, [formData, formId, saveDraft])
+
+  // Auto-save on form data changes (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      autoSave()
+    }, 2000) // 2 second delay
+
+    return () => clearTimeout(timer)
+  }, [autoSave])
+
+  // Update form field
+  const updateField = (field: keyof ProfileUpdateFormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    setHasUnsavedChanges(true)
+    // Clear field error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }))
+    }
+  }
+
+  // Validation
+  const validateForm = (data: ProfileUpdateFormData) => {
+    try {
+      profileUpdateSchema.parse(data)
+      return { isValid: true, errors: {} }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {}
+        error.issues.forEach(issue => {
+          const field = issue.path[0] as string
+          if (field) {
+            fieldErrors[field] = issue.message
+          }
+        })
+        return { isValid: false, errors: fieldErrors }
+      }
+      return { isValid: false, errors: { general: 'Validation failed' } }
+    }
+  }
+
+  const isFormValid = () => {
+    return formData.firstName && formData.lastName && formData.name && formData.email
+  }
+
+  const isDirty = () => {
+    return Object.values(formData).some(value => value !== '')
+  }
+
+  // Submit form
+  const handleSubmit = async () => {
+    const validation = validateForm(formData)
+    
+    if (!validation.isValid) {
+      setErrors(validation.errors)
+      return
+    }
+
+    setIsSubmitting(true)
+    setErrors({})
+
+    try {
+      await updateProfile.mutateAsync(formData)
+    } catch (error) {
+      console.error('Profile update error:', error)
+      setErrors({ general: error instanceof Error ? error.message : 'Profile update failed' })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Manual draft actions
+  const saveDraftManually = () => {
+    saveDraft(formId, formData)
+    setLastSaved(new Date())
+    setHasUnsavedChanges(false)
+  }
+
+  const clearDraftManually = () => {
+    clearDraft(formId)
+    setHasUnsavedChanges(false)
+    setLastSaved(undefined)
+  }
 
   if (!user) {
     return (
@@ -109,51 +210,51 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
       isOpen={isOpen}
       onClose={onClose}
       size="lg"
-      closeOnOverlayClick={!formState.isSubmitting && !updateProfile.isLoading}
+      closeOnOverlayClick={!isSubmitting && !updateProfile.isLoading}
     >
       <EnhancedForm
         title="Profile Settings"
         description="Update your profile information and preferences"
-        onSubmit={formState.handleSubmit}
+        onSubmit={handleSubmit}
         showAutoSaveStatus={true}
-        isAutoSaving={formState.isAutoSaving}
-        lastSaved={formState.lastSaved}
-        hasUnsavedChanges={formState.hasUnsavedChanges}
-        onSaveDraft={formState.saveDraftManually}
-        onClearDraft={formState.clearDraftManually}
-        hasDraft={formState.hasDraft}
+        isAutoSaving={false}
+        lastSaved={lastSaved}
+        hasUnsavedChanges={hasUnsavedChanges}
+        onSaveDraft={saveDraftManually}
+        onClearDraft={clearDraftManually}
+        hasDraft={hasDraft(formId)}
       >
         <EnhancedFormStatus 
           success={updateProfile.isSuccess ? "Profile updated successfully!" : undefined}
-          error={updateProfile.error?.message}
+          error={errors.general || updateProfile.error?.message}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <EnhancedFormField
             label="First Name"
             required
-            error={formState.errors.firstName}
-            hasUnsavedChanges={formState.hasUnsavedChanges}
+            error={errors.firstName}
+            hasUnsavedChanges={hasUnsavedChanges}
           >
             <Input
-              value={formState.data.firstName}
-              onChange={(e) => formState.setField('firstName', e.target.value)}
+              value={formData.firstName}
+              onChange={(e) => updateField('firstName', e.target.value)}
               placeholder="Enter your first name"
-              className={formState.errors.firstName ? 'border-destructive' : ''}
+              className={errors.firstName ? 'border-destructive' : ''}
             />
           </EnhancedFormField>
 
           <EnhancedFormField
             label="Last Name"
             required
-            error={formState.errors.lastName}
-            hasUnsavedChanges={formState.hasUnsavedChanges}
+            error={errors.lastName}
+            hasUnsavedChanges={hasUnsavedChanges}
           >
             <Input
-              value={formState.data.lastName}
-              onChange={(e) => formState.setField('lastName', e.target.value)}
+              value={formData.lastName}
+              onChange={(e) => updateField('lastName', e.target.value)}
               placeholder="Enter your last name"
-              className={formState.errors.lastName ? 'border-destructive' : ''}
+              className={errors.lastName ? 'border-destructive' : ''}
             />
           </EnhancedFormField>
         </div>
@@ -161,14 +262,14 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
         <EnhancedFormField
           label="Display Name"
           required
-          error={formState.errors.name}
-          hasUnsavedChanges={formState.hasUnsavedChanges}
+          error={errors.name}
+          hasUnsavedChanges={hasUnsavedChanges}
         >
           <Input
-            value={formState.data.name}
-            onChange={(e) => formState.setField('name', e.target.value)}
+            value={formData.name}
+            onChange={(e) => updateField('name', e.target.value)}
             placeholder="Enter your display name"
-            className={formState.errors.name ? 'border-destructive' : ''}
+            className={errors.name ? 'border-destructive' : ''}
           />
           <p className="text-sm text-muted-foreground mt-1">
             This is how your name will appear to other users
@@ -178,15 +279,15 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
         <EnhancedFormField
           label="Email"
           required
-          error={formState.errors.email}
-          hasUnsavedChanges={formState.hasUnsavedChanges}
+          error={errors.email}
+          hasUnsavedChanges={hasUnsavedChanges}
         >
           <Input
             type="email"
-            value={formState.data.email}
-            onChange={(e) => formState.setField('email', e.target.value)}
+            value={formData.email}
+            onChange={(e) => updateField('email', e.target.value)}
             placeholder="Enter your email"
-            className={formState.errors.email ? 'border-destructive' : ''}
+            className={errors.email ? 'border-destructive' : ''}
           />
           <p className="text-sm text-muted-foreground mt-1">
             We&apos;ll use this to send you important updates
@@ -195,14 +296,14 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
 
         <EnhancedFormField
           label="Location"
-          error={formState.errors.location}
-          hasUnsavedChanges={formState.hasUnsavedChanges}
+          error={errors.location}
+          hasUnsavedChanges={hasUnsavedChanges}
         >
           <Input
-            value={formState.data.location}
-            onChange={(e) => formState.setField('location', e.target.value)}
+            value={formData.location}
+            onChange={(e) => updateField('location', e.target.value)}
             placeholder="City, State/Country"
-            className={formState.errors.location ? 'border-destructive' : ''}
+            className={errors.location ? 'border-destructive' : ''}
           />
           <p className="text-sm text-muted-foreground mt-1">
             Help other players find tournaments in your area
@@ -211,15 +312,15 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
 
         <EnhancedFormField
           label="Phone Number"
-          error={formState.errors.phone}
-          hasUnsavedChanges={formState.hasUnsavedChanges}
+          error={errors.phone}
+          hasUnsavedChanges={hasUnsavedChanges}
         >
           <Input
             type="tel"
-            value={formState.data.phone}
-            onChange={(e) => formState.setField('phone', e.target.value)}
+            value={formData.phone}
+            onChange={(e) => updateField('phone', e.target.value)}
             placeholder="Enter your phone number"
-            className={formState.errors.phone ? 'border-destructive' : ''}
+            className={errors.phone ? 'border-destructive' : ''}
           />
           <p className="text-sm text-muted-foreground mt-1">
             Optional - for tournament organizers to contact you
@@ -228,15 +329,15 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
 
         <EnhancedFormField
           label="Bio"
-          error={formState.errors.bio}
-          hasUnsavedChanges={formState.hasUnsavedChanges}
+          error={errors.bio}
+          hasUnsavedChanges={hasUnsavedChanges}
         >
           <Textarea
-            value={formState.data.bio}
-            onChange={(e) => formState.setField('bio', e.target.value)}
+            value={formData.bio}
+            onChange={(e) => updateField('bio', e.target.value)}
             placeholder="Tell us about yourself..."
             rows={4}
-            className={formState.errors.bio ? 'border-destructive' : ''}
+            className={errors.bio ? 'border-destructive' : ''}
           />
           <p className="text-sm text-muted-foreground mt-1">
             A brief description about yourself and your gaming interests
@@ -244,16 +345,28 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
         </EnhancedFormField>
 
         <EnhancedFormActions
-          onSubmit={formState.submit}
-          onReset={formState.reset}
+          onSubmit={handleSubmit}
+          onReset={() => {
+            setFormData({
+              name: user?.name || '',
+              email: user?.email || '',
+              firstName: (user as any)?.firstName || '',
+              lastName: (user as any)?.lastName || '',
+              location: (user as any)?.location || '',
+              phone: (user as any)?.phone || '',
+              bio: (user as any)?.bio || '',
+            })
+            setErrors({})
+            setHasUnsavedChanges(false)
+          }}
           onCancel={onClose}
-          onSaveDraft={formState.saveDraftManually}
-          onClearDraft={formState.clearDraftManually}
-          isSubmitting={formState.isSubmitting || updateProfile.isLoading}
-          isValid={formState.isValid}
-          isDirty={formState.isDirty}
-          hasUnsavedChanges={formState.hasUnsavedChanges}
-          hasDraft={formState.hasDraft}
+          onSaveDraft={saveDraftManually}
+          onClearDraft={clearDraftManually}
+          isSubmitting={isSubmitting || updateProfile.isLoading}
+          isValid={!!isFormValid()}
+          isDirty={isDirty()}
+          hasUnsavedChanges={hasUnsavedChanges}
+          hasDraft={hasDraft(formId)}
           submitLabel="Save Changes"
           resetLabel="Reset Changes"
           cancelLabel="Cancel"
