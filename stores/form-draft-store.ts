@@ -54,6 +54,7 @@ interface ExtendedFormDraft extends BaseFormDraft {
 
 // Form draft metadata for organization
 interface FormDraftMetadata {
+  formId?: string
   formType: string
   displayName: string
   description?: string
@@ -92,6 +93,8 @@ interface FormDraftState {
     loading: boolean
     autoSaving: boolean
     deleting: boolean
+    submitting: boolean
+    validating: boolean
   }
   
   // Error states
@@ -100,6 +103,8 @@ interface FormDraftState {
     load: string | null
     delete: string | null
     autoSave: string | null
+    submit: string | null
+    validation: string | null
   }
   
   // Actions for draft management
@@ -150,6 +155,11 @@ interface FormDraftState {
   clearError: (key: keyof FormDraftState['errors']) => void
   clearAllErrors: () => void
   
+  // Actions for form submission
+  setSubmitting: (draftId: string, isSubmitting: boolean) => void
+  setValidationErrors: (draftId: string, errors: Record<string, string>) => void
+  clearValidationErrors: (draftId: string) => void
+  
   // Actions for metadata
   setDraftMetadata: (formType: string, metadata: FormDraftMetadata) => void
   getDraftMetadata: (formType: string) => FormDraftMetadata | null
@@ -199,23 +209,35 @@ const defaultFormDraftMetadata: Record<string, FormDraftMetadata> = {
   'user-preferences': {
     formType: 'user-preferences',
     displayName: 'User Preferences',
-    description: 'Draft for user preference updates',
+    description: 'Draft for user preference settings',
     category: 'user',
     maxDrafts: 1,
-    autoExpire: false,
+    autoExpire: true,
+    expireAfter: 30 * 24 * 60 * 60 * 1000, // 30 days
     requiredFields: [],
-    optionalFields: ['nameDisplayPreference', 'profileVisibility', 'optInCommunications'],
+    optionalFields: ['nameDisplayPreference', 'profileVisibility', 'optInCommunications', 'optInTournamentUpdates', 'optInLeaderboardUpdates', 'optInMarketing'],
+  },
+  'profile-completion': {
+    formType: 'profile-completion',
+    displayName: 'Profile Completion',
+    description: 'Draft for completing user profile information',
+    category: 'user',
+    maxDrafts: 1,
+    autoExpire: true,
+    expireAfter: 7 * 24 * 60 * 60 * 1000, // 7 days
+    requiredFields: ['firstName', 'lastName', 'favoriteGame'],
+    optionalFields: ['location'],
   },
   'profile-update': {
     formType: 'profile-update',
     displayName: 'Profile Update',
-    description: 'Draft for profile updates',
+    description: 'Draft for updating user profile information',
     category: 'user',
     maxDrafts: 1,
     autoExpire: true,
-    expireAfter: 3 * 24 * 60 * 60 * 1000, // 3 days
-    requiredFields: [],
-    optionalFields: ['firstName', 'lastName', 'bio', 'location'],
+    expireAfter: 7 * 24 * 60 * 60 * 1000, // 7 days
+    requiredFields: ['firstName', 'lastName'],
+    optionalFields: ['bio', 'location', 'website', 'socialLinks'],
   },
   'contact-form': {
     formType: 'contact-form',
@@ -239,6 +261,29 @@ const defaultFormDraftMetadata: Record<string, FormDraftMetadata> = {
     requiredFields: ['type', 'title', 'description'],
     optionalFields: ['priority'],
   },
+  'user-registration': {
+    formType: 'user-registration',
+    displayName: 'User Registration',
+    description: 'Draft for user registration forms',
+    category: 'user',
+    maxDrafts: 1,
+    autoExpire: true,
+    expireAfter: 24 * 60 * 60 * 1000, // 24 hours
+    steps: ['personal-info', 'account-info', 'preferences'],
+    requiredFields: ['email', 'password', 'username', 'firstName', 'lastName', 'agreeToTerms'],
+    optionalFields: ['subscribeToUpdates', 'optInCommunications', 'nameDisplayPreference'],
+  },
+  'store-create': {
+    formType: 'store-create',
+    displayName: 'Store Creation',
+    description: 'Draft for creating new stores',
+    category: 'system',
+    maxDrafts: 3,
+    autoExpire: true,
+    expireAfter: 2 * 60 * 60 * 1000, // 2 hours
+    requiredFields: ['name', 'address', 'city', 'state', 'zipCode'],
+    optionalFields: ['contactEmail', 'website', 'isActive'],
+  },
 }
 
 export const useFormDraftStore = create<FormDraftState>()(
@@ -254,12 +299,16 @@ export const useFormDraftStore = create<FormDraftState>()(
         loading: false,
         autoSaving: false,
         deleting: false,
+        submitting: false,
+        validating: false,
       },
       errors: {
         save: null,
         load: null,
         delete: null,
         autoSave: null,
+        submit: null,
+        validation: null,
       },
       
       // Draft management actions
@@ -457,19 +506,15 @@ export const useFormDraftStore = create<FormDraftState>()(
       validateDraftData: (formType: string, data: Record<string, any>) => {
         const state = get()
         const metadata = state.metadata[formType]
-        console.log('🔍 FormDraftStore validateDraftData:', { formType, data, metadata })
         
         if (!metadata || !metadata.validationSchema) {
-          console.log('🔍 No validation schema found, returning valid')
           return { isValid: true, errors: {} }
         }
         
         try {
           const result = metadata.validationSchema.parse(data)
-          console.log('🔍 Validation passed:', result)
           return { isValid: true, errors: {} }
         } catch (error) {
-          console.log('🔍 Validation failed:', error)
           if (error instanceof z.ZodError) {
             const errors: Record<string, string> = {}
             error.issues.forEach(issue => {
@@ -478,7 +523,6 @@ export const useFormDraftStore = create<FormDraftState>()(
                 errors[field] = issue.message
               }
             })
-            console.log('🔍 Parsed errors:', errors)
             return { isValid: false, errors }
           }
           return { isValid: false, errors: { general: 'Validation failed' } }
@@ -661,8 +705,59 @@ export const useFormDraftStore = create<FormDraftState>()(
             load: null,
             delete: null,
             autoSave: null,
+            submit: null,
+            validation: null,
           },
         })
+      },
+      
+      // Form submission actions
+      setSubmitting: (draftId: string, isSubmitting: boolean) => {
+        set((state: FormDraftState) => ({
+          drafts: {
+            ...state.drafts,
+            [draftId]: {
+              ...state.drafts[draftId],
+              isSubmitting,
+            },
+          },
+          loading: {
+            ...state.loading,
+            submitting: isSubmitting,
+          },
+        }))
+      },
+      
+      setValidationErrors: (draftId: string, errors: Record<string, string>) => {
+        set((state: FormDraftState) => ({
+          drafts: {
+            ...state.drafts,
+            [draftId]: {
+              ...state.drafts[draftId],
+              errors,
+            },
+          },
+          errors: {
+            ...state.errors,
+            validation: Object.keys(errors).length > 0 ? 'Validation errors present' : null,
+          },
+        }))
+      },
+      
+      clearValidationErrors: (draftId: string) => {
+        set((state: FormDraftState) => ({
+          drafts: {
+            ...state.drafts,
+            [draftId]: {
+              ...state.drafts[draftId],
+              errors: {},
+            },
+          },
+          errors: {
+            ...state.errors,
+            validation: null,
+          },
+        }))
       },
       
       // Metadata actions
@@ -788,12 +883,16 @@ export const useFormDraftStore = create<FormDraftState>()(
             loading: false,
             autoSaving: false,
             deleting: false,
+            submitting: false,
+            validating: false,
           },
           errors: {
             save: null,
             load: null,
             delete: null,
             autoSave: null,
+            submit: null,
+            validation: null,
           },
         })
       },
@@ -803,6 +902,37 @@ export const useFormDraftStore = create<FormDraftState>()(
       storage: createJSONStorage(() => storageConfigs.formDrafts.storage),
       partialize: storageConfigs.formDrafts.partialize,
       onRehydrateStorage: storageConfigs.formDrafts.onRehydrateStorage,
+      migrate: (persistedState: any, version: number) => {
+        // Handle migration between different versions of the stored state
+        if (version === 0) {
+          // Migrate from version 0 to version 1
+          return {
+            ...persistedState,
+            version: 1,
+            // Ensure all required fields exist with defaults
+            drafts: persistedState.drafts || {},
+            metadata: persistedState.metadata || { ...defaultFormDraftMetadata },
+            activeDraftId: persistedState.activeDraftId || null,
+            autoSaveSettings: persistedState.autoSaveSettings || { ...defaultAutoSaveSettings },
+            loading: persistedState.loading || {
+              saving: false,
+              loading: false,
+              autoSaving: false,
+              deleting: false,
+            },
+            errors: persistedState.errors || {
+              save: null,
+              load: null,
+              delete: null,
+              autoSave: null,
+            },
+          }
+        }
+        
+        // For future versions, add migration logic here
+        return persistedState
+      },
+      version: 1,
     }
   )
 )

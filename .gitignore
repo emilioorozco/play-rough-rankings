@@ -23,3 +23,4 @@ package-lock.json
 scripts/
 docs/
 .vercel
+.env*.local

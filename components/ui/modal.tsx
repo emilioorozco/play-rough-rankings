@@ -17,7 +17,8 @@ interface ModalProps {
   closeOnOverlayClick?: boolean
   error?: string
   success?: string
-  autoCloseDelay?: number // Auto-close delay in seconds (0 = no auto-close, -1 = auto-close after submission with default 4s, >0 = custom delay)
+  autoCloseDelay?: number
+  usePortal?: boolean
   // Multi-step props
   isMultiStep?: boolean
   currentStep?: number
@@ -53,6 +54,7 @@ export function Modal({
   error,
   success,
   autoCloseDelay = 0,
+  usePortal = true,
   // Multi-step props
   isMultiStep = false,
   currentStep = 0,
@@ -105,15 +107,12 @@ export function Modal({
       const newHeight = contentRef.current.scrollHeight
       setContentHeight(newHeight)
     }
-  }, [children, success, error, contentHeight])
+  }, [children, success, error])
 
   // Prevent body scroll when modal is open and handle escape key
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
-      
-      // Don't force focus - let natural focus flow work
-      // The modal will still be focusable via tab navigation if needed
       
       const handleEscape = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -154,11 +153,8 @@ export function Modal({
 
   // Handle countdown timer
   useEffect(() => {
-    // Determine if we should start auto-close timer
     const shouldStartTimer = () => {
       if (!isOpen) return false
-      // Disable auto-close in development (temporarily disabled for testing)
-      // if (process.env.NODE_ENV === 'development') return false
       if (autoCloseDelay > 0) return true // Explicit delay
       if (autoCloseDelay === -1 && hasSubmitted) return true // Auto-close after submission
       return false
@@ -248,11 +244,16 @@ export function Modal({
 
   const modalContent = (
     <div 
-      className="fixed inset-0 flex items-center justify-center bg-black/50 overflow-y-auto p-4 animate-fade-in"
-      style={{ zIndex: 50, position: 'fixed' }}
-      onClick={handleOverlayClick}
+      className={cn(
+        "overflow-y-auto animate-fade-in",
+        usePortal 
+          ? "fixed inset-0 flex items-center justify-center bg-black/50 p-4" 
+          : "relative w-full"
+      )}
+      style={usePortal ? { zIndex: 50, position: 'fixed' } : {}}
+      onClick={usePortal ? handleOverlayClick : undefined}
       role="dialog"
-      aria-modal="true"
+      aria-modal={usePortal ? "true" : "false"}
       aria-labelledby={title ? "modal-title" : undefined}
       aria-describedby={description ? "modal-description" : undefined}
     >
@@ -393,7 +394,7 @@ export function Modal({
     </div>
   )
 
-  return createPortal(modalContent, document.body)
+  return usePortal ? createPortal(modalContent, document.body) : modalContent
 }
 
 // Specialized modal for forms

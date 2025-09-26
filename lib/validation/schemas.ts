@@ -43,7 +43,7 @@ export const profileCompletionSchema = z.object({
   firstName: nameSchema,
   lastName: nameSchema,
   location: z.string().optional(),
-  favoriteGame: z.string().optional(),
+  favoriteGame: z.string().min(1, 'Favorite game is required'),
 })
 
 // Tournament schemas

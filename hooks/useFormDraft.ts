@@ -73,15 +73,22 @@ export function useFormDraft<T extends Record<string, any>>({
   
   // Auto-save timer ref
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  // Track if we've already loaded the draft to prevent re-loading on re-renders
+  const draftLoadedRef = useRef(false)
   
   // Load user preferences for form behavior
   const autoSaveEnabled = enableAutoSave
   
   const draftPersistenceEnabled = enableDraftPersistence
 
-  // Load draft on mount if enabled
+  // Reset draft loaded flag when formId changes
   useEffect(() => {
-    if (draftPersistenceEnabled && hasDraft(formId)) {
+    draftLoadedRef.current = false
+  }, [formId])
+
+  // Load draft on mount if enabled - only run once per formId
+  useEffect(() => {
+    if (draftPersistenceEnabled && hasDraft(formId) && !draftLoadedRef.current) {
       const draftData = loadDraft(formId)
       if (draftData) {
         setData(draftData)
@@ -89,6 +96,7 @@ export function useFormDraft<T extends Record<string, any>>({
         setHasUnsavedChanges(true)
         setLastSaved(getDraftLastSaved(formId) ?? undefined)
         onDraftRestore?.(draftData)
+        draftLoadedRef.current = true
       }
     }
   }, [formId, draftPersistenceEnabled, hasDraft, loadDraft, getDraftLastSaved, onDraftRestore])
