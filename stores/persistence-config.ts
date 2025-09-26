@@ -22,8 +22,9 @@ export class EnhancedStorage implements StateStorage {
       // Check version compatibility
       if (parsed.version && parsed.version !== this.version) {
         console.warn(`Storage version mismatch for ${name}. Expected ${this.version}, got ${parsed.version}`)
-        // Could implement migration logic here
-        return null
+        // For now, we'll let Zustand's migrate function handle the migration
+        // Return the data as-is so it can be processed by the migrate function
+        return item
       }
 
       return item
@@ -188,6 +189,36 @@ export const migrationUtils = {
 
   // Migrate form drafts from old format to new format
   migrateFormDrafts: (oldData: any, version: number): any => {
+    if (version === 0) {
+      // Migrate from version 0 to version 1
+      return {
+        ...oldData,
+        version: 1,
+        // Ensure all required fields exist with defaults
+        drafts: oldData.drafts || {},
+        metadata: oldData.metadata || {},
+        activeDraftId: oldData.activeDraftId || null,
+        autoSaveSettings: oldData.autoSaveSettings || {
+          enabled: true,
+          interval: 30000,
+          maxRetries: 3,
+          retryDelay: 1000,
+        },
+        loading: oldData.loading || {
+          saving: false,
+          loading: false,
+          autoSaving: false,
+          deleting: false,
+        },
+        errors: oldData.errors || {
+          save: null,
+          load: null,
+          delete: null,
+          autoSave: null,
+        },
+      }
+    }
+    
     if (version === 1) {
       // Add any migration logic here for future versions
       return oldData
