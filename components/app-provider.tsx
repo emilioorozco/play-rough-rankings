@@ -6,7 +6,7 @@ import { useAppStore, useTheme, useActivity, useRealtime } from '@/stores/app-st
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { theme, mounted, setTheme, setMounted } = useTheme()
   const { setActivity, markActive } = useActivity()
-  const { addNotification, triggerLeaderboardUpdate } = useRealtime()
+  const { triggerLeaderboardUpdate } = useRealtime()
 
   // Theme initialization
   useEffect(() => {

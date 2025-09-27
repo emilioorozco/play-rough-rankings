@@ -22,8 +22,6 @@ export function TournamentList({ filters }: TournamentListProps) {
     tournaments,
     isLoading,
     error,
-    totalCount,
-    refetch,
   } = useTournamentData({ filters, limit: 12, offset: 0 })
 
   // Filter tournaments by search term on the client side

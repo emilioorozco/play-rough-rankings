@@ -6,8 +6,6 @@ import { useSession } from './auth/session-provider'
 import { ErrorDisplay } from './ui/loading-states'
 import { LoadingBar } from './ui/loading-bar'
 import { Modal } from './ui/modal'
-import { Button } from './ui/button'
-import { RefreshCw } from 'lucide-react'
 
 interface LoadingProviderProps {
   children: ReactNode

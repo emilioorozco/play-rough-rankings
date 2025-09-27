@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { router, publicProcedure, protectedProcedure, organizerProcedure } from '../router-factory'
+import { router, publicProcedure, organizerProcedure } from '../router-factory'
 import {
   CreateDeckSchema,
   UpdateDeckSchema,
@@ -9,11 +9,10 @@ import {
 } from '@/lib/schemas'
 import type {
   DateFilterClause,
-  DeckStatsFilter,
   DeckStatsResult,
   TournamentWhereClause
 } from '@/lib/types/backend'
-import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPublicSelectWithPrefs } from '@/lib/utils/user'
+import { getPublicDisplayName, userPublicSelectWithPrefs } from '@/lib/utils/user'
 
 export const decksRouter = router({
   // List all decks for a game

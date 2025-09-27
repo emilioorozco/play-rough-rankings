@@ -1,8 +1,7 @@
-import { initTRPC, TRPCError } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
 import { prisma, basePrismaClient } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
-import { AuthUserSchema } from "@/lib/schemas";
 import {
   TournamentListQuerySchema,
   CreateTournamentSchema,
@@ -10,9 +9,7 @@ import {
   CreateStoreSchema,
 } from "@/lib/schemas";
 import type {
-  GameUpdateData,
   DateFilterClause,
-  TournamentWhereClause,
 } from "@/lib/types/backend";
 import type { ApiTournamentListResponse } from "@/lib/types/api";
 import { getActiveGamesAsJSON, getGameOrThrow } from "@/lib/games";
@@ -94,7 +91,7 @@ export const appRouter = router({
 
   // Basic auth router
   auth: router({
-    getSession: publicProcedure.query(async ({ ctx }) => {
+    getSession: publicProcedure.query(async () => {
       return {
         user: null,
         session: null,
@@ -329,7 +326,7 @@ export const appRouter = router({
         // Check if a game class exists for this game
         try {
           getGameOrThrow(input.shortName.toLowerCase().replace(/\s+/g, '-'));
-        } catch (error) {
+        } catch {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: `No game class found for '${input.name}'. Please implement the game class first.`,
@@ -560,7 +557,7 @@ export const appRouter = router({
           metadata: z.record(z.string(), z.unknown()).optional(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async () => {
         // For now, return not implemented since auth is not fully set up
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
@@ -755,7 +752,7 @@ export const appRouter = router({
           externalId: z.string().min(1).max(50),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async () => {
         // For now, return not implemented since auth is not fully set up
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
@@ -771,7 +768,7 @@ export const appRouter = router({
           gameId: z.string().uuid(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async () => {
         // For now, return not implemented since auth is not fully set up
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
@@ -1597,7 +1594,7 @@ export const appRouter = router({
         if (input.metadata) {
           try {
             JSON.stringify(input.metadata);
-          } catch (error) {
+          } catch {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "Invalid metadata format",
@@ -2609,7 +2606,7 @@ export const appRouter = router({
         const { parseTournamentFile, validateTournamentData } = await import(
           "@/lib/upload/parsers"
         );
-        const { validateUploadedFile, getFileType } = await import(
+        const { getFileType } = await import(
           "@/lib/upload/config"
         );
 
@@ -2646,7 +2643,7 @@ export const appRouter = router({
           let fileBuffer: Buffer;
           try {
             fileBuffer = Buffer.from(input.fileData, "base64");
-          } catch (error) {
+          } catch {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "Invalid file data encoding",
@@ -2842,7 +2839,7 @@ export const appRouter = router({
           fileSize: z.number().max(10 * 1024 * 1024), // 10MB max
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ input }) => {
         const { parseTournamentFile, validateTournamentData } = await import(
           "@/lib/upload/parsers"
         );
@@ -2861,7 +2858,7 @@ export const appRouter = router({
           let fileBuffer: Buffer;
           try {
             fileBuffer = Buffer.from(input.fileData, "base64");
-          } catch (error) {
+          } catch {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "Invalid file data encoding",

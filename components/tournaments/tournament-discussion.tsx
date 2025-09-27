@@ -8,7 +8,7 @@ interface TournamentDiscussionProps {
   tournament: ApiTournament
 }
 
-export function TournamentDiscussion({ tournament }: TournamentDiscussionProps) {
+export function TournamentDiscussion({}: TournamentDiscussionProps) {
   return (
     <Card className="dark:bg-muted dark:text-foreground border-border">
       <CardHeader>

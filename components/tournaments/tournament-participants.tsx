@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useFilter } from '@/hooks/stores'
-import { Search, Filter, MoreVertical, UserCheck, UserX, Trophy, Medal, Award } from 'lucide-react'
+import { Search, Filter, MoreVertical, UserCheck, Trophy, Medal, Award } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'

@@ -9,7 +9,7 @@ interface PlayerRankingCardProps {
   season?: string
 }
 
-export function PlayerRankingCard({ player, gameId, season }: PlayerRankingCardProps) {
+export function PlayerRankingCard({ player }: PlayerRankingCardProps) {
   const getRankBadgeClass = (rank: number) => {
     if (rank === 1) return 'rank-badge gold'
     if (rank === 2) return 'rank-badge silver'

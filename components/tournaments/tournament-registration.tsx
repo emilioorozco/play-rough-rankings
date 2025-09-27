@@ -1,22 +1,18 @@
 'use client'
 
 import React, { useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc/client'
 import { useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
 import { useFormStepsEnhanced } from '@/hooks/useFormDraft'
-import { useFormDraftStore } from '@/stores/form-draft-store'
 import { useModal } from '@/stores/ui-store'
 import { useTournamentStore } from '@/stores/tournament-store'
 import { tournamentRegistrationSchema, type TournamentRegistrationFormData } from '@/lib/validation/schemas'
 import { ModalForm } from '@/components/ui/form-components'
 import { Modal } from '@/components/ui/modal'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react'
 
 interface TournamentRegistrationProps {
   tournamentId: string
@@ -36,13 +32,11 @@ export function TournamentRegistration({
   currentUser, 
   className 
 }: TournamentRegistrationProps) {
-  const router = useRouter()
   const hasResetOnOpen = useRef(false)
   const hasResetOnClose = useRef(false)
 
   // Use UI store for modal management
   const modal = useModal('tournamentRegistration')
-  const { hasDraft, clearDraft } = useFormDraftStore()
   
   // Use tournament store for state management
   const { setRegistrationStatus, invalidateTournament } = useTournamentStore()
@@ -184,7 +178,7 @@ export function TournamentRegistration({
       // Reset to first step
       formState.goToStep(0)
     }
-  }, [modal.isOpen, currentUser, formState.setFields, formState.goToStep])
+  }, [modal.isOpen, currentUser, formState.setFields, formState.goToStep, formState])
 
   // Reset form when modal is closed
   useEffect(() => {
@@ -195,7 +189,7 @@ export function TournamentRegistration({
       // Reset form state
       formState.reset()
     }
-  }, [modal.isOpen, formState.reset])
+  }, [modal.isOpen, formState.reset, formState])
 
 
   const renderStep = () => {

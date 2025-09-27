@@ -31,7 +31,7 @@ export function TournamentTabs({
   currentUser,
   userPreferences
 }: TournamentTabsProps) {
-  const { activeTab, setActiveTab, setAvailableTabs } = useTab('tournamentDetails')
+  const { activeTab, setActiveTab } = useTab('tournamentDetails')
   const mobileScrollRef = React.useRef<HTMLDivElement | null>(null)
   const anchorRef = React.useRef<HTMLDivElement | null>(null)
 

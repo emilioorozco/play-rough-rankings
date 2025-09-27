@@ -1,9 +1,6 @@
 import { TRPCError } from "@trpc/server";
-import { z } from "zod";
 import { router, protectedProcedure } from "../router-factory";
 import {
-  UserPreferencesSchema,
-  CreateUserPreferencesSchema,
   UpdateUserPreferencesSchema,
 } from "@/lib/schemas";
 
@@ -187,7 +184,6 @@ export const userPreferencesRouter = router({
     const fullName = firstName && lastName ? `${firstName} ${lastName}` : (user.name || "");
     const nameParts = fullName.split(" ");
     const legacyFirstName = nameParts[0] || "";
-    const legacyLastName = nameParts.slice(1).join(" ") || "";
 
     // Build available options
     const options = [

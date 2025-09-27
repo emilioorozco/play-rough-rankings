@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
-import { useFormSteps } from "@/hooks/useFormState";
+import { useFormStepsEnhanced } from "@/hooks/useFormDraft";
 import { tournamentCreateSchema, type TournamentCreateFormData } from "@/lib/validation/schemas";
-import { ModalMultiStepForm, FormInput, FormTextarea, FormSelect, FormCheckbox, FormActions, FormStatus } from "../ui/form-components";
+import { ModalMultiStepForm, FormInput, FormTextarea, FormSelect, FormStatus } from "../ui/form-components";
 import { Modal } from "../ui/modal";
 import { useTRPCMutationWithLoading } from "@/hooks/useTRPCWithLoading";
 import { trpc } from "@/lib/trpc/client";
@@ -25,8 +25,6 @@ export function TournamentCreateModal({
 }: TournamentCreateModalProps) {
   const router = useRouter();
   const { user } = useSession();
-  const hasResetOnOpen = useRef(false);
-  const hasResetOnClose = useRef(false);
 
   // Load available games and stores
   const { data: games } = trpc.games.list.useQuery({ includeInactive: false });
@@ -47,8 +45,8 @@ export function TournamentCreateModal({
     }
   );
 
-  // Multi-step form state
-  const formState = useFormSteps<TournamentCreateFormData>({
+  // Multi-step form state using Zustand-based draft system
+  const formState = useFormStepsEnhanced<TournamentCreateFormData>({
     steps: ['basic-info', 'description', 'details', 'settings', 'confirmation'],
     initialData: {
       name: '',
@@ -119,6 +117,18 @@ export function TournamentCreateModal({
       console.error("Tournament creation error:", error);
     },
     showLoadingBar: true,
+    // Enhanced Zustand features
+    formId: `tournament-create-${Date.now()}`,
+    enableAutoSave: true,
+    autoSaveDelay: 2000,
+    enableDraftPersistence: true,
+    enableUserPreferences: true,
+    onAutoSave: (data) => {
+      console.log('Auto-saved tournament creation draft:', data);
+    },
+    onDraftRestore: (data) => {
+      console.log('Restored tournament creation draft:', data);
+    },
   });
 
   const formatOptions = [
@@ -129,34 +139,10 @@ export function TournamentCreateModal({
   ];
 
   // Handle success callback when modal closes after success
-  useEffect(() => {
-    if (!isOpen && createTournament.isSuccess) {
-      // Call onSuccess to update parent state when modal closes
-      onSuccess?.();
-    }
-  }, [isOpen, createTournament.isSuccess, onSuccess]);
-
-  // Reset form when modal is closed
-  useEffect(() => {
-    if (!isOpen && !hasResetOnClose.current) {
-      hasResetOnClose.current = true;
-      hasResetOnOpen.current = false;
-      formState.reset();
-      // Reset mutation state to clear success message
-      createTournament.reset();
-    } else if (isOpen) {
-      hasResetOnClose.current = false;
-    }
-  }, [isOpen]);
-
-  // Reset form to first step when modal opens
-  useEffect(() => {
-    if (isOpen && !hasResetOnOpen.current) {
-      hasResetOnOpen.current = true;
-      formState.reset();
-      formState.goToStep(0);
-    }
-  }, [isOpen]);
+  if (!isOpen && createTournament.isSuccess) {
+    // Call onSuccess to update parent state when modal closes
+    onSuccess?.();
+  }
 
   // Simple close handler
   const handleClose = () => {

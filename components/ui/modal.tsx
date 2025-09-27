@@ -72,9 +72,6 @@ export function Modal({
   showCancel = false,
   showReset = false,
   submitVariant = 'default',
-  // Form integration props
-  useFormSubmission = false,
-  formSubmitHandler,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | 'none'>('none')
