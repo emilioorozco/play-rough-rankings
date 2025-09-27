@@ -112,7 +112,7 @@ export function TournamentUploadInterface({ tournament }: TournamentUploadInterf
       const fileContent = await readFileContent(selectedFile)
       
       // Validate and parse content based on file type
-      const parsedData = await parseFileContent(fileContent, fileType)
+      await parseFileContent(fileContent, fileType)
       
       // TODO: Send to tRPC endpoint for processing
       // For now, simulate upload

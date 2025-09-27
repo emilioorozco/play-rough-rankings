@@ -3,7 +3,6 @@ import { Prisma, PrismaClient } from '@prisma/client'
 import { 
   calculateMatchRatingChanges, 
   calculateChampionshipPoints, 
-  calculatePerformanceMetrics,
   validateRatingInputs,
   ELO_CONFIG 
 } from '@/lib/rating/elo'
@@ -164,7 +163,7 @@ export const processMatchResult = async (
     }
 
     // Update player game statistics
-    const [updatedPlayer1Stats, updatedPlayer2Stats] = await Promise.all([
+    await Promise.all([
       tx.playerGameStats.update({
         where: {
           playerId_gameId: {

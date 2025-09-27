@@ -195,7 +195,7 @@ export const calculateSeasonalRankings = async (
 
   // Process matches to calculate seasonal stats
   seasonMatches.forEach(match => {
-    const { player1Id, player2Id, winnerId, tournament } = match
+    const { player1Id, player2Id, winnerId } = match
     
     const player1Data = seasonalData.get(player1Id)
     const player2Data = seasonalData.get(player2Id)
@@ -243,9 +243,6 @@ export const calculateSeasonalRankings = async (
   // Build ranking data
   const rankings: SeasonalRankingData[] = playerStats.map(stat => {
     const seasonData = seasonalData.get(stat.playerId)!
-    const currentSeasonalStats = stat.seasonalStats as Record<string, unknown> || {
-      wins: 0, losses: 0, tournaments: 0, points: 0
-    }
 
     const performance = calculatePerformanceMetrics(
       seasonData.wins,

@@ -8,7 +8,7 @@ interface PrivacyControlsProps {
   currentVisibility: 'PUBLIC' | 'PRIVATE'
 }
 
-export function PrivacyControls({ playerId, currentVisibility }: PrivacyControlsProps) {
+export function PrivacyControls({ currentVisibility }: PrivacyControlsProps) {
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(currentVisibility)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +42,7 @@ export function PrivacyControls({ playerId, currentVisibility }: PrivacyControls
       await updateProfileMutation.mutateAsync({
         profileVisibility: visibility,
       })
-    } catch (error) {
+    } catch {
       // Error handled by mutation onError
     }
   }

@@ -14,8 +14,6 @@ import {
 import { getDisplayName, userPublicSelectMinimal } from '@/lib/utils/user'
 import type {
   DateFilterClause,
-  LeaderboardFilter,
-  LeaderboardEntry,
   TournamentWhereClause,
   SeasonalStatsUpdate
 } from '@/lib/types/backend'

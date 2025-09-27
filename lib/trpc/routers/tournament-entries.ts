@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { router, publicProcedure, protectedProcedure, organizerProcedure } from '../router-factory'
+import { router, publicProcedure, organizerProcedure } from '../router-factory'
 import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPublicSelectWithPrefs } from '@/lib/utils/user'
 import { CreateTournamentEntrySchema, UpdateTournamentEntrySchema } from '@/lib/schemas'
 

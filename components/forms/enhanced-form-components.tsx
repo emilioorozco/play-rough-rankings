@@ -18,8 +18,6 @@ interface EnhancedFormProps {
   isAutoSaving?: boolean
   lastSaved?: Date
   hasUnsavedChanges?: boolean
-  onSaveDraft?: () => void
-  onClearDraft?: () => void
   hasDraft?: boolean
 }
 
@@ -33,8 +31,6 @@ export function EnhancedForm({
   isAutoSaving = false,
   lastSaved,
   hasUnsavedChanges = false,
-  onSaveDraft,
-  onClearDraft,
   hasDraft = false,
 }: EnhancedFormProps) {
   const formatLastSaved = (date: Date | undefined) => {
@@ -304,8 +300,6 @@ export function EnhancedMultiStepForm({
   isAutoSaving = false,
   lastSaved,
   hasUnsavedChanges = false,
-  onSaveDraft,
-  onClearDraft,
   hasDraft = false,
 }: EnhancedMultiStepFormProps) {
   const progress = ((currentStep + 1) / totalSteps) * 100
@@ -401,7 +395,6 @@ export function EnhancedFormField({
   label,
   required = false,
   error,
-  isDirty = false,
   hasUnsavedChanges = false,
   className = '',
 }: EnhancedFormFieldProps) {

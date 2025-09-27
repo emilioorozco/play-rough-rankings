@@ -3,7 +3,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { ErrorDisplay } from './ui/loading-states'
 import { Button } from './ui/button'
-import { RefreshCw, Home } from 'lucide-react'
+import { Home } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Props {

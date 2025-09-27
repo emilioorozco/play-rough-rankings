@@ -36,7 +36,6 @@ export function StoreCreateModal({ isOpen, onClose, onSuccess }: StoreCreateModa
     clearDraft,
     hasDraft,
     createDraft,
-    validateDraftData,
   } = useFormDraftStore()
 
   // Form data state
@@ -60,9 +59,9 @@ export function StoreCreateModal({ isOpen, onClose, onSuccess }: StoreCreateModa
       }
     } else {
       // Create initial draft
-      const draftId = createDraft('store-create', formData)
+      createDraft('store-create', formData)
     }
-  }, [formId, hasDraft, loadDraft, createDraft])
+  }, [formId, hasDraft, loadDraft, createDraft, formData])
 
   // Auto-save functionality (optional for modal)
   const autoSave = useCallback(() => {

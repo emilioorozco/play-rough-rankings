@@ -11,7 +11,6 @@ import {
   Settings,
   PlusCircle,
   Shield,
-  Plus,
   Filter,
   SortAsc,
   Gamepad2,
@@ -80,7 +79,6 @@ export default function Home() {
 
 
   const healthQuery = trpc.health.useQuery();
-  const gamesQuery = trpc.games.list.useQuery({ includeInactive: false });
 
   // Fetch data for authenticated users
   const gamesData = trpc.games.list.useQuery(

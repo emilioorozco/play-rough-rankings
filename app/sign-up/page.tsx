@@ -22,15 +22,10 @@ export default function RegisterPage() {
   const {
     formData,
     draftErrors,
-    isDirty,
     isSubmitting,
     updateField,
     submit,
     validate,
-    saveDraft,
-    createDraft,
-    hasDraft,
-    loadDraft,
     clearDraft,
   } = useFormDraftIntegration(formId, formType, registerSchema);
 

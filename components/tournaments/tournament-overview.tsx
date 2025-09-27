@@ -38,9 +38,6 @@ const tournamentRules = [
 
 export function TournamentOverview({ 
   tournament, 
-  isOrganizer, 
-  isRegistered, 
-  currentUser,
   userPreferences
 }: TournamentOverviewProps) {
   const participantCount = tournament.participants?.length || 0

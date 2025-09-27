@@ -275,7 +275,7 @@ const ComboboxContent = React.forwardRef<HTMLDivElement, ComboboxContentProps>(
 ComboboxContent.displayName = "ComboboxContent";
 
 const ComboboxItem = React.forwardRef<HTMLDivElement, ComboboxItemProps>(
-  ({ className, children, value, onClick, ...props }, ref) => {
+  ({ className, children, onClick, ...props }, ref) => {
     return (
       <div
         ref={ref}

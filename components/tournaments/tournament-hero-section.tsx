@@ -108,7 +108,7 @@ export function TournamentHeroSection({
       utils.tournaments.getRegistrationStatus.invalidate({ tournamentId: tournament.id })
       utils.tournaments.getById.invalidate({ id: tournament.id })
     },
-    onError: (error) => {
+    onError: () => {
       setInteraction('isWithdrawing', false)
       setInteraction('withdrawSuccess', false)
       // Error will be displayed in the modal via error prop
@@ -199,7 +199,7 @@ export function TournamentHeroSection({
       await withdrawMutation.mutateAsync({
         tournamentId: tournament.id,
       })
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation's onError callback
     }
   }
@@ -215,7 +215,6 @@ export function TournamentHeroSection({
     loginModal.close()
   }
 
-  const isUpcoming = tournament.status === 'UPCOMING'
   const isActive = tournament.status === 'ACTIVE'
   const isCompleted = tournament.status === 'COMPLETED'
   const isLive = isActive

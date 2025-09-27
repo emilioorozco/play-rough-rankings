@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react'
 import type { ApiTournament } from '@/lib/types/api'
 
 interface TournamentBracketsProps {
@@ -11,7 +11,7 @@ interface TournamentBracketsProps {
   isOrganizer: boolean
 }
 
-export function TournamentBrackets({ tournament, isOrganizer }: TournamentBracketsProps) {
+export function TournamentBrackets({ tournament }: TournamentBracketsProps) {
   // Group matches by round
   const matchesByRound = tournament.matches?.reduce((acc, match) => {
     if (!acc[match.round]) {

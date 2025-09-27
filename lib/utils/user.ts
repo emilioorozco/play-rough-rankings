@@ -14,8 +14,6 @@ export const userPublicSelectWithPrefs = {
   },
 } as const;
 
-type UserNameFields = { [key: string]: unknown };
-
 export function getDisplayName(user: unknown): string {
   if (!user) return "Unknown Player";
   const u = user as { firstName?: string | null; name?: string | null };

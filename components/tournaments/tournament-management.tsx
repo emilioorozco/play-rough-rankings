@@ -3,7 +3,6 @@
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import type { ApiTournament } from '@/lib/types/api'
-import { useModal } from '@/stores/ui-store'
 
 interface TournamentManagementProps {
   isOpen: boolean
@@ -18,8 +17,6 @@ export function TournamentManagement({
   tournament,
   onUpdate 
 }: TournamentManagementProps) {
-  // Use UI store for modal management
-  const modal = useModal('tournamentManagement')
 
   return (
     <Modal
