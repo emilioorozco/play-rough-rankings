@@ -1,5 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, basePrismaClient } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
 import { AuthUserSchema } from "@/lib/schemas";
@@ -21,6 +21,7 @@ import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPubl
 // Enhanced context type for tRPC
 export type TRPCContext = {
   prisma: typeof prisma;
+  basePrisma: typeof basePrismaClient;
   headers: Headers | null;
   user?: { id: string; email: string; name?: string; role: string };
   session?: { id: string; userId: string; expiresAt: Date };
@@ -58,6 +59,7 @@ export const createTRPCContext = async (opts?: {
 
   return {
     prisma,
+    basePrisma: basePrismaClient,
     headers: opts?.headers || null,
     user,
     session,
@@ -168,6 +170,52 @@ export const appRouter = router({
       }
 
       return user;
+    }),
+
+    // Ensure Player record exists for current user (backup for auth callback failures)
+    ensurePlayerExists: protectedProcedure.mutation(async ({ ctx }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      // Check if player already exists
+      const existingPlayer = await ctx.prisma.player.findUnique({
+        where: { userId: ctx.user.id },
+      });
+
+      if (existingPlayer) {
+        return {
+          success: true,
+          message: "Player record already exists",
+          playerId: existingPlayer.id,
+        };
+      }
+
+      // Create player record
+      try {
+        const player = await ctx.prisma.player.create({
+          data: {
+            userId: ctx.user.id,
+          },
+        });
+
+        console.log(`🔧 [BACKUP] Created Player record for user ${ctx.user.id}`, player.id);
+
+        return {
+          success: true,
+          message: "Player record created successfully",
+          playerId: player.id,
+        };
+      } catch (error) {
+        console.error("🔧 [BACKUP] Error creating Player record:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create player record",
+        });
+      }
     }),
   }),
 
@@ -1119,16 +1167,28 @@ export const appRouter = router({
           });
         }
 
-        // Get current user's player record
-        const player = await ctx.prisma.player.findUnique({
+        // Get current user's player record, create if it doesn't exist
+        let player = await ctx.prisma.player.findUnique({
           where: { userId: ctx.user.id },
         });
 
         if (!player) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Player profile not found. Please create a player profile first.",
-          });
+          // Defensive creation: Create player record if it doesn't exist
+          // This can happen if the auth callback failed or there was a race condition
+          try {
+            player = await ctx.prisma.player.create({
+              data: {
+                userId: ctx.user.id,
+              },
+            });
+            console.log(`Created missing Player record for user ${ctx.user.id} during tournament registration`);
+          } catch (error) {
+            console.error("Error creating Player record during tournament registration:", error);
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Failed to create player profile. Please try again.",
+            });
+          }
         }
 
         // Verify tournament exists and is open for registration
@@ -1862,7 +1922,7 @@ export const appRouter = router({
           table: match.table || undefined,
         };
 
-        const result = await processMatchResult(ctx.prisma, matchResult);
+        const result = await processMatchResult(ctx.basePrisma, matchResult);
 
         return {
           success: true,
@@ -1888,7 +1948,7 @@ export const appRouter = router({
         // Verify user has permission to complete this tournament
 
         const result = await processTournamentCompletion(
-          ctx.prisma,
+          ctx.basePrisma,
           input.tournamentId,
         );
 
@@ -1966,7 +2026,7 @@ export const appRouter = router({
           }),
         );
 
-        const result = await batchProcessMatchResults(ctx.prisma, matchResults);
+        const result = await batchProcessMatchResults(ctx.basePrisma, matchResults);
 
         return {
           success: true,

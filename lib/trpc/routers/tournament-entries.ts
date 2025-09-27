@@ -170,9 +170,12 @@ export const tournamentEntriesRouter = router({
         })
       }
 
-      // Verify player exists
+      // Verify player exists, create user if player exists but user doesn't
       const player = await ctx.prisma.player.findUnique({
         where: { id: input.playerId },
+        include: {
+          user: true,
+        },
       })
 
       if (!player) {
@@ -180,6 +183,28 @@ export const tournamentEntriesRouter = router({
           code: 'NOT_FOUND',
           message: 'Player not found'
         })
+      }
+
+      // Defensive user creation: If player exists but user doesn't, create a basic user
+      if (!player.user) {
+        try {
+          // Create a minimal user record for the existing player
+          await ctx.prisma.user.create({
+            data: {
+              id: player.userId,
+              email: `player-${player.id}@placeholder.com`, // Placeholder email
+              name: `Player ${player.id.slice(0, 8)}`, // Placeholder name
+              role: 'player',
+            },
+          })
+          console.log(`Created missing User record for player ${player.id}`)
+        } catch (error) {
+          console.error('Error creating User record for existing player:', error)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Player data is corrupted. Please contact support.'
+          })
+        }
       }
 
       // Verify deck exists and matches tournament game/format if provided
@@ -388,10 +413,13 @@ export const tournamentEntriesRouter = router({
         })
       }
 
-      // Verify all players exist
+      // Verify all players exist, create users for any missing ones
       const playerIds = input.entries.map(e => e.playerId)
       const players = await ctx.prisma.player.findMany({
         where: { id: { in: playerIds } },
+        include: {
+          user: true,
+        },
       })
 
       if (players.length !== playerIds.length) {
@@ -399,6 +427,32 @@ export const tournamentEntriesRouter = router({
           code: 'BAD_REQUEST',
           message: 'One or more players not found'
         })
+      }
+
+      // Defensive user creation: Create users for players that don't have them
+      const playersWithoutUsers = players.filter(p => !p.user)
+      if (playersWithoutUsers.length > 0) {
+        try {
+          await ctx.prisma.$transaction(
+            playersWithoutUsers.map(player =>
+              ctx.prisma.user.create({
+                data: {
+                  id: player.userId,
+                  email: `player-${player.id}@placeholder.com`, // Placeholder email
+                  name: `Player ${player.id.slice(0, 8)}`, // Placeholder name
+                  role: 'player',
+                },
+              })
+            )
+          )
+          console.log(`Created missing User records for ${playersWithoutUsers.length} players`)
+        } catch (error) {
+          console.error('Error creating User records for existing players:', error)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Some player data is corrupted. Please contact support.'
+          })
+        }
       }
 
       // Verify all decks exist and match tournament if provided
