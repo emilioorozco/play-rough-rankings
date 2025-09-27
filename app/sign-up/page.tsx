@@ -146,6 +146,8 @@ export default function RegisterPage() {
         // Clear draft on successful registration
         clearDraft();
         console.log("Registration successful");
+        
+        
         router.push("/");
       }
     } catch (error) {

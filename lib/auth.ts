@@ -14,6 +14,8 @@ export const auth = betterAuth({
   ],
   emailAndPassword: {
     enabled: true,
+    requireEmailVerification: false, // Disable email verification for development
+    autoSignInAfterVerification: true, // This should trigger afterSignUp after email verification
   },
   socialProviders: {
     google: {
@@ -154,73 +156,26 @@ export const auth = betterAuth({
         console.log(`Email registration with firstName: "${user.firstName}", lastName: "${user.lastName}"`);
       }
       
-      // Create Player and UserPreferences records immediately during signup
-      // This ensures they exist regardless of email verification status
-      try {
-        // Create Player record for new user
-        await prisma.player.create({
-          data: {
-            userId: user.id,
-          },
-        });
-        console.log(`Created Player record for new user ${user.id}`);
-      } catch (error) {
-        console.error("Error creating Player record for new user:", error);
-      }
-      
-      try {
-        // Create UserPreferences record for new user
-        await prisma.userPreferences.create({
-          data: {
-            id: user.id, // Use user ID as the preferences ID for 1:1 relationship
-            userId: user.id,
-            nameDisplayPreference: user.nameDisplayPreference || 'DISPLAY_NAME',
-            optInCommunications: user.optInCommunications || false,
-            subscribeToUpdates: user.subscribeToUpdates || false,
-          },
-        });
-        console.log(`Created UserPreferences record for new user ${user.id}`);
-      } catch (error) {
-        console.error("Error creating UserPreferences record for new user:", error);
-      }
-      
       return user;
     },
     async afterSignUp({ user, account }: { user: any; account: any }) {
       console.log("afterSignUp callback triggered for user:", user.id, "account:", account?.providerId);
       
-      // Ensure Player record exists (may already exist from beforeSignUp)
-      try {
-        await prisma.player.upsert({
-          where: { userId: user.id },
-          update: {}, // No updates needed if player already exists
-          create: {
-            userId: user.id,
-          },
-        });
-        console.log(`Ensured Player record exists for user ${user.id}`);
-      } catch (error) {
-        console.error("Error ensuring Player record exists:", error);
+      // Development mode: Auto-verify email since we're not sending verification emails
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { emailVerified: true },
+          });
+          console.log("Auto-verified email for development user", user.id);
+        } catch (error) {
+          console.error("Error auto-verifying email:", error);
+        }
       }
       
-      // Ensure UserPreferences record exists (may already exist from beforeSignUp)
-      try {
-        await prisma.userPreferences.upsert({
-          where: { userId: user.id },
-          update: {}, // No updates needed if preferences already exist
-          create: {
-            id: user.id, // Use user ID as the preferences ID for 1:1 relationship
-            userId: user.id,
-            nameDisplayPreference: user.nameDisplayPreference || 'DISPLAY_NAME',
-            optInCommunications: user.optInCommunications || false,
-            subscribeToUpdates: user.subscribeToUpdates || false,
-          },
-        });
-        console.log(`Ensured UserPreferences record exists for user ${user.id}`);
-      } catch (error) {
-        console.error("Error ensuring UserPreferences record exists:", error);
-      }
-      
+      // Note: Player and UserPreferences records are now automatically created
+      // by the Prisma extension in lib/prisma.ts, so no need to create them here
       return user;
     },
     async afterSignIn({ user, account }: { user: any; account: any }) {
@@ -265,16 +220,16 @@ export const auth = betterAuth({
         console.log(`User ${user.id} already has firstName: "${user.firstName}", lastName: "${user.lastName}" from OAuth provider`);
       }
       
-      // Ensure Player record exists for this user
+      // Ensure Player record exists for this user (defensive measure)
       try {
-        await prisma.player.upsert({
+        const player = await prisma.player.upsert({
           where: { userId: user.id },
           update: {}, // No updates needed if player already exists
           create: {
             userId: user.id,
           },
         });
-        console.log(`Ensured Player record exists for user ${user.id}`);
+        console.log(`Ensured Player record exists for user ${user.id}`, player.id);
       } catch (error) {
         console.error("Error ensuring Player record exists:", error);
       }
