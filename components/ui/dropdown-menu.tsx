@@ -43,7 +43,7 @@ interface DropdownMenuTriggerProps extends React.ButtonHTMLAttributes<HTMLButton
 const DropdownMenuTrigger = React.forwardRef<HTMLButtonElement, DropdownMenuTriggerProps>(
   ({ className, children, asChild = false, ...props }, ref) => {
     const { dropdownId } = useDropdownContext()
-    const { isOpen, toggle } = useDropdown(dropdownId)
+    const { toggle } = useDropdown(dropdownId)
 
     if (asChild && React.isValidElement(children)) {
       // Type-safe clone element with proper onClick handling

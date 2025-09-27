@@ -7,7 +7,6 @@ import { useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
 import { trpc } from '@/lib/trpc/client'
 import { useFormDraftIntegration } from '@/stores/form-draft-integration'
 import { profileCompletionSchema } from '@/lib/validation/schemas'
-import type { ProfileCompletionFormData } from '@/lib/validation/schemas'
 import { FormInput, FormSelect, FormActions, FormStatus, StandaloneForm } from '@/components/ui/form-components'
 
 interface ProfileCompletionProps {

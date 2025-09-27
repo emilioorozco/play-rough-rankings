@@ -2,12 +2,10 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import csv from 'csv-parser'
 import { Readable } from 'stream'
-import { TournamentSchema, MatchSchema } from '@/lib/schemas'
+import { TournamentSchema } from '@/lib/schemas'
 import type {
   CSVRowData,
-  TournamentFileMetadata,
-  PlayerFileData,
-  FileFormat
+  TournamentFileMetadata
 } from '@/lib/types/backend'
 
 // Import tournament level enum from existing schema
@@ -512,7 +510,7 @@ export const validateTournamentData = (data: TournamentData): void => {
   // Validate tournament date
   try {
     new Date(data.tournament.date)
-  } catch (error) {
+  } catch {
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message: 'Invalid tournament date format'

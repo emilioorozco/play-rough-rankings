@@ -2,34 +2,19 @@
 
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc/client'
-import type { ApiGame, SafeSeasonalStats, GameStatsMetadata } from '@/lib/types/api'
+import type { ApiGame } from '@/lib/types/api'
 
 interface PlayerStatsDisplayProps {
   playerId: string
   games: ApiGame[]
 }
 
-// Helper function to safely access seasonal stats
-const getSeasonalStats = (seasonalStats: unknown): SafeSeasonalStats => {
-  if (!seasonalStats || typeof seasonalStats !== 'object') {
-    return { wins: 0, losses: 0, tournaments: 0, points: 0 }
-  }
-  
-  const stats = seasonalStats as Record<string, unknown>
-  return {
-    wins: (typeof stats.wins === 'number' ? stats.wins : 0),
-    losses: (typeof stats.losses === 'number' ? stats.losses : 0),
-    tournaments: (typeof stats.tournaments === 'number' ? stats.tournaments : 0),
-    points: (typeof stats.points === 'number' ? stats.points : 0),
-  }
-}
 
 export function PlayerStatsDisplay({ playerId, games }: PlayerStatsDisplayProps) {
-  const [selectedGameId, setSelectedGameId] = useState<string>(games[0]?.id || '')
-  const [selectedFormat, setSelectedFormat] = useState<string>('')
+  const [selectedGameId] = useState<string>(games[0]?.id || '')
 
   // Get game stats for the selected game
-  const { data: gameStats, isLoading: statsLoading } = trpc.players.getGameStats.useQuery(
+  trpc.players.getGameStats.useQuery(
     {
       playerId,
       gameId: selectedGameId,
@@ -39,10 +24,6 @@ export function PlayerStatsDisplay({ playerId, games }: PlayerStatsDisplayProps)
     }
   )
 
-  // Get available formats for the selected game (placeholder for now)
-  const availableFormats = ['Standard', 'Expanded', 'Legacy', 'Modern']
-
-  const selectedGame = games.find(game => game.id === selectedGameId)
 
   if (games.length === 0) {
     return (

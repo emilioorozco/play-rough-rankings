@@ -4,12 +4,11 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useFormSteps } from "@/hooks/useFormState";
 import { tournamentCreateSchema, type TournamentCreateFormData } from "@/lib/validation/schemas";
-import { ModalMultiStepForm, FormInput, FormTextarea, FormSelect, FormCheckbox, FormActions, FormStatus } from "../ui/form-components";
+import { ModalMultiStepForm, FormInput, FormTextarea, FormSelect, FormActions, FormStatus } from "../ui/form-components";
 import { Modal } from "../ui/modal";
 import { useTRPCMutationWithLoading } from "@/hooks/useTRPCWithLoading";
 import { trpc } from "@/lib/trpc/client";
 import { useSession } from "@/components/auth/session-provider";
-import { useModal } from "@/stores/ui-store";
 import { useTournamentOperations } from "@/stores/tournament-store";
 
 interface TournamentCreateFormProps {

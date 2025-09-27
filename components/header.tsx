@@ -54,7 +54,6 @@ export function Header() {
       if (!user) return;
       
       const isLandscape = window.innerWidth > window.innerHeight;
-      const isSmallScreen = window.innerWidth < 768; // md breakpoint
       const isPortrait = window.innerHeight > window.innerWidth;
       
       // Show user info in dropdown if:

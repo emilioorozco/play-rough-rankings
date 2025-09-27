@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Calendar,
   MapPin,
@@ -34,7 +34,6 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
   const tournamentDate = useMemo(() => new Date(tournament.date), [tournament.date]);
   const isUpcoming = useMemo(() => tournament.status === "UPCOMING", [tournament.status]);
   const isActive = useMemo(() => tournament.status === "ACTIVE", [tournament.status]);
-  const isCompleted = useMemo(() => tournament.status === "COMPLETED", [tournament.status]);
 
   const handleMouseEnter = useCallback(() => {
     setIsHovered(true);
@@ -46,7 +45,7 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
     setViewing();
   }, [setViewing]);
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
+  const handleClick = useCallback(() => {
     // Let the Link handle navigation naturally
   }, []);
 

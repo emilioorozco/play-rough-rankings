@@ -228,7 +228,7 @@ const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
 SelectContent.displayName = "SelectContent";
 
 const SelectItem = React.forwardRef<HTMLDivElement, SelectItemProps>(
-  ({ className, children, value, ...props }, ref) => {
+  ({ className, children, value }, ref) => {
     const {
       value: selectedValue,
       onValueChange,

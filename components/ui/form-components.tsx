@@ -503,10 +503,6 @@ export function MultiStepForm({
 
 // Modal-specific multi-step form component (no Card wrapper, no progress bar - handled by modal header)
 export function ModalMultiStepForm({ 
-  title, 
-  description, 
-  currentStep, 
-  totalSteps, 
   children, 
   className 
 }: MultiStepFormProps) {
