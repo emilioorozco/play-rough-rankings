@@ -736,7 +736,7 @@ export const leaderboardsRouter = router({
       const season = input.season || getCurrentSeason()
       
       // Get rankings using the caching system
-      const rankings = await getRankingsWithCache(ctx.prisma, input.gameId, season)
+      const rankings = await getRankingsWithCache(ctx.basePrisma, input.gameId, season)
       
       // Apply limit
       const limitedRankings = rankings.slice(0, input.limit)
@@ -807,7 +807,7 @@ export const leaderboardsRouter = router({
 
       // Analyze performance trends
       const trends = await analyzePerformanceTrends(
-        ctx.prisma,
+        ctx.basePrisma,
         input.playerId,
         input.gameId,
         input.period
@@ -850,7 +850,7 @@ export const leaderboardsRouter = router({
       invalidateRankingCache(input.gameId, season)
 
       // Recalculate rankings
-      const rankings = await getRankingsWithCache(ctx.prisma, input.gameId, season)
+      const rankings = await getRankingsWithCache(ctx.basePrisma, input.gameId, season)
 
       return {
         success: true,
@@ -885,7 +885,7 @@ export const leaderboardsRouter = router({
       }
 
       // Batch update rankings
-      await batchUpdateRankings(ctx.prisma, input.updates)
+      await batchUpdateRankings(ctx.basePrisma, input.updates)
 
       return {
         success: true,
@@ -915,7 +915,7 @@ export const leaderboardsRouter = router({
       const currentSeason = getCurrentSeason()
       
       // Get current season rankings
-      const currentRankings = await getRankingsWithCache(ctx.prisma, input.gameId, currentSeason)
+      const currentRankings = await getRankingsWithCache(ctx.basePrisma, input.gameId, currentSeason)
       
       // Calculate statistics
       const totalPlayers = currentRankings.length
