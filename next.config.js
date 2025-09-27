@@ -3,11 +3,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false, // keep strict; set true only temporarily
   },
-  experimental: {
-    typedRoutes: true,
-    // Enable React experimental features
-    reactCompiler: false, // Keep disabled for now to avoid conflicts
-  },
+  typedRoutes: true,
   eslint: {
     // ESLint enabled during builds to catch issues before deployment
     ignoreDuringBuilds: false,
