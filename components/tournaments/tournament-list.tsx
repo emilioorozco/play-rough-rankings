@@ -3,7 +3,7 @@
 import { TournamentCard } from './tournament-card'
 import { useMemo } from 'react'
 import { Trophy } from 'lucide-react'
-import { useTournamentData } from '@/hooks/stores/use-tournament-data'
+import { useTournamentQueries } from '@/hooks/stores/use-tournament-queries'
 
 interface TournamentListProps {
   filters: {
@@ -17,12 +17,12 @@ interface TournamentListProps {
 }
 
 export function TournamentList({ filters }: TournamentListProps) {
-  // Use custom hook for data fetching and store management
+  // Use integrated tRPC + Zustand hook for data fetching and store management
   const {
     tournaments,
     isLoading,
     error,
-  } = useTournamentData({ filters, limit: 12, offset: 0 })
+  } = useTournamentQueries({ filters, limit: 12, offset: 0 })
 
   // Filter tournaments by search term on the client side
   const filteredTournaments = useMemo(() => {

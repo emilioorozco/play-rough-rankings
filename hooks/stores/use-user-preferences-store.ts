@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 import { useUserPreferencesStore } from '@/stores/user-preferences-store'
-import { useUserPreferencesStoreSelectors } from '@/stores/user-preferences-store-selectors'
 
 // Preference Management Hooks
 export function useUserPreference(preferenceKey: string) {
@@ -23,7 +22,7 @@ export function useUserPreference(preferenceKey: string) {
   }
 }
 
-export function useUserPreferences(category?: string) {
+export function useUserPreferences() {
   const preferences = useUserPreferencesStore((state) => state.preferences)
   const setPreferences = useUserPreferencesStore((state) => state.setPreferences)
   const resetPreferences = useUserPreferencesStore((state) => state.resetPreferences)
@@ -173,7 +172,7 @@ export function useAccessibilityPreferences() {
 export function usePreferenceMetadata() {
   const metadata = useUserPreferencesStore((state) => state.metadata)
   const lastUpdated = useUserPreferencesStore((state) => state.lastUpdated)
-  const version = useUserPreferencesStore((state) => 1) // Assuming version 1 for now
+  const version = useUserPreferencesStore(() => 1) // Assuming version 1 for now
 
   return {
     metadata,
@@ -231,7 +230,7 @@ export function useUserPreferencesStoreState() {
   })
   const metadata = useUserPreferencesStore((state) => state.metadata)
   const lastUpdated = useUserPreferencesStore((state) => state.lastUpdated)
-  const version = useUserPreferencesStore((state) => 1)
+  const version = useUserPreferencesStore(() => 1)
 
   return {
     allPreferences,

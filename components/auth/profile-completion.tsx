@@ -1,11 +1,11 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
+import React from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from './session-provider'
 import { useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
 import { trpc } from '@/lib/trpc/client'
-import { useFormDraftIntegration } from '@/stores/form-draft-integration'
+import { useSimpleZustandForm } from '@/hooks/use-form-zustand'
 import { profileCompletionSchema } from '@/lib/validation/schemas'
 import { FormInput, FormSelect, FormActions, FormStatus, StandaloneForm } from '@/components/ui/form-components'
 
@@ -16,7 +16,6 @@ interface ProfileCompletionProps {
 export function ProfileCompletion({ className }: ProfileCompletionProps) {
   const { user, refetch } = useSession()
   const router = useRouter()
-  const initializedRef = useRef(false)
 
   const { data: games } = trpc.games.list.useQuery({ includeInactive: false })
 
@@ -35,57 +34,27 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
     }
   )
 
-  const {
-    formData,
-    draftErrors,
-    isDirty,
-    isSubmitting,
-    updateField,
-    validate,
-    saveDraft,
-    createDraft,
-  } = useFormDraftIntegration(
-    `profile-completion-${user?.id || 'anonymous'}`,
-    'profile-completion',
-    profileCompletionSchema
-  )
+  // Form state using Zustand-based form system
+  const formState = useSimpleZustandForm({
+    initialData: {
+      firstName: (user as any)?.firstName || '',
+      lastName: (user as any)?.lastName || '',
+      location: (user as any)?.location || '',
+      favoriteGame: (user as any)?.favoriteGame || '',
+    },
+    validationSchema: profileCompletionSchema,
+    onSubmit: async (data) => {
+      await updateProfile.mutateAsync(data)
+    },
+    onSuccess: () => {
+      console.log('Profile completion successful')
+    },
+    onError: (error) => {
+      console.error('Profile completion error:', error)
+    },
+    showLoadingBar: true,
+  })
 
-  useEffect(() => {
-    if (user && !initializedRef.current) {
-      const initialData = {
-        firstName: (user as any).firstName || '',
-        lastName: (user as any).lastName || '',
-        location: (user as any).location || '',
-        favoriteGame: (user as any).favoriteGame || '',
-      }
-      createDraft(initialData)
-      initializedRef.current = true
-    }
-  }, [user, createDraft])
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (isDirty && formData) {
-        saveDraft(formData)
-      }
-    }, 2000) // 2 second delay
-
-    return () => clearTimeout(timer)
-  }, [formData, isDirty, saveDraft])
-
-  // Form submission handler
-  const handleSubmit = async () => {
-    try {
-      const validation = validate(formData)
-      if (!validation.isValid) {
-        return // Errors are automatically set in store
-      }
-      
-      await updateProfile.mutateAsync(formData)
-    } catch (error) {
-      console.error('Profile completion failed:', error)
-    }
-  }
 
   if (!user) {
     return (
@@ -111,27 +80,27 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
             <FormInput
               label="First Name"
               required
-              error={draftErrors.firstName}
-              value={formData?.firstName || ''}
-              onChange={(e) => updateField('firstName', e.target.value)}
+              error={formState.errors.firstName}
+              value={formState.data.firstName}
+              onChange={(e) => formState.setField('firstName', e.target.value)}
               placeholder="Enter your first name"
             />
 
             <FormInput
               label="Last Name"
               required
-              error={draftErrors.lastName}
-              value={formData?.lastName || ''}
-              onChange={(e) => updateField('lastName', e.target.value)}
+              error={formState.errors.lastName}
+              value={formState.data.lastName}
+              onChange={(e) => formState.setField('lastName', e.target.value)}
               placeholder="Enter your last name"
             />
           </div>
 
           <FormInput
             label="Location"
-            error={draftErrors.location}
-            value={formData?.location || ''}
-            onChange={(e) => updateField('location', e.target.value)}
+            error={formState.errors.location}
+            value={formState.data.location}
+            onChange={(e) => formState.setField('location', e.target.value)}
             placeholder="City, State/Country"
             description="Help other players find tournaments in your area"
           />
@@ -139,9 +108,9 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
           <FormSelect
             label="Favorite Game"
             required
-            error={draftErrors.favoriteGame}
-            value={formData?.favoriteGame || ''}
-            onValueChange={(value) => updateField('favoriteGame', value)}
+            error={formState.errors.favoriteGame}
+            value={formState.data.favoriteGame}
+            onValueChange={(value) => formState.setField('favoriteGame', value)}
             placeholder="Select your favorite game"
             options={games?.map(game => ({ value: game.id, label: game.name })) || []}
             description="This helps us recommend relevant tournaments and content"
@@ -149,10 +118,10 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
 
           <div className="pt-6 border-t">
             <FormActions
-              onSubmit={handleSubmit}
-              isSubmitting={isSubmitting || updateProfile.isLoading}
-              isValid={true}
-              isDirty={isDirty}
+              onSubmit={formState.submit}
+              isSubmitting={formState.isSubmitting || updateProfile.isLoading}
+              isValid={formState.isValid}
+              isDirty={formState.isDirty}
               submitLabel="Complete Profile"
               showReset={false}
               showCancel={false}

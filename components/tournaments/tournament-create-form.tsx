@@ -2,12 +2,12 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { useFormSteps } from "@/hooks/useFormState";
+import { useZustandFormSteps } from "@/hooks/use-form-zustand";
 import { tournamentCreateSchema, type TournamentCreateFormData } from "@/lib/validation/schemas";
 import { ModalMultiStepForm, FormInput, FormTextarea, FormSelect, FormActions, FormStatus } from "../ui/form-components";
 import { Modal } from "../ui/modal";
-import { useTRPCMutationWithLoading } from "@/hooks/useTRPCWithLoading";
 import { trpc } from "@/lib/trpc/client";
+import { useLoading, useError } from "@/stores/loading-store";
 import { useSession } from "@/components/auth/session-provider";
 import { useTournamentOperations } from "@/stores/tournament-store";
 
@@ -32,27 +32,36 @@ export function TournamentCreateForm({
   const { data: games } = trpc.games.list.useQuery({ includeInactive: false });
   const { data: stores } = trpc.stores.list.useQuery({});
 
+  // Loading and error state management
+  const { setLoading } = useLoading('create-tournament')
+  const { setError, clearError } = useError('create-tournament')
+  
   // Create tournament mutation
-  const createTournament = useTRPCMutationWithLoading<{ id: string }, unknown, TournamentCreateFormData>(
-    'create-tournament',
-    () => trpc.tournaments.create.useMutation(),
-    {
-      onSuccess: (data) => {
-        // Invalidate tournament list to refresh data
-        invalidateTournamentList();
-        onSuccess?.();
-        onClose();
-        router.push(`/tournaments/${data.id}`);
-      },
-      onError: (error) => {
-        console.error("Tournament creation failed:", error);
-      },
-    }
-  );
+  const createTournament = trpc.tournaments.create.useMutation({
+    onMutate: () => {
+      setLoading(true)
+      clearError()
+    },
+    onSuccess: (data) => {
+      // Invalidate tournament list to refresh data
+      invalidateTournamentList();
+      onSuccess?.();
+      onClose();
+      router.push(`/tournaments/${data.id}`);
+      setLoading(false)
+    },
+    onError: (error) => {
+      console.error("Tournament creation failed:", error);
+      setError(error.message)
+      setLoading(false)
+    },
+  });
 
-  // Multi-step form state
-  const formState = useFormSteps<TournamentCreateFormData>({
+  // Multi-step form state using Zustand
+  const formState = useZustandFormSteps<TournamentCreateFormData>({
     steps: ['basic-info', 'description', 'details', 'settings', 'confirmation'],
+    formId: `tournament-create-form-${user?.id || 'anonymous'}-${Date.now()}`,
+    formType: 'tournament-create-form',
     initialData: {
       name: '',
       description: '',
@@ -120,6 +129,9 @@ export function TournamentCreateForm({
       console.error("Tournament creation error:", error);
     },
     showLoadingBar: true,
+    enableAutoSave: true,
+    autoSaveDelay: 2000,
+    userId: user?.id,
   });
 
   const renderBasicInfoStep = () => (
@@ -329,7 +341,7 @@ export function TournamentCreateForm({
       isOpen={isOpen}
       onClose={onClose}
       size="xl"
-      closeOnOverlayClick={!formState.isSubmitting && !createTournament.isLoading}
+      closeOnOverlayClick={!formState.isSubmitting && !createTournament.isPending}
     >
       <ModalMultiStepForm
         title="Create Tournament"
@@ -347,9 +359,9 @@ export function TournamentCreateForm({
         {renderStep()}
 
         <FormActions
-          onSubmit={formState.submit}
+            onSubmit={formState.submit}
           onCancel={onClose}
-          isSubmitting={formState.isSubmitting || createTournament.isLoading}
+          isSubmitting={formState.isSubmitting || createTournament.isPending}
           isValid={formState.isValid}
           isDirty={formState.isDirty}
           submitLabel={
@@ -367,7 +379,7 @@ export function TournamentCreateForm({
           <div className="flex justify-start pt-4">
             <button
               type="button"
-              onClick={formState.goToPreviousStep}
+              onClick={formState.prevStep}
               className="text-sm text-muted-foreground hover:text-foreground"
               disabled={formState.isSubmitting}
             >

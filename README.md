@@ -35,7 +35,7 @@ Play Rough Rankings is a full-stack tournament management system that provides:
 - **Jest** with comprehensive testing strategy (Unit, Integration, Component tests)
 - **Testing Library** for React component testing
 - **MSW** for API mocking in tests
-- **ESLint** with Next.js configuration for code quality
+- **ESLint** with Next.js flat config for modern code quality standards
 - **TypeScript** for type safety across the entire stack
 
 ### Database & Storage
@@ -64,6 +64,8 @@ git clone <repository-url>
 cd leaderboard-service
 npm install
 ```
+
+**Note**: The project uses ESLint flat config format with `eslint.config.mjs` for modern ESLint configuration compatible with Next.js 15+.
 
 ### 2. Environment Configuration
 
@@ -409,7 +411,12 @@ rm -rf .next
 # Reinstall dependencies
 rm -rf node_modules package-lock.json
 npm install
+
+# Verify ESLint configuration
+npm run lint
 ```
+
+**ESLint Configuration**: The project uses ESLint flat config (`eslint.config.mjs`) which requires Next.js 15+. If you encounter ESLint plugin warnings during build, ensure you're using the correct configuration format.
 
 #### Test Issues
 ```bash

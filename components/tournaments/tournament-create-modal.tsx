@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { useFormStepsEnhanced } from "@/hooks/useFormDraft";
+import { useZustandFormSteps } from "@/hooks/use-form-zustand";
 import { tournamentCreateSchema, type TournamentCreateFormData } from "@/lib/validation/schemas";
 import { ModalMultiStepForm, FormInput, FormTextarea, FormSelect, FormStatus } from "../ui/form-components";
 import { Modal } from "../ui/modal";
@@ -45,9 +45,11 @@ export function TournamentCreateModal({
     }
   );
 
-  // Multi-step form state using Zustand-based draft system
-  const formState = useFormStepsEnhanced<TournamentCreateFormData>({
+  // Multi-step form state using Zustand-based form system
+  const formState = useZustandFormSteps<TournamentCreateFormData>({
     steps: ['basic-info', 'description', 'details', 'settings', 'confirmation'],
+    formId: `tournament-create-${user?.id || 'anonymous'}-${Date.now()}`,
+    formType: 'tournament-create',
     initialData: {
       name: '',
       description: '',
@@ -117,18 +119,9 @@ export function TournamentCreateModal({
       console.error("Tournament creation error:", error);
     },
     showLoadingBar: true,
-    // Enhanced Zustand features
-    formId: `tournament-create-${Date.now()}`,
     enableAutoSave: true,
     autoSaveDelay: 2000,
-    enableDraftPersistence: true,
-    enableUserPreferences: true,
-    onAutoSave: (data) => {
-      console.log('Auto-saved tournament creation draft:', data);
-    },
-    onDraftRestore: (data) => {
-      console.log('Restored tournament creation draft:', data);
-    },
+    userId: user?.id,
   });
 
   const formatOptions = [
@@ -363,7 +356,7 @@ export function TournamentCreateModal({
       onClose={handleClose}
       title="Create Tournament"
       size="lg"
-      closeOnOverlayClick={!formState.isSubmitting && !createTournament.isLoading}
+      closeOnOverlayClick={!formState.isSubmitting && !createTournament.isPending}
       autoCloseDelay={createTournament.isSuccess ? 3 : 0}
       success={createTournament.isSuccess ? "Tournament created successfully!" : undefined}
       isMultiStep={true}
@@ -371,7 +364,7 @@ export function TournamentCreateModal({
       totalSteps={5}
       onSubmit={formState.submit}
       onCancel={handleClose}
-      isSubmitting={formState.isSubmitting || createTournament.isLoading}
+      isSubmitting={formState.isSubmitting || createTournament.isPending}
       isValid={formState.isValid}
       isDirty={formState.isDirty}
       submitLabel={
@@ -392,7 +385,7 @@ export function TournamentCreateModal({
           <div className="flex justify-start mb-4">
             <button
               type="button"
-              onClick={formState.goToPreviousStep}
+              onClick={formState.prevStep}
               className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
               disabled={formState.isSubmitting}
             >

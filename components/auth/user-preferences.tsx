@@ -5,7 +5,7 @@ import { trpc } from '@/lib/trpc/client'
 import { useSession } from './session-provider'
 import { useTRPCQueryWithLoading, useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
 import { CardSkeleton, ErrorDisplay } from '../ui/loading-states'
-import { useFormDraft } from '@/hooks/useFormDraft'
+import { useZustandForm } from '@/hooks/use-form-zustand'
 import { userPreferencesSchema, type UserPreferencesFormData } from '@/lib/validation/schemas'
 import { 
   EnhancedForm, 
@@ -50,8 +50,10 @@ export function UserPreferencesWithStore({ className }: UserPreferencesProps) {
     }
   )
 
-  // Enhanced form state using Zustand-based draft system
-  const formState = useFormDraft<UserPreferencesFormData>({
+  // Enhanced form state using Zustand-based form system
+  const formState = useZustandForm<UserPreferencesFormData>({
+    formId,
+    formType: 'user-preferences',
     initialData: {
       nameDisplayPreference: 'FIRST_NAME',
       profileVisibility: 'PUBLIC',
@@ -71,18 +73,9 @@ export function UserPreferencesWithStore({ className }: UserPreferencesProps) {
       console.error("Preferences update error:", error)
     },
     showLoadingBar: true,
-    // Enhanced Zustand features
-    formId,
     enableAutoSave: true,
     autoSaveDelay: 2000,
-    enableDraftPersistence: true,
-    enableUserPreferences: true,
-    onAutoSave: (data) => {
-      console.log('Auto-saved preferences draft:', data)
-    },
-    onDraftRestore: (data) => {
-      console.log('Restored preferences draft:', data)
-    },
+    userId: user?.id,
   })
 
   // Update form data when preferences are loaded
@@ -135,7 +128,7 @@ export function UserPreferencesWithStore({ className }: UserPreferencesProps) {
       <EnhancedForm
         title="User Preferences"
         description="Customize your experience and privacy settings"
-        onSubmit={formState.handleSubmit}
+        onSubmit={formState.submit}
         showAutoSaveStatus={true}
         isAutoSaving={formState.isAutoSaving}
         lastSaved={formState.lastSaved}
