@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useRef } from 'react'
 import { useTournamentStore } from './tournament-store'
 
 // Tournament data hooks
@@ -165,32 +165,39 @@ export const useTournamentFilterSummary = () => {
   )
 }
 
-// Action hooks
+// Action hooks - stable reference to prevent infinite loops
 export const useTournamentActions = () => {
-  return useTournamentStore((state) => ({
-    // Tournament data actions
-    cacheTournament: state.cacheTournament,
-    setCurrentTournament: state.setCurrentTournament,
-    clearTournamentCache: state.clearTournamentCache,
-    // Tournament list actions
-    setTournamentList: state.setTournamentList,
-    setTournamentListPage: state.setTournamentListPage,
-    setTournamentListLoading: state.setTournamentListLoading,
-    setTournamentListError: state.setTournamentListError,
-    // Registration status actions
-    setRegistrationStatus: state.setRegistrationStatus,
-    getRegistrationStatus: state.getRegistrationStatus,
-    updateRegistrationStatus: state.updateRegistrationStatus,
-    clearRegistrationStatus: state.clearRegistrationStatus,
-    clearAllRegistrationStatus: state.clearAllRegistrationStatus,
-    // Filter actions
-    setFilters: state.setFilters,
-    resetFilters: state.resetFilters,
-    // Utility actions
-    invalidateTournament: state.invalidateTournament,
-    invalidateTournamentList: state.invalidateTournamentList,
-    resetTournamentStore: state.resetTournamentStore,
-  }))
+  const actionsRef = useRef<ReturnType<typeof useTournamentStore.getState> | null>(null)
+  
+  if (!actionsRef.current) {
+    const state = useTournamentStore.getState()
+    actionsRef.current = {
+      // Tournament data actions
+      cacheTournament: state.cacheTournament,
+      setCurrentTournament: state.setCurrentTournament,
+      clearTournamentCache: state.clearTournamentCache,
+      // Tournament list actions
+      setTournamentList: state.setTournamentList,
+      setTournamentListPage: state.setTournamentListPage,
+      setTournamentListLoading: state.setTournamentListLoading,
+      setTournamentListError: state.setTournamentListError,
+      // Registration status actions
+      setRegistrationStatus: state.setRegistrationStatus,
+      getRegistrationStatus: state.getRegistrationStatus,
+      updateRegistrationStatus: state.updateRegistrationStatus,
+      clearRegistrationStatus: state.clearRegistrationStatus,
+      clearAllRegistrationStatus: state.clearAllRegistrationStatus,
+      // Filter actions
+      setFilters: state.setFilters,
+      resetFilters: state.resetFilters,
+      // Utility actions
+      invalidateTournament: state.invalidateTournament,
+      invalidateTournamentList: state.invalidateTournamentList,
+      resetTournamentStore: state.resetTournamentStore,
+    }
+  }
+  
+  return actionsRef.current
 }
 
 // Combined hooks for common use cases

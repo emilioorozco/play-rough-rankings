@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFormDraftStore } from './form-draft-store'
 
 // Stable empty object to prevent infinite loops
@@ -191,23 +191,30 @@ export const useDraftHealth = () => {
 })
 }
 
-// Action hooks
+// Action hooks - stable reference to prevent infinite loops
 export const useFormDraftActions = () => {
-  return useFormDraftStore((state) => ({
-    createDraft: state.createDraft,
-    updateDraft: state.updateDraft,
-    saveDraft: state.saveDraft,
-    loadDraft: state.loadDraft,
-    deleteDraft: state.deleteDraft,
-    clearDraft: state.clearDraft,
-    clearAllDrafts: state.clearDrafts,
-    validateDraft: state.validateDraft,
-    updateDraftStep: state.updateDraftStep,
-    setDraftMetadata: state.setDraftMetadata,
-    exportDraft: state.exportDraft,
-    importDraft: state.importDraft,
-    cleanupExpiredDrafts: state.cleanupExpiredDrafts,
-  }))
+  const actionsRef = useRef<ReturnType<typeof useFormDraftStore.getState> | null>(null)
+  
+  if (!actionsRef.current) {
+    const state = useFormDraftStore.getState()
+    actionsRef.current = {
+      createDraft: state.createDraft,
+      updateDraft: state.updateDraft,
+      saveDraft: state.saveDraft,
+      loadDraft: state.loadDraft,
+      deleteDraft: state.deleteDraft,
+      clearDraft: state.clearDraft,
+      clearDrafts: state.clearDrafts,
+      validateDraft: state.validateDraft,
+      updateDraftStep: state.updateDraftStep,
+      setDraftMetadata: state.setDraftMetadata,
+      exportDraft: state.exportDraft,
+      importDraft: state.importDraft,
+      cleanupExpiredDrafts: state.cleanupExpiredDrafts,
+    }
+  }
+  
+  return actionsRef.current
 }
 
 // Combined hooks for common use cases
@@ -248,7 +255,7 @@ export const useDraftListState = () => {
     stats,
     summary,
     health,
-    clearAll: () => actions.clearAllDrafts(),
+    clearAll: () => actions.clearDrafts(),
     clearExpired: () => actions.cleanupExpiredDrafts(),
   }), [drafts, stats, summary, health, actions])
 }
