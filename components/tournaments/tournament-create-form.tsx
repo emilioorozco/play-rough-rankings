@@ -42,7 +42,7 @@ export function TournamentCreateForm({
       setLoading(true)
       clearError()
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       // Invalidate tournament list to refresh data
       invalidateTournamentList();
       onSuccess?.();
@@ -50,17 +50,23 @@ export function TournamentCreateForm({
       router.push(`/tournaments/${data.id}`);
       setLoading(false)
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Tournament creation failed:", error);
       setError(error.message)
       setLoading(false)
     },
-  });
+  } as any);
 
   // Multi-step form state using Zustand
+  // Use useMemo to keep formId stable across renders
+  const formId = React.useMemo(
+    () => `tournament-create-${user?.id || 'anonymous'}-${Date.now()}`,
+    [user?.id]
+  );
+  
   const formState = useZustandFormSteps<TournamentCreateFormData>({
     steps: ['basic-info', 'description', 'details', 'settings', 'confirmation'],
-    formId: `tournament-create-form-${user?.id || 'anonymous'}-${Date.now()}`,
+    formId,
     formType: 'tournament-create-form',
     initialData: {
       name: '',

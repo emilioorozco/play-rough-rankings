@@ -289,17 +289,26 @@ export function Modal({
               )}
             </div>
             {/* Multi-step progress bar on top of divider */}
-            {isMultiStep && (
-              <div className="absolute -bottom-px left-0 right-0 h-1 bg-muted">
-                <div 
-                  className="h-full bg-primary transition-all duration-500 ease-out"
-                  style={{ 
-                    width: `${(currentStep / totalSteps) * 100}%`,
-                    transition: 'width 500ms ease-out'
-                  }}
-                />
-              </div>
-            )}
+            {isMultiStep && (() => {
+              const isLastStep = currentStep === totalSteps - 1
+              // Show progress up to but not including 100%, leaving room for final submission
+              // Only reach 100% when submitting the final step
+              const baseProgress = isLastStep && isSubmitting 
+                ? 100 
+                : Math.min((currentStep / totalSteps) * 100 + (100 / totalSteps / 2), 90)
+              
+              return (
+                <div className="absolute -bottom-px left-0 right-0 h-1 bg-muted">
+                  <div 
+                    className="h-full bg-primary transition-all duration-500 ease-out"
+                    style={{ 
+                      width: `${baseProgress}%`,
+                      transition: 'width 500ms ease-out'
+                    }}
+                  />
+                </div>
+              )
+            })()}
           </div>
         )}
         <div 

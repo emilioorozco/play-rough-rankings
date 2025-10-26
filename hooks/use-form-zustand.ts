@@ -1,7 +1,8 @@
 import { z } from 'zod'
-import { useDraft, useFormDraftActions, useDraftData, useDraftErrors, useIsDraftDirty, useDraftTouchedFields, useDraftSubmitAttempted } from '@/stores/form-draft-store-selectors'
+import { useDraftByFormId, useDraftIdByFormId, useFormDraftActions, useDraftDataByFormId, useDraftErrorsByFormId, useIsDraftDirtyByFormId, useDraftTouchedFieldsByFormId, useDraftSubmitAttemptedByFormId } from '@/stores/form-draft-store-selectors'
 import { useLoadingActions } from '@/stores/loading-store-selectors'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useEffect } from 'react'
+import React from 'react'
 
 interface UseZustandFormOptions<T> {
   formId: string
@@ -41,31 +42,40 @@ export function useZustandForm<T extends Record<string, any>>({
   const actions = useFormDraftActions()
   const loadingActions = useLoadingActions()
   
-  // Get or create draft
-  const draft = useDraft(formId)
-  const draftData = useDraftData(formId) as T || initialData
-  const errors = useDraftErrors(formId)
-  const isDirty = useIsDraftDirty(formId)
-  const touchedFields = useDraftTouchedFields(formId)
-  const submitAttempted = useDraftSubmitAttempted(formId)
+  // Get or create draft using formId-based selectors
+  const draft = useDraftByFormId(formId)
+  const draftId = useDraftIdByFormId(formId)
+  const draftData = useDraftDataByFormId(formId) as T || initialData
+  const errors = useDraftErrorsByFormId(formId)
+  const isDirty = useIsDraftDirtyByFormId(formId)
+  const touchedFields = useDraftTouchedFieldsByFormId(formId)
+  const submitAttempted = useDraftSubmitAttemptedByFormId(formId)
   // const isValid = useIsDraftValid(formId) // Not used in current implementation
   
-  // Initialize draft if it doesn't exist
-  if (!draft) {
-    actions.createDraft(formType, initialData, {
-      formType,
-      displayName: `Form ${formId}`,
-      category: 'other',
-      autoExpire: true,
-      expireAfter: 24 * 60 * 60 * 1000, // 24 hours
-    })
-    actions.updateDraft(formId, {
-      userId,
-      sessionId,
-      autoSaveEnabled: enableAutoSave,
-      autoSaveInterval: autoSaveDelay,
-    })
-  }
+  console.log('[useZustandForm] State:', { formId, draftId, hasDraft: !!draft, hasData: !!draftData })
+  
+  // Initialize draft if it doesn't exist (use useEffect to avoid render-time side effects)
+  React.useEffect(() => {
+    if (!draft) {
+      console.log('[useZustandForm] Creating draft for formId:', formId)
+      const newDraftId = actions.createDraft(formType, initialData, {
+        formId, // CRITICAL: Pass formId in metadata so saveDraft can find it!
+        formType,
+        displayName: `Form ${formId}`,
+        category: 'other',
+        autoExpire: true,
+        expireAfter: 24 * 60 * 60 * 1000, // 24 hours
+      })
+      console.log('[useZustandForm] Created draft with ID:', newDraftId, 'for formId:', formId)
+      // Use the newly created draftId for updateDraft
+      actions.updateDraft(newDraftId, {
+        userId,
+        sessionId,
+        autoSaveEnabled: enableAutoSave,
+        autoSaveInterval: autoSaveDelay,
+      })
+    }
+  }, [draft, formId, formType, initialData, actions, userId, sessionId, enableAutoSave, autoSaveDelay])
   
   // Validate current data
   const validationResult = useMemo(() => {
@@ -89,13 +99,15 @@ export function useZustandForm<T extends Record<string, any>>({
     }
   }, [draftData, validationSchema])
   
-  // Update validation state in store
-  if (draft && validationResult.success !== draft.isValid) {
-    actions.updateDraft(formId, { 
-      isValid: validationResult.success,
-      errors: validationResult.errors as Record<string, string>
-    })
-  }
+  React.useEffect(() => {
+    if (draft && draftId && validationResult.success !== draft.isValid) {
+      console.log('[useZustandForm] Updating validation state:', { draftId, isValid: validationResult.success })
+      actions.updateDraft(draftId, { 
+        isValid: validationResult.success,
+        errors: validationResult.errors as Record<string, string>
+      })
+    }
+  }, [draft, draftId, validationResult.success, validationResult.errors, actions])
   
   // Compute display errors - only show errors for touched fields OR after submit attempt
   const displayErrors = useMemo(() => {
@@ -117,20 +129,26 @@ export function useZustandForm<T extends Record<string, any>>({
   
   // Update field value
   const setField = useCallback((field: keyof T, value: any) => {
+    console.log('[useZustandForm] setField called:', { field, value, formId, draftId })
     const currentData = actions.loadDraft(formId) || initialData
+    console.log('[useZustandForm] currentData:', currentData)
     const updatedData = { ...currentData, [field]: value }
+    console.log('[useZustandForm] updatedData:', updatedData)
     actions.saveDraft(formId, updatedData)
+    console.log('[useZustandForm] saveDraft complete')
     
-    // Mark field as touched when user interacts with it
-    actions.markFieldTouched(formId, field as string)
+    // Mark field as touched when user interacts with it (use draftId if available)
+    if (draftId) {
+      actions.markFieldTouched(draftId, field as string)
+    }
     
     // Clear field error when user starts typing
-    if (errors[field as string]) {
+    if (draftId && errors[field as string]) {
       const clearedErrors = { ...errors }
       delete clearedErrors[field as string]
-      actions.updateDraft(formId, { errors: clearedErrors })
+      actions.updateDraft(draftId, { errors: clearedErrors })
     }
-  }, [formId, actions, initialData, errors])
+  }, [formId, draftId, actions, initialData, errors])
   
   // Update multiple fields
   const setFields = useCallback((updates: Partial<T>) => {
@@ -139,58 +157,73 @@ export function useZustandForm<T extends Record<string, any>>({
     actions.saveDraft(formId, updatedData)
     
     // Clear errors for updated fields
-    const clearedErrors = { ...errors }
-    let hasChanges = false
-    Object.keys(updates).forEach(key => {
-      if (clearedErrors[key]) {
-        delete clearedErrors[key]
-        hasChanges = true
+    if (draftId) {
+      const clearedErrors = { ...errors }
+      let hasChanges = false
+      Object.keys(updates).forEach(key => {
+        if (clearedErrors[key]) {
+          delete clearedErrors[key]
+          hasChanges = true
+        }
+      })
+      
+      if (hasChanges) {
+        actions.updateDraft(draftId, { errors: clearedErrors })
       }
-    })
-    
-    if (hasChanges) {
-      actions.updateDraft(formId, { errors: clearedErrors })
     }
-  }, [formId, actions, initialData, errors])
+  }, [formId, draftId, actions, initialData, errors])
   
   // Set field error
   const setFieldError = useCallback((field: keyof T, error: string) => {
-    const updatedErrors = { ...errors, [field as string]: error }
-    actions.updateDraft(formId, { errors: updatedErrors })
-  }, [formId, actions, errors])
+    if (draftId) {
+      const updatedErrors = { ...errors, [field as string]: error }
+      actions.updateDraft(draftId, { errors: updatedErrors })
+    }
+  }, [draftId, actions, errors])
   
   // Set multiple errors
   const setMultipleErrors = useCallback((newErrors: Record<keyof T, string>) => {
-    actions.updateDraft(formId, { errors: newErrors as Record<string, string> })
-  }, [formId, actions])
+    if (draftId) {
+      actions.updateDraft(draftId, { errors: newErrors as Record<string, string> })
+    }
+  }, [draftId, actions])
   
   // Clear all errors
   const clearErrors = useCallback(() => {
-    actions.updateDraft(formId, { errors: {} })
-  }, [formId, actions])
+    if (draftId) {
+      actions.updateDraft(draftId, { errors: {} })
+    }
+  }, [draftId, actions])
   
   // Reset form to initial state
   const reset = useCallback(() => {
-    actions.saveDraft(formId, initialData)
-    actions.updateDraft(formId, { 
-      errors: {},
-      isDirty: false,
-      isSubmitting: false 
-    })
-    actions.resetTouchedState(formId)
-  }, [formId, actions, initialData])
+    if (draftId) {
+      actions.saveDraft(formId, initialData)
+      actions.updateDraft(draftId, { 
+        errors: {},
+        isDirty: false,
+        isSubmitting: false 
+      })
+      actions.resetTouchedState(draftId)
+    }
+  }, [formId, draftId, actions, initialData])
   
   // Submit form
   const submit = useCallback(async () => {
+    if (!draftId) {
+      console.error('[useZustandForm] Cannot submit - no draftId resolved')
+      return
+    }
+    
     // Mark that submit was attempted - this triggers showing all validation errors
-    actions.markSubmitAttempted(formId)
+    actions.markSubmitAttempted(draftId)
     
     if (!validationResult.success) {
       setMultipleErrors(validationResult.errors as Record<keyof T, string>)
       return
     }
     
-    actions.updateDraft(formId, { isSubmitting: true })
+    actions.updateDraft(draftId, { isSubmitting: true })
     
     if (showLoadingBar) {
       loadingActions.showLoadingBar()
@@ -207,15 +240,15 @@ export function useZustandForm<T extends Record<string, any>>({
       const err = error instanceof Error ? error : new Error(String(error))
       onError?.(err)
     } finally {
-      actions.updateDraft(formId, { isSubmitting: false })
+      actions.updateDraft(draftId, { isSubmitting: false })
       if (showLoadingBar) {
         loadingActions.hideLoadingBar()
       }
     }
   }, [
+    draftId,
     validationResult, 
     setMultipleErrors, 
-    formId, 
     actions, 
     showLoadingBar, 
     loadingActions, 
@@ -273,23 +306,27 @@ export function useZustandFormSteps<T extends Record<string, any>>({
 }: UseZustandFormStepsOptions<T>) {
   const baseForm = useZustandForm(baseOptions)
   const actions = useFormDraftActions()
-  const draft = useDraft(baseOptions.formId)
+  const draft = useDraftByFormId(baseOptions.formId)
+  const draftId = useDraftIdByFormId(baseOptions.formId)
   
   const currentStepIndex = draft?.currentStep || 0
   const currentStepName = steps[currentStepIndex]
   const totalSteps = steps.length
   
   // Update total steps in draft if different
-  if (draft && draft.totalSteps !== totalSteps) {
-    actions.updateDraft(baseOptions.formId, { totalSteps })
-  }
+  React.useEffect(() => {
+    if (draft && draftId && draft.totalSteps !== totalSteps) {
+      actions.updateDraft(draftId, { totalSteps })
+    }
+  }, [draft, draftId, totalSteps, actions])
   
   // Navigate between steps
   const goToStep = useCallback((stepIndex: number) => {
-    if (stepIndex >= 0 && stepIndex < totalSteps) {
-      actions.updateDraftStep(baseOptions.formId, stepIndex)
+    if (draftId && stepIndex >= 0 && stepIndex < totalSteps) {
+      console.log('[useZustandFormSteps] goToStep:', { draftId, stepIndex })
+      actions.updateDraftStep(draftId, stepIndex)
     }
-  }, [baseOptions.formId, actions, totalSteps])
+  }, [draftId, actions, totalSteps])
   
   const nextStep = useCallback(() => {
     if (currentStepIndex < totalSteps - 1) {
@@ -316,6 +353,12 @@ export function useZustandFormSteps<T extends Record<string, any>>({
     }
   }, [currentStepSchema, baseForm.data])
   
+  const isLastStep = currentStepIndex === totalSteps - 1
+  // Progress goes from 0% to ~90% across steps, only reaching 100% on final submission
+  const optimisticProgress = isLastStep && baseForm.isSubmitting 
+    ? 100 
+    : Math.min((currentStepIndex / totalSteps) * 100 + (100 / totalSteps / 2), 90)
+  
   return {
     ...baseForm,
     
@@ -324,9 +367,9 @@ export function useZustandFormSteps<T extends Record<string, any>>({
     currentStepName,
     totalSteps,
     isFirstStep: currentStepIndex === 0,
-    isLastStep: currentStepIndex === totalSteps - 1,
+    isLastStep,
     isCurrentStepValid,
-    progress: ((currentStepIndex + 1) / totalSteps) * 100,
+    progress: optimisticProgress,
     
     // Step navigation
     goToStep,

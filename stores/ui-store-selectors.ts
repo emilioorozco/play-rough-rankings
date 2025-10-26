@@ -163,26 +163,46 @@ export const useWithdrawalState = () => {
   )
 }
 
-// Action hooks
+// Individual action selectors - stable and cached
+export const useOpenModal = () => useUIStore((state) => state.openModal)
+export const useCloseModal = () => useUIStore((state) => state.closeModal)
+export const useCloseAllModals = () => useUIStore((state) => state.closeAllModals)
+export const useSetActiveTab = () => useUIStore((state) => state.setActiveTab)
+export const useSetAvailableTabs = () => useUIStore((state) => state.setAvailableTabs)
+export const useSetFilters = () => useUIStore((state) => state.setFilters)
+export const useResetFilters = () => useUIStore((state) => state.resetFilters)
+export const useSetInteraction = () => useUIStore((state) => state.setInteraction)
+export const useResetInteractions = () => useUIStore((state) => state.resetInteractions)
+export const useOpenConfirmation = () => useUIStore((state) => state.openConfirmation)
+export const useCloseConfirmation = () => useUIStore((state) => state.closeConfirmation)
+
+// Backward compatibility - returns individual hooks
 export const useUIActions = () => {
-  return useUIStore((state) => ({
-    // Modal actions
-    openModal: state.openModal,
-    closeModal: state.closeModal,
-    closeAllModals: state.closeAllModals,
-    // Tab actions
-    setActiveTab: state.setActiveTab,
-    setAvailableTabs: state.setAvailableTabs,
-    // Filter actions
-    setFilters: state.setFilters,
-    resetFilters: state.resetFilters,
-    // Interaction actions
-    setInteraction: state.setInteraction,
-    resetInteractions: state.resetInteractions,
-    // Confirmation actions
-    openConfirmation: state.openConfirmation,
-    closeConfirmation: state.closeConfirmation,
-  }))
+  const openModal = useOpenModal()
+  const closeModal = useCloseModal()
+  const closeAllModals = useCloseAllModals()
+  const setActiveTab = useSetActiveTab()
+  const setAvailableTabs = useSetAvailableTabs()
+  const setFilters = useSetFilters()
+  const resetFilters = useResetFilters()
+  const setInteraction = useSetInteraction()
+  const resetInteractions = useResetInteractions()
+  const openConfirmation = useOpenConfirmation()
+  const closeConfirmation = useCloseConfirmation()
+  
+  return useMemo(() => ({
+    openModal,
+    closeModal,
+    closeAllModals,
+    setActiveTab,
+    setAvailableTabs,
+    setFilters,
+    resetFilters,
+    setInteraction,
+    resetInteractions,
+    openConfirmation,
+    closeConfirmation,
+  }), [openModal, closeModal, closeAllModals, setActiveTab, setAvailableTabs, setFilters, resetFilters, setInteraction, resetInteractions, openConfirmation, closeConfirmation])
 }
 
 // Combined hooks for common use cases

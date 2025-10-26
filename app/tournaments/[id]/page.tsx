@@ -11,10 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TournamentHeroSection } from '@/components/tournaments/tournament-hero-section'
 import { TournamentQuickInfo } from '@/components/tournaments/tournament-quick-info'
 import { TournamentTabs } from '@/components/tournaments/tournament-tabs'
-import { 
-  useCurrentTournament, 
-  useTournamentStore
-} from '@/stores/tournament-store'
+import { useTournamentStore } from '@/stores/tournament-store'
 import { useTab } from '@/stores/ui-store'
 
 export default function TournamentDetailsPage() {
@@ -36,36 +33,42 @@ export default function TournamentDetailsPage() {
     { enabled: !!user }
   )
 
-  // Get tournament store state
-  const { 
-    tournament: storeTournament, 
-    setTournamentId: setStoreTournamentId
-  } = useCurrentTournament()
+  // Get tournament store state and actions separately (stable selectors)
+  const storeTournament = useTournamentStore(state => state.currentTournament)
+  const setCurrentTournament = useTournamentStore(state => state.setCurrentTournament)
+  const setCurrentTournamentId = useTournamentStore(state => state.setCurrentTournamentId)
 
   // Get registration status from tournament store (primary) and tRPC query (fallback)
   const storeRegistrationStatus = useTournamentStore(state => 
     state.getRegistrationStatus(tournamentId)
   )
+  const setRegistrationStatus = useTournamentStore(state => state.setRegistrationStatus)
   const isRegistered = storeRegistrationStatus?.isRegistered ?? registrationStatusQuery.data?.isRegistered ?? false
 
-  // Sync store from query results using Zustand actions
-  const syncTournamentData = useTournamentStore(state => state.setCurrentTournament)
-  const syncRegistrationData = useTournamentStore(state => state.setRegistrationStatus)
-
-  // Sync tournament data when query completes (moved to useEffect)
+  // Sync tournament data when query completes
+  // Extract IDs to avoid deep type instantiation from tRPC query data
+  const queryTournamentId = tournamentQuery.data?.id
+  const storeTournamentId = storeTournament?.id
+  
   React.useEffect(() => {
-    if (tournamentQuery.data && (!storeTournament || storeTournament.id !== tournamentQuery.data.id)) {
-      syncTournamentData(tournamentQuery.data as any)
-      setStoreTournamentId(tournamentId)
+    const data = tournamentQuery.data
+    if (data && queryTournamentId !== storeTournamentId) {
+      setCurrentTournament(data as any)
+      setCurrentTournamentId(tournamentId)
     }
-  }, [tournamentQuery.data, storeTournament, syncTournamentData, setStoreTournamentId, tournamentId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryTournamentId, storeTournamentId, tournamentId, setCurrentTournament, setCurrentTournamentId])
 
-  // Sync registration status when query completes (moved to useEffect)
+  // Sync registration status when query completes
+  const hasRegistrationData = !!registrationStatusQuery.data
+  const hasStoredStatus = !!storeRegistrationStatus
+  
   React.useEffect(() => {
-    if (registrationStatusQuery.data && !storeRegistrationStatus) {
-      syncRegistrationData(tournamentId, {
-        isRegistered: !!registrationStatusQuery.data.isRegistered,
-        canRegister: !!registrationStatusQuery.data.canRegister,
+    const data = registrationStatusQuery.data
+    if (hasRegistrationData && !hasStoredStatus && data) {
+      setRegistrationStatus(tournamentId, {
+        isRegistered: !!data.isRegistered,
+        canRegister: !!data.canRegister,
         canWithdraw: false,
         isFull: false,
         participantCount: 0,
@@ -73,7 +76,8 @@ export default function TournamentDetailsPage() {
         registrationDeadline: undefined,
       })
     }
-  }, [registrationStatusQuery.data, storeRegistrationStatus, syncRegistrationData, tournamentId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRegistrationData, hasStoredStatus, tournamentId, setRegistrationStatus])
 
   // Use TRPC data as primary source, fallback to store (avoid deep type instantiation at union)
   const tournament = (tournamentQuery.data as any) ?? storeTournament
