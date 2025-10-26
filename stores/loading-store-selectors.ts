@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useRef } from 'react'
 import { useLoadingStore } from './loading-store'
 
 // Loading state hooks
@@ -115,20 +115,27 @@ export const useLoadingProgressPercentage = () => {
   )
 }
 
-// Action hooks
+// Action hooks - stable reference to prevent infinite loops
 export const useLoadingActions = () => {
-  return useLoadingStore((state) => ({
-    setLoading: state.setLoading,
-    setError: state.setError,
-    clearError: state.clearError,
-    clearAllErrors: state.clearAllErrors,
-    setGlobalLoading: state.setGlobalLoading,
-    setGlobalError: state.setGlobalError,
-    clearGlobalError: state.clearGlobalError,
-    showLoadingBar: state.showLoadingBar,
-    hideLoadingBar: state.hideLoadingBar,
-    setLoadingBarProgress: state.setLoadingBarProgress,
-  }))
+  const actionsRef = useRef<ReturnType<typeof useLoadingStore.getState> | null>(null)
+  
+  if (!actionsRef.current) {
+    const state = useLoadingStore.getState()
+    actionsRef.current = {
+      setLoading: state.setLoading,
+      setError: state.setError,
+      clearError: state.clearError,
+      clearAllErrors: state.clearAllErrors,
+      setGlobalLoading: state.setGlobalLoading,
+      setGlobalError: state.setGlobalError,
+      clearGlobalError: state.clearGlobalError,
+      showLoadingBar: state.showLoadingBar,
+      hideLoadingBar: state.hideLoadingBar,
+      setLoadingBarProgress: state.setLoadingBarProgress,
+    }
+  }
+  
+  return actionsRef.current
 }
 
 // Combined hooks for common use cases
