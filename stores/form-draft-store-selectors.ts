@@ -10,7 +10,70 @@ export const useDraft = (draftId: string) => {
 }
 
 export const useDraftData = (draftId: string) => {
-  return useFormDraftStore((state) => state.drafts[draftId]?.data)
+  const data = useFormDraftStore((state) => state.drafts[draftId]?.data)
+  console.log('[useDraftData]', { draftId, data })
+  return data
+}
+
+// FormId-based selectors that search by metadata.formId
+export const useDraftByFormId = (formId: string) => {
+  return useFormDraftStore((state) => {
+    const drafts = Object.values(state.drafts)
+    const foundDraft = drafts.find((draft: any) => draft?.metadata?.formId === formId)
+    console.log('[useDraftByFormId]', { formId, foundDraftId: foundDraft?.id, found: !!foundDraft })
+    return foundDraft || null
+  })
+}
+
+export const useDraftIdByFormId = (formId: string) => {
+  return useFormDraftStore((state) => {
+    const drafts = Object.values(state.drafts)
+    const foundDraft = drafts.find((draft: any) => draft?.metadata?.formId === formId)
+    const draftId = foundDraft?.id || null
+    console.log('[useDraftIdByFormId]', { formId, resolvedDraftId: draftId })
+    return draftId
+  })
+}
+
+export const useDraftDataByFormId = (formId: string) => {
+  return useFormDraftStore((state) => {
+    const drafts = Object.values(state.drafts)
+    const foundDraft = drafts.find((draft: any) => draft?.metadata?.formId === formId)
+    console.log('[useDraftDataByFormId]', { formId, foundDraftId: foundDraft?.id, hasData: !!foundDraft?.data })
+    return foundDraft?.data || null
+  })
+}
+
+export const useDraftErrorsByFormId = (formId: string) => {
+  return useFormDraftStore((state) => {
+    const drafts = Object.values(state.drafts)
+    const foundDraft = drafts.find((draft: any) => draft?.metadata?.formId === formId)
+    return foundDraft?.errors || EMPTY_OBJECT
+  })
+}
+
+export const useIsDraftDirtyByFormId = (formId: string) => {
+  return useFormDraftStore((state) => {
+    const drafts = Object.values(state.drafts)
+    const foundDraft = drafts.find((draft: any) => draft?.metadata?.formId === formId)
+    return foundDraft?.isDirty || false
+  })
+}
+
+export const useDraftTouchedFieldsByFormId = (formId: string) => {
+  return useFormDraftStore((state) => {
+    const drafts = Object.values(state.drafts)
+    const foundDraft = drafts.find((draft: any) => draft?.metadata?.formId === formId)
+    return foundDraft?.touchedFields || EMPTY_OBJECT
+  })
+}
+
+export const useDraftSubmitAttemptedByFormId = (formId: string) => {
+  return useFormDraftStore((state) => {
+    const drafts = Object.values(state.drafts)
+    const foundDraft = drafts.find((draft: any) => draft?.metadata?.formId === formId)
+    return foundDraft?.submitAttempted || false
+  })
 }
 
 export const useDraftMetadata = (draftId: string) => {

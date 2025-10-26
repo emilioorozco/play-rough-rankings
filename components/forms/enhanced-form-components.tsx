@@ -280,6 +280,7 @@ interface EnhancedMultiStepFormProps {
   showProgress?: boolean
   showAutoSaveStatus?: boolean
   isAutoSaving?: boolean
+  isSubmitting?: boolean
   lastSaved?: Date
   hasUnsavedChanges?: boolean
   onSaveDraft?: () => void
@@ -298,11 +299,16 @@ export function EnhancedMultiStepForm({
   showProgress = true,
   showAutoSaveStatus = true,
   isAutoSaving = false,
+  isSubmitting = false,
   lastSaved,
   hasUnsavedChanges = false,
   hasDraft = false,
 }: EnhancedMultiStepFormProps) {
-  const progress = ((currentStep + 1) / totalSteps) * 100
+  const isLastStep = currentStep === totalSteps - 1
+  // Progress goes from 0% to ~90% across steps, only reaching 100% on final submission
+  const progress = isLastStep && isSubmitting 
+    ? 100 
+    : Math.min((currentStep / totalSteps) * 100 + (100 / totalSteps / 2), 90)
 
   return (
     <Card className={`w-full ${className}`}>

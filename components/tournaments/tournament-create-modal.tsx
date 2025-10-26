@@ -45,10 +45,16 @@ export function TournamentCreateModal({
     }
   );
 
+  // Stable formId - only created once per modal open
+  const formId = React.useMemo(
+    () => `tournament-create-${user?.id || 'anonymous'}-${Date.now()}`,
+    [user?.id]
+  );
+
   // Multi-step form state using Zustand-based form system
   const formState = useZustandFormSteps<TournamentCreateFormData>({
     steps: ['basic-info', 'description', 'details', 'settings', 'confirmation'],
-    formId: `tournament-create-${user?.id || 'anonymous'}-${Date.now()}`,
+    formId,
     formType: 'tournament-create',
     initialData: {
       name: '',
@@ -95,6 +101,16 @@ export function TournamentCreateModal({
       }),
     },
     onSubmit: async (data) => {
+      // Validate date before conversion
+      if (!data.date) {
+        throw new Error('Tournament date is required');
+      }
+      
+      const parsedDate = new Date(data.date);
+      if (isNaN(parsedDate.getTime())) {
+        throw new Error('Invalid tournament date');
+      }
+      
       // Transform form data to match backend schema
       const transformedData = {
         name: data.name,
@@ -102,7 +118,7 @@ export function TournamentCreateModal({
         gameId: data.gameId,
         storeId: data.storeId,
         organizerId: user?.id || '', // Add organizer ID
-        date: new Date(data.date).toISOString(), // Convert to ISO datetime
+        date: parsedDate.toISOString(), // Convert to ISO datetime
         format: data.format,
         maxPlayers: parseInt(data.maxPlayers), // Convert string to number
         entryFee: parseFloat(data.entryFee), // Convert string to number
@@ -362,17 +378,17 @@ export function TournamentCreateModal({
       isMultiStep={true}
       currentStep={formState.currentStep}
       totalSteps={5}
-      onSubmit={formState.submit}
-      onCancel={handleClose}
+      onSubmit={formState.isLastStep ? formState.submit : formState.nextStep}
+      onCancel={formState.isFirstStep ? handleClose : formState.prevStep}
       isSubmitting={formState.isSubmitting || createTournament.isPending}
-      isValid={formState.isValid}
+      isValid={formState.isCurrentStepValid}
       isDirty={formState.isDirty}
       submitLabel={
-        formState.currentStepName === 'confirmation'
+        formState.isLastStep
           ? "Create Tournament" 
           : "Continue"
       }
-      cancelLabel="Cancel"
+      cancelLabel={formState.isFirstStep ? "Cancel" : "Back"}
       showCancel={true}
     >
       <ModalMultiStepForm
