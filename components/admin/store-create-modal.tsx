@@ -42,12 +42,8 @@ export function StoreCreateModal({ isOpen, onClose, onSuccess }: StoreCreateModa
       onSuccess?.()
       onClose()
     },
-    onSuccess: () => {
-      console.log('Store created successfully')
-    },
-    onError: (error) => {
-      console.error('Store creation error:', error)
-    },
+    onSuccess: () => {},
+    onError: () => {},
     showLoadingBar: true,
   })
 

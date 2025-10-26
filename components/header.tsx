@@ -79,9 +79,7 @@ export function Header() {
       await signOut();
       closeUserMenu();
       router.push("/");
-    } catch (error) {
-      console.error("Sign out failed:", error);
-    }
+    } catch {}
   };
 
   const getRoleBadgeVariant = (role: string) => {

@@ -1281,21 +1281,31 @@ export const appRouter = router({
             });
           }
         } else if (input.deckArchetype) {
-          // Create a new deck from the provided information
-          const newDeck = await ctx.prisma.deck.create({
-            data: {
-              name: `${input.deckArchetype} Deck`,
-              archetype: input.deckArchetype,
+          // Check if deck archetype already exists for this game/format
+          const deckName = `${input.deckArchetype} Deck`;
+          let deck = await ctx.prisma.deck.findFirst({
+            where: {
+              name: deckName,
               gameId: tournament.gameId,
               format: tournament.format,
-              description: input.deckList || null,
-              metadata: {
-                shareDeckList: input.shareDeckList || false,
-                deckList: input.deckList || null,
-              },
             },
           });
-          deckId = newDeck.id;
+
+          // Create deck only if it doesn't exist (shared archetype)
+          if (!deck) {
+            deck = await ctx.prisma.deck.create({
+              data: {
+                name: deckName,
+                archetype: input.deckArchetype,
+                gameId: tournament.gameId,
+                format: tournament.format,
+                // No description - deck lists are stored per-entry in metadata
+                description: null,
+                metadata: {},
+              },
+            });
+          }
+          deckId = deck.id;
         }
 
         // Update user's firstName and lastName if provided
@@ -1314,13 +1324,17 @@ export const appRouter = router({
           console.log("No firstName or lastName provided, skipping user update");
         }
 
-        // Create tournament entry
+        // Create tournament entry with deck list in metadata
         const entry = await ctx.prisma.tournamentEntry.create({
           data: {
             tournamentId: input.tournamentId,
             playerId: player.id,
             deckId: deckId,
             registrationDate: new Date(),
+            metadata: {
+              deckList: input.deckList || null,
+              shareDeckList: input.shareDeckList || false,
+            },
           },
           include: {
             tournament: {
