@@ -37,6 +37,14 @@ export const useDraftErrors = (draftId: string) => {
   return useFormDraftStore((state) => state.drafts[draftId]?.errors || EMPTY_OBJECT)
 }
 
+export const useDraftTouchedFields = (draftId: string) => {
+  return useFormDraftStore((state) => state.drafts[draftId]?.touchedFields || EMPTY_OBJECT)
+}
+
+export const useDraftSubmitAttempted = (draftId: string) => {
+  return useFormDraftStore((state) => state.drafts[draftId]?.submitAttempted || false)
+}
+
 export const useDraftCurrentStep = (draftId: string) => {
   return useFormDraftStore((state) => state.drafts[draftId]?.currentStep || 0)
 }
@@ -193,7 +201,24 @@ export const useDraftHealth = () => {
 
 // Action hooks - stable reference to prevent infinite loops
 export const useFormDraftActions = () => {
-  const actionsRef = useRef<ReturnType<typeof useFormDraftStore.getState> | null>(null)
+  const actionsRef = useRef<{
+    createDraft: (formType: string, initialData: Record<string, any>, metadata?: any) => string
+    updateDraft: (draftId: string, updates: any) => void
+    saveDraft: (formId: string, data: any) => void
+    loadDraft: (formId: string) => any | null
+    deleteDraft: (draftId: string) => void
+    clearDraft: (formId: string) => void
+    clearDrafts: (formType?: string) => void
+    validateDraft: (draftId: string) => { isValid: boolean; errors: Record<string, string> }
+    updateDraftStep: (draftId: string, step: number) => void
+    setDraftMetadata: (formType: string, metadata: any) => void
+    exportDraft: (draftId: string) => string
+    importDraft: (draftData: string) => string
+    cleanupExpiredDrafts: () => void
+    markFieldTouched: (draftId: string, field: string) => void
+    markSubmitAttempted: (draftId: string) => void
+    resetTouchedState: (draftId: string) => void
+  } | null>(null)
   
   if (!actionsRef.current) {
     const state = useFormDraftStore.getState()
@@ -211,10 +236,14 @@ export const useFormDraftActions = () => {
       exportDraft: state.exportDraft,
       importDraft: state.importDraft,
       cleanupExpiredDrafts: state.cleanupExpiredDrafts,
+      markFieldTouched: state.markFieldTouched,
+      markSubmitAttempted: state.markSubmitAttempted,
+      resetTouchedState: state.resetTouchedState,
     }
   }
   
-  return actionsRef.current
+  // Non-null assertion since we initialize it above
+  return actionsRef.current!
 }
 
 // Combined hooks for common use cases

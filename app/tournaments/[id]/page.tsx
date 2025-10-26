@@ -48,28 +48,32 @@ export default function TournamentDetailsPage() {
   )
   const isRegistered = storeRegistrationStatus?.isRegistered ?? registrationStatusQuery.data?.isRegistered ?? false
 
-  // Sync store from query results using Zustand actions (no React hooks needed)
+  // Sync store from query results using Zustand actions
   const syncTournamentData = useTournamentStore(state => state.setCurrentTournament)
   const syncRegistrationData = useTournamentStore(state => state.setRegistrationStatus)
 
-  // Sync tournament data when query completes
-  if (tournamentQuery.data && (!storeTournament || storeTournament.id !== tournamentQuery.data.id)) {
-    syncTournamentData(tournamentQuery.data as any)
-    setStoreTournamentId(tournamentId)
-  }
+  // Sync tournament data when query completes (moved to useEffect)
+  React.useEffect(() => {
+    if (tournamentQuery.data && (!storeTournament || storeTournament.id !== tournamentQuery.data.id)) {
+      syncTournamentData(tournamentQuery.data as any)
+      setStoreTournamentId(tournamentId)
+    }
+  }, [tournamentQuery.data, storeTournament, syncTournamentData, setStoreTournamentId, tournamentId])
 
-  // Sync registration status when query completes  
-  if (registrationStatusQuery.data && !storeRegistrationStatus) {
-    syncRegistrationData(tournamentId, {
-      isRegistered: !!registrationStatusQuery.data.isRegistered,
-      canRegister: !!registrationStatusQuery.data.canRegister,
-      canWithdraw: false,
-      isFull: false,
-      participantCount: 0,
-      maxPlayers: undefined,
-      registrationDeadline: undefined,
-    })
-  }
+  // Sync registration status when query completes (moved to useEffect)
+  React.useEffect(() => {
+    if (registrationStatusQuery.data && !storeRegistrationStatus) {
+      syncRegistrationData(tournamentId, {
+        isRegistered: !!registrationStatusQuery.data.isRegistered,
+        canRegister: !!registrationStatusQuery.data.canRegister,
+        canWithdraw: false,
+        isFull: false,
+        participantCount: 0,
+        maxPlayers: undefined,
+        registrationDeadline: undefined,
+      })
+    }
+  }, [registrationStatusQuery.data, storeRegistrationStatus, syncRegistrationData, tournamentId])
 
   // Use TRPC data as primary source, fallback to store (avoid deep type instantiation at union)
   const tournament = (tournamentQuery.data as any) ?? storeTournament
