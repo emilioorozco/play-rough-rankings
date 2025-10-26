@@ -118,6 +118,11 @@ interface TournamentState {
   invalidateTournamentList: () => void
   refreshTournamentData: (tournamentId: string) => void
   resetTournamentStore: () => void
+  
+  // tRPC integration helpers
+  handleQueryLoading: (queryType: 'tournamentList' | 'currentTournament' | 'registrationStatus') => void
+  handleQuerySuccess: (queryType: 'tournamentList' | 'currentTournament' | 'registrationStatus', data?: any) => void
+  handleQueryError: (queryType: 'tournamentList' | 'currentTournament' | 'registrationStatus', error: string) => void
 }
 
 // Initial state
@@ -514,6 +519,46 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       loading: { ...initialLoading },
       errors: { ...initialErrors },
     })
+  },
+  
+  // tRPC integration helpers
+  handleQueryLoading: (queryType) => {
+    set((state) => ({
+      loading: {
+        ...state.loading,
+        [queryType]: true,
+      },
+      errors: {
+        ...state.errors,
+        [queryType]: null,
+      },
+    }))
+  },
+  
+  handleQuerySuccess: (queryType, data) => {
+    set((state) => ({
+      loading: {
+        ...state.loading,
+        [queryType]: false,
+      },
+      errors: {
+        ...state.errors,
+        [queryType]: null,
+      },
+    }))
+  },
+  
+  handleQueryError: (queryType, error) => {
+    set((state) => ({
+      loading: {
+        ...state.loading,
+        [queryType]: false,
+      },
+      errors: {
+        ...state.errors,
+        [queryType]: error,
+      },
+    }))
   },
 }))
 

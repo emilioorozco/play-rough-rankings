@@ -1,11 +1,11 @@
 import { useCallback } from 'react'
 import { useUIStore } from '@/stores/ui-store'
-import { useModalSelectors, useUIStoreSelectors } from '@/stores/ui-store-selectors'
+import { useIsModalOpen, useModalData, useConfirmationState, useTabState, useFilterState } from '@/stores/ui-store-selectors'
 
 // Modal Management Hooks
 export function useModal(modalName: 'userPreferences' | 'confirmation' | 'tournamentRegistration' | 'tournamentManagement' | 'tournamentCreate' | 'login' | 'storeCreate') {
-  const isOpen = useModalSelectors.isModalOpen(modalName)
-  const config = useModalSelectors.getModalData(modalName)
+  const isOpen = useIsModalOpen(modalName)
+  const config = useModalData(modalName)
   const openModal = useUIStore((state) => state.openModal)
   const closeModal = useUIStore((state) => state.closeModal)
 
@@ -26,7 +26,7 @@ export function useModal(modalName: 'userPreferences' | 'confirmation' | 'tourna
 }
 
 export function useConfirmationModal() {
-  const { isOpen, config } = useUIStoreSelectors.getConfirmationState()
+  const { isOpen, config } = useConfirmationState()
   const openConfirmation = useUIStore((state) => state.openConfirmation)
   const closeConfirmation = useUIStore((state) => state.closeConfirmation)
 
@@ -48,7 +48,7 @@ export function useConfirmationModal() {
 
 // Tab Management Hooks
 export function useTab(tabName: 'tournamentDetails' | 'tournamentManage' | 'leaderboard-view') {
-  const { activeTab, setActiveTab } = useUIStoreSelectors.getTabState(tabName)
+  const { activeTab } = useTabState(tabName)
   const setTab = useUIStore((state) => state.setActiveTab)
 
   const setTabCallback = useCallback((tab: string) => {
@@ -63,7 +63,7 @@ export function useTab(tabName: 'tournamentDetails' | 'tournamentManage' | 'lead
 
 // Filter Management Hooks
 export function useFilter(filterName: 'tournaments' | 'tournament-list' | 'tournament-participants') {
-  const { filters, setFilters, resetFilters } = useUIStoreSelectors.getFilterState(filterName)
+  const { filters } = useFilterState(filterName)
   const setFilter = useUIStore((state) => state.setFilters)
   const resetFiltersAction = useUIStore((state) => state.resetFilters)
 

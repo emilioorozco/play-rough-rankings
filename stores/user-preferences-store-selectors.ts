@@ -1,421 +1,282 @@
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { useUserPreferencesStore } from './user-preferences-store'
-import type { UserPreferencesState } from './user-preferences-store'
 
-// Preference selectors
-export const usePreferenceSelectors = {
-  // Get specific preference value
-  getPreference: (key: string, defaultValue?: any) => {
-    return useUserPreferencesStore((state) => state.preferences[key as keyof typeof state.preferences] ?? defaultValue)
-  },
+// Basic preference hooks
+export const usePreference = (key: string, defaultValue?: any) => {
+  return useUserPreferencesStore((state) => state.preferences[key as keyof typeof state.preferences] ?? defaultValue)
+}
 
-  // Get multiple preferences
-  getPreferences: (keys: string[]) => {
-    return useUserPreferencesStore((state) => {
+export const usePreferences = (keys: string[]) => {
+  return useUserPreferencesStore(
+    useCallback((state) => {
       const preferences: Record<string, any> = {}
       keys.forEach(key => {
         preferences[key] = state.preferences[key as keyof typeof state.preferences]
       })
       return preferences
-    })
-  },
+    }, [keys])
+  )
+}
 
-  // Get all preferences
-  getAllPreferences: () => {
-    return useUserPreferencesStore((state) => state.preferences)
-  },
+export const useAllPreferences = () => {
+  return useUserPreferencesStore((state) => state.preferences)
+}
 
-  // Check if preference exists
-  hasPreference: (key: string) => {
-    return useUserPreferencesStore((state) => key in state.preferences)
-  },
+export const useHasPreference = (key: string) => {
+  return useUserPreferencesStore((state) => key in state.preferences)
+}
 
-  // Get preference by category
-  getPreferencesByCategory: (category: string) => {
-    const metadata = useUserPreferencesStore((state) => state.metadata)
-    const preferences = useUserPreferencesStore((state) => state.preferences)
+export const usePreferencesByCategory = (category: string) => {
+  const metadata = useUserPreferencesStore((state) => state.metadata)
+  const preferences = useUserPreferencesStore((state) => state.preferences)
+  
+  return useMemo(() => {
+    const categoryKeys = Object.keys(metadata).filter(
+      key => metadata[key as keyof typeof metadata].category === category
+    ) as (keyof typeof preferences)[]
     
-    return useMemo(() => {
-      const categoryKeys = Object.keys(metadata).filter(
-        key => metadata[key as keyof typeof metadata].category === category
-      ) as (keyof typeof preferences)[]
-      
-      const result: Partial<typeof preferences> = {}
-      categoryKeys.forEach(key => {
-        (result as any)[key] = preferences[key]
-      })
-      return result
-    }, [metadata, preferences, category])
-  },
+    const result: Partial<typeof preferences> = {}
+    categoryKeys.forEach(key => {
+      (result as any)[key] = preferences[key]
+    })
+    return result
+  }, [metadata, preferences, category])
+}
 
-  // Get preference categories
-  getCategories: () => {
-    return useUserPreferencesStore((state) => {
+export const usePreferenceCategories = () => {
+  return useUserPreferencesStore(
+    useCallback((state) => {
       const categories = new Set<string>()
       Object.values(state.metadata).forEach(meta => {
         categories.add(meta.category)
       })
       return Array.from(categories)
-    })
-  },
+    }, [])
+  )
 }
 
-// Category-specific selectors
-export const useCategorySelectors = {
-  // Display preferences
-  getDisplayPreferences: () => {
-    const metadata = useUserPreferencesStore((state) => state.metadata)
-    const preferences = useUserPreferencesStore((state) => state.preferences)
-    
-    return useMemo(() => {
-      const categoryKeys = Object.keys(metadata).filter(
-        key => metadata[key as keyof typeof metadata].category === 'display'
-      ) as (keyof typeof preferences)[]
-      
-      const result: Partial<typeof preferences> = {}
-      categoryKeys.forEach(key => {
-        (result as any)[key] = preferences[key]
-      })
-      return result
-    }, [metadata, preferences])
-  },
-
-  // Communication preferences
-  getCommunicationPreferences: () => {
-    const metadata = useUserPreferencesStore((state) => state.metadata)
-    const preferences = useUserPreferencesStore((state) => state.preferences)
-    
-    return useMemo(() => {
-      const categoryKeys = Object.keys(metadata).filter(
-        key => metadata[key as keyof typeof metadata].category === 'communications'
-      ) as (keyof typeof preferences)[]
-      
-      const result: Partial<typeof preferences> = {}
-      categoryKeys.forEach(key => {
-        (result as any)[key] = preferences[key]
-      })
-      return result
-    }, [metadata, preferences])
-  },
-
-  // Tournament preferences
-  getTournamentPreferences: () => {
-    const metadata = useUserPreferencesStore((state) => state.metadata)
-    const preferences = useUserPreferencesStore((state) => state.preferences)
-    
-    return useMemo(() => {
-      const categoryKeys = Object.keys(metadata).filter(
-        key => metadata[key as keyof typeof metadata].category === 'tournaments'
-      ) as (keyof typeof preferences)[]
-      
-      const result: Partial<typeof preferences> = {}
-      categoryKeys.forEach(key => {
-        (result as any)[key] = preferences[key]
-      })
-      return result
-    }, [metadata, preferences])
-  },
-
-  // Privacy preferences
-  getPrivacyPreferences: () => {
-    const metadata = useUserPreferencesStore((state) => state.metadata)
-    const preferences = useUserPreferencesStore((state) => state.preferences)
-    
-    return useMemo(() => {
-      const categoryKeys = Object.keys(metadata).filter(
-        key => metadata[key as keyof typeof metadata].category === 'privacy'
-      ) as (keyof typeof preferences)[]
-      
-      const result: Partial<typeof preferences> = {}
-      categoryKeys.forEach(key => {
-        (result as any)[key] = preferences[key]
-      })
-      return result
-    }, [metadata, preferences])
-  },
-
-  // Game preferences
-  getGamePreferences: () => {
-    const metadata = useUserPreferencesStore((state) => state.metadata)
-    const preferences = useUserPreferencesStore((state) => state.preferences)
-    
-    return useMemo(() => {
-      const categoryKeys = Object.keys(metadata).filter(
-        key => metadata[key as keyof typeof metadata].category === 'games'
-      ) as (keyof typeof preferences)[]
-      
-      const result: Partial<typeof preferences> = {}
-      categoryKeys.forEach(key => {
-        (result as any)[key] = preferences[key]
-      })
-      return result
-    }, [metadata, preferences])
-  },
-
-  // Accessibility preferences
-  getAccessibilityPreferences: () => {
-    const metadata = useUserPreferencesStore((state) => state.metadata)
-    const preferences = useUserPreferencesStore((state) => state.preferences)
-    
-    return useMemo(() => {
-      const categoryKeys = Object.keys(metadata).filter(
-        key => metadata[key as keyof typeof metadata].category === 'accessibility'
-      ) as (keyof typeof preferences)[]
-      
-      const result: Partial<typeof preferences> = {}
-      categoryKeys.forEach(key => {
-        (result as any)[key] = preferences[key]
-      })
-      return result
-    }, [metadata, preferences])
-  },
-
-  // Advanced preferences
-  getAdvancedPreferences: () => {
-    const metadata = useUserPreferencesStore((state) => state.metadata)
-    const preferences = useUserPreferencesStore((state) => state.preferences)
-    
-    return useMemo(() => {
-      const categoryKeys = Object.keys(metadata).filter(
-        key => metadata[key as keyof typeof metadata].category === 'advanced'
-      ) as (keyof typeof preferences)[]
-      
-      const result: Partial<typeof preferences> = {}
-      categoryKeys.forEach(key => {
-        (result as any)[key] = preferences[key]
-      })
-      return result
-    }, [metadata, preferences])
-  },
+// Category-specific hooks
+export const useDisplayPreferences = () => {
+  return usePreferencesByCategory('display')
 }
 
-// Specific preference selectors
-export const useSpecificPreferenceSelectors = {
-  // Theme preferences
-  getTheme: () => {
-    return useUserPreferencesStore((state) => state.preferences.theme ?? 'system')
-  },
-
-  // Language preferences
-  getLanguage: () => {
-    return useUserPreferencesStore((state) => state.preferences.language ?? 'en')
-  },
-
-  // Timezone preferences
-  getTimezone: () => {
-    return useUserPreferencesStore((state) => state.preferences.timezone ?? 'UTC')
-  },
-
-  // Name display preference
-  getNameDisplayPreference: () => {
-    return useUserPreferencesStore((state) => state.preferences.nameDisplayPreference ?? 'FIRST_NAME')
-  },
-
-  // Profile visibility
-  getProfileVisibility: () => {
-    return useUserPreferencesStore((state) => state.preferences.profileVisibility ?? 'PUBLIC')
-  },
-
-  // Communication preferences
-  getOptInCommunications: () => {
-    return useUserPreferencesStore((state) => state.preferences.optInCommunications ?? false)
-  },
-
-  getOptInTournamentUpdates: () => {
-    return useUserPreferencesStore((state) => state.preferences.optInTournamentUpdates ?? true)
-  },
-
-  getOptInLeaderboardUpdates: () => {
-    return useUserPreferencesStore((state) => state.preferences.optInLeaderboardUpdates ?? true)
-  },
-
-  getOptInMarketing: () => {
-    return useUserPreferencesStore((state) => state.preferences.optInMarketing ?? false)
-  },
-
-  // Accessibility preferences
-  getFontSize: () => {
-    return useUserPreferencesStore((state) => state.preferences.fontSize ?? 'medium')
-  },
-
-  getHighContrast: () => {
-    return useUserPreferencesStore((state) => state.preferences.highContrast ?? false)
-  },
-
-  getReducedMotion: () => {
-    return useUserPreferencesStore((state) => state.preferences.reducedMotion ?? false)
-  },
-
-  // Tournament preferences
-  getDefaultTournamentView: () => {
-    return useUserPreferencesStore((state) => state.preferences.defaultTournamentView ?? 'list')
-  },
-
-  getAutoRegisterForTournaments: () => {
-    return useUserPreferencesStore((state) => state.preferences.autoRegisterForTournaments ?? false)
-  },
-
-  getTournamentReminderTime: () => {
-    return useUserPreferencesStore((state) => state.preferences.tournamentReminderTime ?? 30)
-  },
+export const useCommunicationPreferences = () => {
+  return usePreferencesByCategory('communications')
 }
 
-// Action selectors
-export const useUserPreferencesActions = {
-  // Set multiple preferences
-  setPreferences: () => useUserPreferencesStore((state) => state.setPreferences),
-
-  // Update preference
-  updatePreference: () => useUserPreferencesStore((state) => state.updatePreference),
-
-  // Update multiple preferences
-  updatePreferences: () => useUserPreferencesStore((state) => state.updatePreferences),
-
-  // Reset preferences
-  resetPreferences: () => useUserPreferencesStore((state) => state.resetPreferences),
-
-  // Reset to defaults
-  resetToDefaults: () => useUserPreferencesStore((state) => state.resetToDefaults),
-
-  // Reset store
-  resetStore: () => useUserPreferencesStore((state) => state.resetStore),
+export const useTournamentPreferences = () => {
+  return usePreferencesByCategory('tournaments')
 }
 
-// Combined selectors for common use cases
-export const useUserPreferencesStoreSelectors = {
-  // Get complete display preferences state
-  getDisplayPreferencesState: () => {
-    const preferences = useCategorySelectors.getDisplayPreferences()
-    const updatePreference = useUserPreferencesActions.updatePreference()
-
-    return useMemo(() => ({
-      preferences,
-      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
-    }), [preferences, updatePreference])
-  },
-
-  // Get complete communication preferences state
-  getCommunicationPreferencesState: () => {
-    const preferences = useCategorySelectors.getCommunicationPreferences()
-    const updatePreference = useUserPreferencesActions.updatePreference()
-
-    return useMemo(() => ({
-      preferences,
-      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
-    }), [preferences, updatePreference])
-  },
-
-  // Get complete tournament preferences state
-  getTournamentPreferencesState: () => {
-    const preferences = useCategorySelectors.getTournamentPreferences()
-    const updatePreference = useUserPreferencesActions.updatePreference()
-
-    return useMemo(() => ({
-      preferences,
-      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
-    }), [preferences, updatePreference])
-  },
-
-  // Get complete accessibility preferences state
-  getAccessibilityPreferencesState: () => {
-    const preferences = useCategorySelectors.getAccessibilityPreferences()
-    const updatePreference = useUserPreferencesActions.updatePreference()
-
-    return useMemo(() => ({
-      preferences,
-      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
-    }), [preferences, updatePreference])
-  },
-
-  // Get complete privacy preferences state
-  getPrivacyPreferencesState: () => {
-    const preferences = useCategorySelectors.getPrivacyPreferences()
-    const updatePreference = useUserPreferencesActions.updatePreference()
-
-    return useMemo(() => ({
-      preferences,
-      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
-    }), [preferences, updatePreference])
-  },
-
-  // Get complete advanced preferences state
-  getAdvancedPreferencesState: () => {
-    const preferences = useCategorySelectors.getAdvancedPreferences()
-    const updatePreference = useUserPreferencesActions.updatePreference()
-
-    return useMemo(() => ({
-      preferences,
-      updatePreference: (key: any, value: any) => updatePreference(key as any, value as any),
-    }), [preferences, updatePreference])
-  },
+export const usePrivacyPreferences = () => {
+  return usePreferencesByCategory('privacy')
 }
 
-// Performance-optimized selectors for specific use cases
-export const useOptimizedUserPreferencesSelectors = {
-  // Get only the data needed for theme rendering
-  getThemeRenderData: () => {
-    const theme = useUserPreferencesStore((state) => state.preferences.theme)
-    const highContrast = useUserPreferencesStore((state) => state.preferences.highContrast)
-    const reducedMotion = useUserPreferencesStore((state) => state.preferences.reducedMotion)
-    
-    return useMemo(() => ({
-      theme: theme ?? 'system',
-      highContrast: highContrast ?? false,
-      reducedMotion: reducedMotion ?? false,
-    }), [theme, highContrast, reducedMotion])
-  },
+export const useGamePreferences = () => {
+  return usePreferencesByCategory('games')
+}
 
-  // Get only the data needed for communication preferences rendering
-  getCommunicationRenderData: () => {
-    const optInCommunications = useUserPreferencesStore((state) => state.preferences.optInCommunications)
-    const optInTournamentUpdates = useUserPreferencesStore((state) => state.preferences.optInTournamentUpdates)
-    const optInLeaderboardUpdates = useUserPreferencesStore((state) => state.preferences.optInLeaderboardUpdates)
-    const optInMarketing = useUserPreferencesStore((state) => state.preferences.optInMarketing)
-    
-    return useMemo(() => ({
-      optInCommunications: optInCommunications ?? false,
-      optInTournamentUpdates: optInTournamentUpdates ?? true,
-      optInLeaderboardUpdates: optInLeaderboardUpdates ?? true,
-      optInMarketing: optInMarketing ?? false,
-    }), [optInCommunications, optInTournamentUpdates, optInLeaderboardUpdates, optInMarketing])
-  },
+export const useAccessibilityPreferences = () => {
+  return usePreferencesByCategory('accessibility')
+}
 
-  // Get only the data needed for display preferences rendering
-  getDisplayRenderData: () => {
-    const nameDisplayPreference = useUserPreferencesStore((state) => state.preferences.nameDisplayPreference)
-    const profileVisibility = useUserPreferencesStore((state) => state.preferences.profileVisibility)
-    const fontSize = useUserPreferencesStore((state) => state.preferences.fontSize)
-    
-    return useMemo(() => ({
-      nameDisplayPreference: nameDisplayPreference ?? 'FIRST_NAME',
-      profileVisibility: profileVisibility ?? 'PUBLIC',
-      fontSize: fontSize ?? 'medium',
-    }), [nameDisplayPreference, profileVisibility, fontSize])
-  },
+export const useAdvancedPreferences = () => {
+  return usePreferencesByCategory('advanced')
+}
 
-  // Get only the data needed for tournament preferences rendering
-  getTournamentRenderData: () => {
-    const defaultTournamentView = useUserPreferencesStore((state) => state.preferences.defaultTournamentView)
-    const autoRegisterForTournaments = useUserPreferencesStore((state) => state.preferences.autoRegisterForTournaments)
-    const tournamentReminderTime = useUserPreferencesStore((state) => state.preferences.tournamentReminderTime)
-    
-    return useMemo(() => ({
-      defaultTournamentView: defaultTournamentView ?? 'list',
-      autoRegisterForTournaments: autoRegisterForTournaments ?? false,
-      tournamentReminderTime: tournamentReminderTime ?? 30,
-    }), [defaultTournamentView, autoRegisterForTournaments, tournamentReminderTime])
-  },
+// Specific preference hooks
+export const useTheme = () => {
+  return useUserPreferencesStore((state) => state.preferences.theme ?? 'system')
+}
 
-  // Get only the data needed for accessibility rendering
-  getAccessibilityRenderData: () => {
-    const fontSize = useUserPreferencesStore((state) => state.preferences.fontSize)
-    const highContrast = useUserPreferencesStore((state) => state.preferences.highContrast)
-    const reducedMotion = useUserPreferencesStore((state) => state.preferences.reducedMotion)
-    
-    return useMemo(() => ({
-      fontSize: fontSize ?? 'medium',
-      highContrast: highContrast ?? false,
-      reducedMotion: reducedMotion ?? false,
-    }), [fontSize, highContrast, reducedMotion])
-  },
+export const useLanguage = () => {
+  return useUserPreferencesStore((state) => state.preferences.language ?? 'en')
+}
+
+export const useTimezone = () => {
+  return useUserPreferencesStore((state) => state.preferences.timezone ?? 'UTC')
+}
+
+export const useNameDisplayPreference = () => {
+  return useUserPreferencesStore((state) => state.preferences.nameDisplayPreference ?? 'FIRST_NAME')
+}
+
+export const useProfileVisibility = () => {
+  return useUserPreferencesStore((state) => state.preferences.profileVisibility ?? 'PUBLIC')
+}
+
+export const useOptInCommunications = () => {
+  return useUserPreferencesStore((state) => state.preferences.optInCommunications ?? false)
+}
+
+export const useOptInTournamentUpdates = () => {
+  return useUserPreferencesStore((state) => state.preferences.optInTournamentUpdates ?? true)
+}
+
+export const useOptInLeaderboardUpdates = () => {
+  return useUserPreferencesStore((state) => state.preferences.optInLeaderboardUpdates ?? true)
+}
+
+export const useOptInMarketing = () => {
+  return useUserPreferencesStore((state) => state.preferences.optInMarketing ?? false)
+}
+
+export const useFontSize = () => {
+  return useUserPreferencesStore((state) => state.preferences.fontSize ?? 'medium')
+}
+
+export const useHighContrast = () => {
+  return useUserPreferencesStore((state) => state.preferences.highContrast ?? false)
+}
+
+export const useReducedMotion = () => {
+  return useUserPreferencesStore((state) => state.preferences.reducedMotion ?? false)
+}
+
+export const useDefaultTournamentView = () => {
+  return useUserPreferencesStore((state) => state.preferences.defaultTournamentView ?? 'list')
+}
+
+export const useAutoRegisterForTournaments = () => {
+  return useUserPreferencesStore((state) => state.preferences.autoRegisterForTournaments ?? false)
+}
+
+export const useTournamentReminderTime = () => {
+  return useUserPreferencesStore((state) => state.preferences.tournamentReminderTime ?? 30)
+}
+
+// Action hooks
+export const useUserPreferencesActions = () => {
+  return useUserPreferencesStore((state) => ({
+    setPreferences: state.setPreferences,
+    updatePreference: state.updatePreference,
+    updatePreferences: state.updatePreferences,
+    resetPreferences: state.resetPreferences,
+    resetToDefaults: state.resetToDefaults,
+    resetStore: state.resetStore,
+  }))
+}
+
+// Combined hooks for common use cases
+export const useDisplayPreferencesState = () => {
+  const preferences = useDisplayPreferences()
+  const actions = useUserPreferencesActions()
+
+  return useMemo(() => ({
+    preferences,
+    updatePreference: actions.updatePreference,
+  }), [preferences, actions])
+}
+
+export const useCommunicationPreferencesState = () => {
+  const preferences = useCommunicationPreferences()
+  const actions = useUserPreferencesActions()
+
+  return useMemo(() => ({
+    preferences,
+    updatePreference: actions.updatePreference,
+  }), [preferences, actions])
+}
+
+export const useTournamentPreferencesState = () => {
+  const preferences = useTournamentPreferences()
+  const actions = useUserPreferencesActions()
+
+  return useMemo(() => ({
+    preferences,
+    updatePreference: actions.updatePreference,
+  }), [preferences, actions])
+}
+
+export const useAccessibilityPreferencesState = () => {
+  const preferences = useAccessibilityPreferences()
+  const actions = useUserPreferencesActions()
+
+  return useMemo(() => ({
+    preferences,
+    updatePreference: actions.updatePreference,
+  }), [preferences, actions])
+}
+
+export const usePrivacyPreferencesState = () => {
+  const preferences = usePrivacyPreferences()
+  const actions = useUserPreferencesActions()
+
+  return useMemo(() => ({
+    preferences,
+    updatePreference: actions.updatePreference,
+  }), [preferences, actions])
+}
+
+export const useAdvancedPreferencesState = () => {
+  const preferences = useAdvancedPreferences()
+  const actions = useUserPreferencesActions()
+
+  return useMemo(() => ({
+    preferences,
+    updatePreference: actions.updatePreference,
+  }), [preferences, actions])
+}
+
+// Performance-optimized hooks for rendering
+export const useThemeRenderData = () => {
+  const theme = useTheme()
+  const highContrast = useHighContrast()
+  const reducedMotion = useReducedMotion()
+  
+  return useMemo(() => ({
+    theme,
+    highContrast,
+    reducedMotion,
+  }), [theme, highContrast, reducedMotion])
+}
+
+export const useCommunicationRenderData = () => {
+  const optInCommunications = useOptInCommunications()
+  const optInTournamentUpdates = useOptInTournamentUpdates()
+  const optInLeaderboardUpdates = useOptInLeaderboardUpdates()
+  const optInMarketing = useOptInMarketing()
+  
+  return useMemo(() => ({
+    optInCommunications,
+    optInTournamentUpdates,
+    optInLeaderboardUpdates,
+    optInMarketing,
+  }), [optInCommunications, optInTournamentUpdates, optInLeaderboardUpdates, optInMarketing])
+}
+
+export const useDisplayRenderData = () => {
+  const nameDisplayPreference = useNameDisplayPreference()
+  const profileVisibility = useProfileVisibility()
+  const fontSize = useFontSize()
+  
+  return useMemo(() => ({
+    nameDisplayPreference,
+    profileVisibility,
+    fontSize,
+  }), [nameDisplayPreference, profileVisibility, fontSize])
+}
+
+export const useTournamentRenderData = () => {
+  const defaultTournamentView = useDefaultTournamentView()
+  const autoRegisterForTournaments = useAutoRegisterForTournaments()
+  const tournamentReminderTime = useTournamentReminderTime()
+  
+  return useMemo(() => ({
+    defaultTournamentView,
+    autoRegisterForTournaments,
+    tournamentReminderTime,
+  }), [defaultTournamentView, autoRegisterForTournaments, tournamentReminderTime])
+}
+
+export const useAccessibilityRenderData = () => {
+  const fontSize = useFontSize()
+  const highContrast = useHighContrast()
+  const reducedMotion = useReducedMotion()
+  
+  return useMemo(() => ({
+    fontSize,
+    highContrast,
+    reducedMotion,
+  }), [fontSize, highContrast, reducedMotion])
 }

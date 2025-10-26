@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/components/auth/session-provider";
-import { useFormDraftIntegration } from "@/stores/form-draft-integration";
-import { useFormDraftStore } from "@/stores/form-draft-store";
+import { useZustandFormSteps } from "@/hooks/use-form-zustand";
 import { registerSchema } from "@/lib/validation/schemas";
 import { FormInput, FormSelect, FormCheckbox, FormStatus } from "@/components/ui/form-components";
 import { Modal } from "@/components/ui/modal";
@@ -14,111 +13,55 @@ export default function RegisterPage() {
   const router = useRouter();
   const { signUp } = useSession();
   
-  const formId = 'user-registration';
-  const formType = 'user-registration';
   const steps = ['personal-info', 'account-info', 'preferences'];
   
-  // Form integration hook
-  const {
-    formData,
-    draftErrors,
-    isSubmitting,
-    updateField,
-    submit,
-    validate,
-    clearDraft,
-  } = useFormDraftIntegration(formId, formType, registerSchema);
-
-  // Import updateDraftStep from the store
-  const { updateDraftStep } = useFormDraftStore();
-
-  // UI state for password visibility (local state for now)
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Resolve the actual draft by metadata.formId so we can use the internal draftId
-  const draftEntry = useFormDraftStore((state) => {
-    const drafts = state.drafts as Record<string, any>;
-    return Object.values(drafts).find((d: any) => d?.metadata?.formId === formId) as any;
-  });
-  const draftId = draftEntry?.id as string | undefined;
-  const currentStep = draftEntry?.currentStep || 0;
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[RegisterPage] draft resolution', { formId, draftId, currentStep, hasDraft: !!draftEntry });
-  }
-
-  // Draft initialization is now handled by the integration hook
-  // The form will render with default values and create the draft when user starts typing
-
-  // updateField is now provided by useFormDraftIntegration
-
-  // Step management
-  const goToNextStep = () => {
-    if (currentStep < steps.length - 1) {
-      if (draftId) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('[RegisterPage] update step next', { draftId, from: currentStep, to: currentStep + 1 });
-        }
-        updateDraftStep(draftId, currentStep + 1);
-      }
-    }
-  };
-
-  const goToPreviousStep = () => {
-    if (currentStep > 0) {
-      if (draftId) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('[RegisterPage] update step prev', { draftId, from: currentStep, to: currentStep - 1 });
-        }
-        updateDraftStep(draftId, currentStep - 1);
-      }
-    }
-  };
-
-  const currentStepName = steps[currentStep];
-  const isFirstStep = currentStep === 0;
-  const isLastStep = currentStep === steps.length - 1;
-
-
-  // Validation is now handled by useFormDraftIntegration
-
-  const isFormValid = () => {
-    return formData.username && formData.username.length >= 3 &&
-           formData.firstName && formData.lastName &&
-           formData.email &&
-           formData.password && formData.password.length >= 8 &&
-           formData.password === formData.confirmPassword &&
-           formData.agreeToTerms === true;
-  };
-
-  const isCurrentStepValid = () => {
-    if (currentStepName === 'personal-info') {
-      return formData.username && formData.username.length >= 3 && 
-             formData.firstName && formData.lastName;
-    } else if (currentStepName === 'account-info') {
-      return formData.email && 
-             formData.password && formData.password.length >= 8 && 
-             formData.password === formData.confirmPassword;
-    } else if (currentStepName === 'preferences') {
-      return formData.agreeToTerms === true;
-    }
-    return true;
-  };
-
-  // Submit form
-  const handleSubmit = async () => {
-    try {
-      console.log("Registration data:", formData);
+  // Multi-step form state using Zustand
+  const formState = useZustandFormSteps({
+    steps,
+    formId: 'user-registration',
+    formType: 'user-registration',
+    initialData: {
+      username: '',
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      agreeToTerms: false,
+      subscribeToUpdates: false,
+      nameDisplayPreference: 'DISPLAY_NAME',
+      optInCommunications: false,
+    },
+    validationSchemas: {
+      'personal-info': registerSchema.pick({
+        username: true,
+        firstName: true,
+        lastName: true,
+      }),
+      'account-info': registerSchema.pick({
+        email: true,
+        password: true,
+        confirmPassword: true,
+      }),
+      'preferences': registerSchema.pick({
+        agreeToTerms: true,
+        subscribeToUpdates: true,
+        nameDisplayPreference: true,
+        optInCommunications: true,
+      }),
+    },
+    onSubmit: async (data) => {
+      console.log("Registration data:", data);
       
       const result = await signUp.email({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password,
-        name: formData.username || [formData.firstName, formData.lastName].filter(Boolean).join(" ") || formData.email,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        nameDisplayPreference: formData.nameDisplayPreference,
-        optInCommunications: formData.optInCommunications,
-        subscribeToUpdates: formData.subscribeToUpdates,
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+        name: data.username || [data.firstName, data.lastName].filter(Boolean).join(" ") || data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        nameDisplayPreference: data.nameDisplayPreference,
+        optInCommunications: data.optInCommunications,
+        subscribeToUpdates: data.subscribeToUpdates,
       } as any);
 
       if (result.error) {
@@ -138,28 +81,30 @@ export default function RegisterPage() {
         
         throw new Error(errorMessage);
       } else {
-        // Clear draft on successful registration
-        clearDraft();
         console.log("Registration successful");
-        
-        
         router.push("/");
       }
-    } catch (error) {
+    },
+    onSuccess: () => {
+      console.log("Registration completed successfully!");
+    },
+    onError: (error) => {
       console.error("Registration error:", error);
-      throw error; // Let the integration hook handle the error
-    }
-  };
+    },
+    showLoadingBar: true,
+    enableAutoSave: true,
+    autoSaveDelay: 2000,
+  });
 
-  // Step validation
-  const handleStepValidation = () => {
-    // Use the integration hook's validate function
-    const isValid = validate(formData);
-    
-    if (isValid) {
-      goToNextStep();
-    }
-  };
+  // UI state for password visibility
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Get step state from formState
+  const currentStepName = formState.currentStepName;
+  const isFirstStep = formState.isFirstStep;
+  const isLastStep = formState.isLastStep;
+
 
   const renderPersonalInfoStep = () => (
     <div className="space-y-6">
@@ -173,9 +118,9 @@ export default function RegisterPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormInput
           label="First Name"
-          value={formData.firstName}
-          onChange={(e) => updateField('firstName', e.target.value)}
-          error={draftErrors.firstName}
+          value={formState.data.firstName}
+          onChange={(e) => formState.setField('firstName', e.target.value)}
+          error={formState.errors.firstName}
           required
           placeholder="Enter your first name"
           icon={User}
@@ -183,9 +128,9 @@ export default function RegisterPage() {
 
         <FormInput
           label="Last Name"
-          value={formData.lastName}
-          onChange={(e) => updateField('lastName', e.target.value)}
-          error={draftErrors.lastName}
+          value={formState.data.lastName}
+          onChange={(e) => formState.setField('lastName', e.target.value)}
+          error={formState.errors.lastName}
           required
           placeholder="Enter your last name"
           icon={User}
@@ -194,9 +139,9 @@ export default function RegisterPage() {
 
       <FormInput
         label="Username"
-        value={formData.username}
-        onChange={(e) => updateField('username', e.target.value)}
-        error={draftErrors.username}
+        value={formState.data.username}
+        onChange={(e) => formState.setField('username', e.target.value)}
+        error={formState.errors.username}
         required
         placeholder="Choose a username"
         icon={User}
@@ -217,9 +162,9 @@ export default function RegisterPage() {
       <FormInput
         label="Email"
         type="email"
-        value={formData.email}
-        onChange={(e) => updateField('email', e.target.value)}
-        error={draftErrors.email}
+        value={formState.data.email}
+        onChange={(e) => formState.setField('email', e.target.value)}
+        error={formState.errors.email}
         required
         placeholder="Enter your email"
         icon={Mail}
@@ -228,9 +173,9 @@ export default function RegisterPage() {
         <FormInput
           label="Password"
           type={showPassword ? "text" : "password"}
-          value={formData.password}
-          onChange={(e) => updateField('password', e.target.value)}
-          error={draftErrors.password}
+          value={formState.data.password}
+          onChange={(e) => formState.setField('password', e.target.value)}
+          error={formState.errors.password}
           required
           placeholder="Create a password"
           icon={Lock}
@@ -248,9 +193,9 @@ export default function RegisterPage() {
         <FormInput
           label="Confirm Password"
           type={showConfirmPassword ? "text" : "password"}
-          value={formData.confirmPassword}
-          onChange={(e) => updateField('confirmPassword', e.target.value)}
-          error={draftErrors.confirmPassword}
+          value={formState.data.confirmPassword}
+          onChange={(e) => formState.setField('confirmPassword', e.target.value)}
+          error={formState.errors.confirmPassword}
           required
           placeholder="Confirm your password"
           icon={Lock}
@@ -280,9 +225,9 @@ export default function RegisterPage() {
         <FormSelect
           label="Name Display Preference"
           description="Choose how your name appears on leaderboards and in tournaments"
-          value={formData.nameDisplayPreference}
-          onValueChange={(value) => updateField('nameDisplayPreference', value)}
-          error={draftErrors.nameDisplayPreference}
+          value={formState.data.nameDisplayPreference}
+          onValueChange={(value) => formState.setField('nameDisplayPreference', value)}
+          error={formState.errors.nameDisplayPreference}
           required
           options={[
             {
@@ -306,16 +251,16 @@ export default function RegisterPage() {
 
         <FormCheckbox
           label="Subscribe to updates and notifications"
-          checked={formData.subscribeToUpdates}
-          onCheckedChange={(checked) => updateField('subscribeToUpdates', checked)}
-          error={draftErrors.subscribeToUpdates}
+          checked={formState.data.subscribeToUpdates}
+          onCheckedChange={(checked) => formState.setField('subscribeToUpdates', checked)}
+          error={formState.errors.subscribeToUpdates}
         />
 
         <FormCheckbox
           label="Receive general platform updates and announcements"
-          checked={formData.optInCommunications}
-          onCheckedChange={(checked) => updateField('optInCommunications', checked)}
-          error={draftErrors.optInCommunications}
+          checked={formState.data.optInCommunications}
+          onCheckedChange={(checked) => formState.setField('optInCommunications', checked)}
+          error={formState.errors.optInCommunications}
         />
 
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
@@ -330,9 +275,9 @@ export default function RegisterPage() {
 
         <FormCheckbox
           label="I agree to the Terms of Service and Privacy Policy"
-          checked={formData.agreeToTerms}
-          onCheckedChange={(checked) => updateField('agreeToTerms', checked)}
-          error={draftErrors.agreeToTerms}
+          checked={formState.data.agreeToTerms}
+          onCheckedChange={(checked) => formState.setField('agreeToTerms', checked)}
+          error={formState.errors.agreeToTerms}
           required
         />
       </div>
@@ -367,13 +312,13 @@ export default function RegisterPage() {
           closeOnOverlayClick={false}
           usePortal={false}
           isMultiStep={true}
-          currentStep={currentStep}
-          totalSteps={steps.length}
-          onSubmit={isLastStep ? () => submit(handleSubmit) : handleStepValidation}
-          onCancel={goToPreviousStep}
-          isSubmitting={isSubmitting}
-          isValid={isLastStep ? !!isFormValid() : !!isCurrentStepValid()}
-          isDirty={Object.values(formData).some(value => value !== '' && value !== false)}
+          currentStep={formState.currentStep}
+          totalSteps={formState.totalSteps}
+          onSubmit={isLastStep ? formState.submit : formState.nextStep}
+          onCancel={formState.prevStep}
+          isSubmitting={formState.isSubmitting}
+          isValid={formState.isCurrentStepValid}
+          isDirty={formState.isDirty}
           submitLabel={isLastStep ? "Create Account" : "Continue"}
           cancelLabel="Back"
           showCancel={!isFirstStep}
@@ -381,7 +326,7 @@ export default function RegisterPage() {
         >
           <>
             <FormStatus 
-              error={draftErrors.email || draftErrors.password || draftErrors.username || draftErrors.general}
+              error={formState.errors.email || formState.errors.password || formState.errors.username || (formState.errors as any).general}
             />
             {renderCurrentStep()}
           </>

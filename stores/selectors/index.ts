@@ -1,61 +1,61 @@
-// UI Store Selectors
+// Re-export individual hooks that actually exist
 export {
-  useModalSelectors,
-  useTabSelectors,
-  useFilterSelectors,
-  useInteractionSelectors,
+  useModal,
+  useIsModalOpen,
+  useModalData,
+  useOpenModals,
+  useHasOpenModals,
+  useConfirmationModal,
+  useTab,
+  useActiveTab,
+  useAvailableTabs,
+  useIsTabActive,
+  useFilters,
+  useFilterValue,
+  useTournamentListFilters,
+  useHasActiveFilters,
+  useActiveFilterCount,
+  useInteraction,
+  useAllInteractions,
+  useIsInteractionActive,
+  useWithdrawalState,
   useUIActions,
-  useUIStoreSelectors,
-  useOptimizedUISelectors,
+  useModalState,
 } from '../ui-store-selectors'
 
-// Tournament Store Selectors
+// Tournament Store Individual Selectors
 export {
-  useTournamentDataSelectors,
-  useTournamentListSelectors,
-  useRegistrationStatusSelectors,
-  useTournamentFilterSelectors,
+  useCurrentTournament,
+  useCurrentTournamentId,
+  useTournamentById,
+  useTournaments,
+  useTournamentTotalCount,
+  useRegistrationStatus,
+  useTournamentFilters,
+  useHasActiveTournamentFilters,
   useTournamentActions,
-  useTournamentStoreSelectors,
-  useOptimizedTournamentSelectors,
+  useTournamentCardData,
 } from '../tournament-store-selectors'
 
-// User Preferences Store Selectors
+// Form Draft Store Individual Selectors
 export {
-  usePreferenceSelectors,
-  useCategorySelectors,
-  useSpecificPreferenceSelectors,
-  useUserPreferencesActions,
-  useUserPreferencesStoreSelectors,
-  useOptimizedUserPreferencesSelectors,
-} from '../user-preferences-store-selectors'
-
-// Form Draft Store Selectors
-export {
-  useDraftSelectors,
-  useDraftListSelectors,
-  useDraftManagementSelectors,
+  useDraft,
   useFormDraftActions,
-  useFormDraftStoreSelectors,
-  useOptimizedFormDraftSelectors,
+  useDraftData,
+  useDraftErrors,
+  useIsDraftDirty,
 } from '../form-draft-store-selectors'
 
-// Loading Store Selectors
+// Loading Store Individual Selectors
 export {
-  useLoadingSelectors,
-  useErrorSelectors,
-  useProgressSelectors,
+  useLoading,
+  useAllLoading,
+  useIsAnyLoading,
+  useError,
+  useAllErrors,
   useLoadingActions,
-  useLoadingStoreSelectors,
-  useOptimizedLoadingSelectors,
+  useLoadingState,
 } from '../loading-store-selectors'
-
-// Auth Store Selectors
-export {
-  useAuthRoleSelectors,
-  useAuthPermissionSelectors,
-  useAuthUISelectors,
-} from '../auth-store-selectors'
 
 // Re-export the original store hooks for convenience
 export { useUIStore } from '../ui-store'
@@ -65,10 +65,4 @@ export { useFormDraftStore } from '../form-draft-store'
 export { useLoadingStore } from '../loading-store'
 export { useAuthStore } from '../auth-store'
 
-// Re-export the original store hooks that were already optimized
-export { useModal, useTab, useFilters, useInteractions, useConfirmationModal } from '../ui-store'
-export { useCurrentTournament, useTournamentList, useRegistrationStatus } from '../tournament-store'
-export { useUserPreferences, useUserPreference, useUserPreferencesByCategory } from '../user-preferences-store'
-export { useFormDraft, useFormDraftsByType, useActiveFormDraft } from '../form-draft-store'
-export { useLoadingBar, useLoading, useError } from '../loading-store'
-export { useRequiredRole, useRoleAccess, usePermissions } from '../auth-store'
+// Note: Store hooks are available by importing directly from their respective store files

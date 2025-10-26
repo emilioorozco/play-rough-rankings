@@ -1,384 +1,247 @@
 import { useMemo, useCallback } from 'react'
 import { useLoadingStore } from './loading-store'
 
-// Loading state selectors
-export const useLoadingSelectors = {
-  // Get specific loading state
-  getLoading: (key: string) => {
-    return useLoadingStore((state) => state.loading[key] || false)
-  },
-
-  // Get all loading states
-  getAllLoading: () => {
-    return useLoadingStore((state) => state.loading)
-  },
-
-  // Check if any loading is active
-  isAnyLoading: () => {
-    return useLoadingStore((state) => 
-      Object.values(state.loading).some(Boolean) || state.isGlobalLoading
-    )
-  },
-
-  // Get loading count
-  getLoadingCount: () => {
-    return useLoadingStore((state) => 
-      Object.values(state.loading).filter(Boolean).length + (state.isGlobalLoading ? 1 : 0)
-    )
-  },
-
-  // Get loading keys - memoized to prevent infinite loops
-  getLoadingKeys: () => {
-    return useLoadingStore(
-      useCallback((state) => 
-        Object.entries(state.loading)
-          .filter(([_, isLoading]) => isLoading)
-          .map(([key, _]) => key)
-      , [])
-    )
-  },
-
-  // Check if global loading is active
-  isGlobalLoading: () => {
-    return useLoadingStore((state) => state.isGlobalLoading)
-  },
-
-  // Get loading bar state - memoized to prevent infinite loops
-  getLoadingBarState: () => {
-    return useLoadingStore(
-      useCallback((state) => ({
-        isActive: state.loadingBar.isVisible,
-        progress: state.loadingBar.progress,
-        message: state.loadingBar.message,
-      }), [])
-    )
-  },
+// Loading state hooks
+export const useLoading = (key: string) => {
+  return useLoadingStore((state) => state.loading[key] || false)
 }
 
-// Error state selectors
-export const useErrorSelectors = {
-  // Get specific error
-  getError: (key: string) => {
-    return useLoadingStore((state) => state.errors[key] || null)
-  },
+export const useAllLoading = () => {
+  return useLoadingStore((state) => state.loading)
+}
 
-  // Get all errors
-  getAllErrors: () => {
-    return useLoadingStore((state) => state.errors)
-  },
+export const useIsAnyLoading = () => {
+  return useLoadingStore((state) => 
+    Object.values(state.loading).some(Boolean) || state.isGlobalLoading
+  )
+}
 
-  // Check if any errors exist
-  hasAnyErrors: () => {
-    return useLoadingStore((state) => 
-      Object.keys(state.errors).length > 0 || !!state.globalError
-    )
-  },
+export const useLoadingCount = () => {
+  return useLoadingStore((state) => 
+    Object.values(state.loading).filter(Boolean).length + (state.isGlobalLoading ? 1 : 0)
+  )
+}
 
-  // Get error count
-  getErrorCount: () => {
-    return useLoadingStore((state) => 
-      Object.keys(state.errors).length + (state.globalError ? 1 : 0)
-    )
-  },
+export const useLoadingKeys = () => {
+  return useLoadingStore(
+    useCallback((state) => 
+      Object.entries(state.loading)
+        .filter(([, isLoading]) => isLoading)
+        .map(([key]) => key)
+    , [])
+  )
+}
 
-  // Get error keys - memoized to prevent infinite loops
-  getErrorKeys: () => {
-    return useLoadingStore(
-      useCallback((state) => 
-        Object.keys(state.errors).filter(key => state.errors[key])
-      , [])
-    )
-  },
+export const useIsGlobalLoading = () => {
+  return useLoadingStore((state) => state.isGlobalLoading)
+}
 
-  // Get global error
-  getGlobalError: () => {
-    return useLoadingStore((state) => state.globalError)
-  },
+export const useLoadingBarState = () => {
+  return useLoadingStore(
+    useCallback((state) => ({
+      isActive: state.loadingBar.isVisible,
+      progress: state.loadingBar.progress,
+      message: state.loadingBar.message,
+    }), [])
+  )
+}
 
-  // Check if specific error exists
-  hasError: (key: string) => {
-    return useLoadingStore((state) => !!state.errors[key])
-  },
+// Error state hooks
+export const useError = (key: string) => {
+  return useLoadingStore((state) => state.errors[key] || null)
+}
 
-  // Get error summary - memoized to prevent infinite loops
-  getErrorSummary: () => {
-    return useLoadingStore(
-      useCallback((state) => ({
-        totalErrors: Object.keys(state.errors).length + (state.globalError ? 1 : 0),
+export const useAllErrors = () => {
+  return useLoadingStore((state) => state.errors)
+}
+
+export const useHasAnyErrors = () => {
+  return useLoadingStore((state) => 
+    Object.keys(state.errors).length > 0 || !!state.globalError
+  )
+}
+
+export const useErrorCount = () => {
+  return useLoadingStore((state) => 
+    Object.keys(state.errors).length + (state.globalError ? 1 : 0)
+  )
+}
+
+export const useErrorKeys = () => {
+  return useLoadingStore(
+    useCallback((state) => 
+      Object.keys(state.errors).filter(key => state.errors[key])
+    , [])
+  )
+}
+
+export const useGlobalError = () => {
+  return useLoadingStore((state) => state.globalError)
+}
+
+export const useHasError = (key: string) => {
+  return useLoadingStore((state) => !!state.errors[key])
+}
+
+export const useErrorSummary = () => {
+  return useLoadingStore(
+    useCallback((state) => ({
+      totalErrors: Object.keys(state.errors).length + (state.globalError ? 1 : 0),
+      hasGlobalError: !!state.globalError,
+      errorKeys: Object.keys(state.errors).filter(key => state.errors[key]),
+      globalError: state.globalError,
+    }), [])
+  )
+}
+
+// Progress hooks
+export const useLoadingProgress = () => {
+  return useLoadingStore((state) => state.loadingBar.progress)
+}
+
+export const useLoadingMessage = () => {
+  return useLoadingStore((state) => state.loadingBar.message)
+}
+
+export const useIsLoadingInProgress = () => {
+  return useLoadingStore((state) => state.loadingBar.isVisible)
+}
+
+export const useLoadingProgressPercentage = () => {
+  return useLoadingStore(
+    useCallback((state) => {
+      return Math.max(0, Math.min(100, Math.round(state.loadingBar.progress)))
+    }, [])
+  )
+}
+
+// Action hooks
+export const useLoadingActions = () => {
+  return useLoadingStore((state) => ({
+    setLoading: state.setLoading,
+    setError: state.setError,
+    clearError: state.clearError,
+    clearAllErrors: state.clearAllErrors,
+    setGlobalLoading: state.setGlobalLoading,
+    setGlobalError: state.setGlobalError,
+    clearGlobalError: state.clearGlobalError,
+    showLoadingBar: state.showLoadingBar,
+    hideLoadingBar: state.hideLoadingBar,
+    setLoadingBarProgress: state.setLoadingBarProgress,
+  }))
+}
+
+// Combined hooks for common use cases
+export const useLoadingState = (key: string) => {
+  const isLoading = useLoading(key)
+  const error = useError(key)
+  const actions = useLoadingActions()
+
+  return useMemo(() => ({
+    isLoading,
+    error,
+    setLoading: (loading: boolean) => actions.setLoading(key, loading),
+    setError: (error: string | null) => actions.setError(key, error),
+    clearError: () => actions.clearError(key),
+  }), [isLoading, error, actions, key])
+}
+
+export const useGlobalLoadingState = () => {
+  const isGlobalLoading = useIsGlobalLoading()
+  const globalError = useGlobalError()
+  const loadingBar = useLoadingBarState()
+  const actions = useLoadingActions()
+
+  return useMemo(() => ({
+    isGlobalLoading,
+    globalError,
+    loadingBar,
+    setGlobalLoading: actions.setGlobalLoading,
+    setGlobalError: actions.setGlobalError,
+    clearGlobalError: actions.clearGlobalError,
+    showLoadingBar: actions.showLoadingBar,
+    hideLoadingBar: actions.hideLoadingBar,
+    setLoadingProgress: actions.setLoadingBarProgress,
+  }), [isGlobalLoading, globalError, loadingBar, actions])
+}
+
+export const useErrorState = () => {
+  const errors = useAllErrors()
+  const errorCount = useErrorCount()
+  const hasAnyErrors = useHasAnyErrors()
+  const globalError = useGlobalError()
+  const actions = useLoadingActions()
+
+  return useMemo(() => ({
+    errors,
+    errorCount,
+    hasAnyErrors,
+    globalError,
+    clearError: actions.clearError,
+    clearAllErrors: actions.clearAllErrors,
+    clearGlobalError: actions.clearGlobalError,
+  }), [errors, errorCount, hasAnyErrors, globalError, actions])
+}
+
+// Performance optimized hooks for rendering
+export const useLoadingIndicatorData = () => {
+  return useLoadingStore(
+    useCallback((state) => ({
+      isVisible: state.loadingBar.isVisible,
+      progress: state.loadingBar.progress,
+      message: state.loadingBar.message,
+      hasAnyLoading: Object.values(state.loading).some(Boolean) || state.isGlobalLoading,
+    }), [])
+  )
+}
+
+export const useLoadingBarRenderData = () => {
+  return useLoadingStore(
+    useCallback((state) => ({
+      isVisible: state.loadingBar.isVisible,
+      progress: Math.max(0, Math.min(100, Math.round(state.loadingBar.progress))),
+      message: state.loadingBar.message,
+    }), [])
+  )
+}
+
+export const useErrorDisplayData = () => {
+  return useLoadingStore(
+    useCallback((state) => ({
+      globalError: state.globalError,
+      hasGlobalError: !!state.globalError,
+      errorCount: Object.keys(state.errors).length + (state.globalError ? 1 : 0),
+    }), [])
+  )
+}
+
+export const useLoadingStatusData = () => {
+  return useLoadingStore(
+    useCallback((state) => {
+      const loadingKeys = Object.entries(state.loading)
+        .filter(([, isLoading]) => isLoading)
+        .map(([key]) => key)
+      const errorKeys = Object.keys(state.errors).filter(key => state.errors[key])
+      
+      return {
+        activeLoadingCount: loadingKeys.length + (state.isGlobalLoading ? 1 : 0),
+        activeErrorCount: errorKeys.length + (state.globalError ? 1 : 0),
+        isGlobalLoading: state.isGlobalLoading,
         hasGlobalError: !!state.globalError,
-        errorKeys: Object.keys(state.errors).filter(key => state.errors[key]),
-        globalError: state.globalError,
-      }), [])
-    )
-  },
+        loadingKeys,
+        errorKeys,
+      }
+    }, [])
+  )
 }
 
-// Progress selectors
-export const useProgressSelectors = {
-  // Get loading progress
-  getLoadingProgress: () => {
-    return useLoadingStore((state) => state.loadingBar.progress)
-  },
-
-  // Get loading message
-  getLoadingMessage: () => {
-    return useLoadingStore((state) => state.loadingBar.message)
-  },
-
-  // Get loading duration
-  getLoadingDuration: () => {
-    // Not tracked in store; provide safe default
-    return 0
-  },
-
-  // Get loading start time
-  getLoadingStartTime: () => {
-    // Not tracked in store; provide safe default
-    return null as number | null
-  },
-
-  // Check if loading is in progress
-  isLoadingInProgress: () => {
-    return useLoadingStore((state) => state.loadingBar.isVisible)
-  },
-
-  // Get loading progress percentage - memoized to prevent infinite loops
-  getLoadingProgressPercentage: () => {
-    return useLoadingStore(
-      useCallback((state) => {
-        // Use loading bar progress directly as percentage
-        return Math.max(0, Math.min(100, Math.round(state.loadingBar.progress)))
-      }, [])
-    )
-  },
-}
-
-// Action selectors
-export const useLoadingActions = {
-  // Set loading state
-  setLoading: () => useLoadingStore((state) => state.setLoading),
-
-  // Set error state
-  setError: () => useLoadingStore((state) => state.setError),
-
-  // Clear error
-  clearError: () => useLoadingStore((state) => state.clearError),
-
-  // Clear all errors
-  clearAllErrors: () => useLoadingStore((state) => state.clearAllErrors),
-
-  // Set global loading
-  setGlobalLoading: () => useLoadingStore((state) => state.setGlobalLoading),
-
-  // Set global error
-  setGlobalError: () => useLoadingStore((state) => state.setGlobalError),
-
-  // Clear global error
-  clearGlobalError: () => useLoadingStore((state) => state.clearGlobalError),
-
-  // Show loading bar
-  showLoadingBar: () => useLoadingStore((state) => state.showLoadingBar),
-
-  // Hide loading bar
-  hideLoadingBar: () => useLoadingStore((state) => state.hideLoadingBar),
-
-  // Set loading progress
-  setLoadingProgress: () => useLoadingStore((state) => state.setLoadingBarProgress),
-
-  // Set loading message
-  // Wrapper that updates just the message using current progress
-  setLoadingMessage: () => useLoadingStore((state) => (message: string) => state.setLoadingBarProgress(state.loadingBar.progress, message)),
-}
-
-// Combined selectors for common use cases
-export const useLoadingStoreSelectors = {
-  // Get complete loading state for a specific key
-  getLoadingState: (key: string) => {
-    const isLoading = useLoadingSelectors.getLoading(key)
-    const error = useErrorSelectors.getError(key)
-    const setLoading = useLoadingActions.setLoading()
-    const setError = useLoadingActions.setError()
-    const clearError = useLoadingActions.clearError()
-
-    return useMemo(() => ({
-      isLoading,
-      error,
-      setLoading: (loading: boolean) => setLoading(key, loading),
-      setError: (error: string | null) => setError(key, error),
-      clearError: () => clearError(key),
-    }), [isLoading, error, setLoading, setError, clearError, key])
-  },
-
-  // Get complete global loading state
-  getGlobalLoadingState: () => {
-    const isGlobalLoading = useLoadingSelectors.isGlobalLoading()
-    const globalError = useErrorSelectors.getGlobalError()
-    const progress = useProgressSelectors.getLoadingProgress()
-    const message = useProgressSelectors.getLoadingMessage()
-    const duration = useProgressSelectors.getLoadingDuration()
-    const startTime = useProgressSelectors.getLoadingStartTime()
-    const progressPercentage = useProgressSelectors.getLoadingProgressPercentage()
-    
-    const setGlobalLoading = useLoadingActions.setGlobalLoading()
-    const setGlobalError = useLoadingActions.setGlobalError()
-    const clearGlobalError = useLoadingActions.clearGlobalError()
-    const showLoadingBar = useLoadingActions.showLoadingBar()
-    const hideLoadingBar = useLoadingActions.hideLoadingBar()
-    const setLoadingProgress = useLoadingActions.setLoadingProgress()
-    const setLoadingMessage = (msg: string) => setLoadingProgress(progress, msg)
-
-    return useMemo(() => ({
-      isGlobalLoading,
-      globalError,
-      progress,
-      message,
-      duration,
-      startTime,
-      progressPercentage,
-      setGlobalLoading,
-      setGlobalError,
-      clearGlobalError,
-      showLoadingBar,
-      hideLoadingBar,
-      setLoadingProgress,
-      setLoadingMessage,
-    }), [
-      isGlobalLoading, globalError, progress, message, duration, startTime, progressPercentage,
-      setGlobalLoading, setGlobalError, clearGlobalError, showLoadingBar, hideLoadingBar,
-      setLoadingProgress
-    ])
-  },
-
-  // Get complete error state
-  getErrorState: () => {
-    const errors = useErrorSelectors.getAllErrors()
-    const globalError = useErrorSelectors.getGlobalError()
-    const hasAnyErrors = useErrorSelectors.hasAnyErrors()
-    const errorCount = useErrorSelectors.getErrorCount()
-    const errorKeys = useErrorSelectors.getErrorKeys()
-    
-    const setError = useLoadingActions.setError()
-    const clearError = useLoadingActions.clearError()
-    const clearAllErrors = useLoadingActions.clearAllErrors()
-    const setGlobalError = useLoadingActions.setGlobalError()
-    const clearGlobalError = useLoadingActions.clearGlobalError()
-
-    return useMemo(() => ({
-      errors,
-      globalError,
-      hasAnyErrors,
-      errorCount,
-      errorKeys,
-      setError: (key: string, error: string | null) => setError(key, error),
-      clearError: (key: string) => clearError(key),
-      clearAllErrors,
-      setGlobalError,
-      clearGlobalError,
-    }), [
-      errors, globalError, hasAnyErrors, errorCount, errorKeys,
-      setError, clearError, clearAllErrors, setGlobalError, clearGlobalError
-    ])
-  },
-
-  // Get complete loading bar state
-  getLoadingBarState: () => {
-    const isActive = useLoadingStore((state) => state.loadingBar.isVisible)
-    const progress = useProgressSelectors.getLoadingProgress()
-    const message = useProgressSelectors.getLoadingMessage()
-    const duration = useProgressSelectors.getLoadingDuration()
-    const startTime = useProgressSelectors.getLoadingStartTime()
-    const progressPercentage = useProgressSelectors.getLoadingProgressPercentage()
-    
-    const showLoadingBar = useLoadingActions.showLoadingBar()
-    const hideLoadingBar = useLoadingActions.hideLoadingBar()
-    const setLoadingProgress = useLoadingActions.setLoadingProgress()
-    const setLoadingMessage = (msg: string) => setLoadingProgress(progress, msg)
-
-    return useMemo(() => ({
-      isActive,
-      progress,
-      message,
-      duration,
-      startTime,
-      progressPercentage,
-      showLoadingBar,
-      hideLoadingBar,
-      setLoadingProgress,
-      setLoadingMessage,
-    }), [
-      isActive, progress, message, duration, startTime, progressPercentage,
-      showLoadingBar, hideLoadingBar, setLoadingProgress
-    ])
-  },
-}
-
-// Performance-optimized selectors for specific use cases
-export const useOptimizedLoadingSelectors = {
-  // Get only the data needed for loading indicator rendering - memoized to prevent infinite loops
-  getLoadingIndicatorData: (key: string) => {
-    return useLoadingStore(
-      useCallback((state) => ({
-        isLoading: state.loading[key] || false,
-        error: state.errors[key] || null,
-      }), [key])
-    )
-  },
-
-  // Get only the data needed for global loading bar rendering - memoized to prevent infinite loops
-  getLoadingBarRenderData: () => {
-    return useLoadingStore(
-      useCallback((state) => ({
-        isActive: state.loadingBar.isVisible,
-        progress: state.loadingBar.progress,
-        message: state.loadingBar.message,
-        progressPercentage: Math.max(0, Math.min(100, Math.round(state.loadingBar.progress))),
-      }), [])
-    )
-  },
-
-  // Get only the data needed for error display rendering - memoized to prevent infinite loops
-  getErrorDisplayData: (key: string) => {
-    return useLoadingStore(
-      useCallback((state) => ({
-        error: state.errors[key] || null,
-        globalError: state.globalError,
-        hasError: !!state.errors[key] || !!state.globalError,
-      }), [key])
-    )
-  },
-
-  // Get only the data needed for loading status rendering - memoized to prevent infinite loops
-  getLoadingStatusData: () => {
-    return useLoadingStore(
-      useCallback((state) => {
-        const loadingKeys = Object.entries(state.loading)
-          .filter(([_, isLoading]) => isLoading)
-          .map(([key, _]) => key)
-        
-        return {
-          isAnyLoading: loadingKeys.length > 0 || state.isGlobalLoading,
-          loadingCount: loadingKeys.length + (state.isGlobalLoading ? 1 : 0),
-          loadingKeys,
-          isGlobalLoading: state.isGlobalLoading,
-        }
-      }, [])
-    )
-  },
-
-  // Get only the data needed for error summary rendering - memoized to prevent infinite loops
-  getErrorSummaryData: () => {
-    return useLoadingStore(
-      useCallback((state) => {
-        const errorKeys = Object.keys(state.errors).filter(key => state.errors[key])
-        
-        return {
-          hasAnyErrors: errorKeys.length > 0 || !!state.globalError,
-          errorCount: errorKeys.length + (state.globalError ? 1 : 0),
-          errorKeys,
-          hasGlobalError: !!state.globalError,
-          globalError: state.globalError,
-        }
-      }, [])
-    )
-  },
+export const useErrorSummaryData = () => {
+  return useLoadingStore(
+    useCallback((state) => ({
+      totalErrors: Object.keys(state.errors).length + (state.globalError ? 1 : 0),
+      specificErrors: Object.keys(state.errors).length,
+      hasGlobalError: !!state.globalError,
+      hasAnyErrors: Object.keys(state.errors).length > 0 || !!state.globalError,
+    }), [])
+  )
 }
