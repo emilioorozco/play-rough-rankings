@@ -167,7 +167,25 @@ export const useTournamentFilterSummary = () => {
 
 // Action hooks - stable reference to prevent infinite loops
 export const useTournamentActions = () => {
-  const actionsRef = useRef<ReturnType<typeof useTournamentStore.getState> | null>(null)
+  const actionsRef = useRef<{
+    cacheTournament: (tournament: any) => void
+    setCurrentTournament: (tournament: any) => void
+    clearTournamentCache: () => void
+    setTournamentList: (tournaments: any[], totalCount: number) => void
+    setTournamentListPage: (page: number) => void
+    setTournamentListLoading: (isLoading: boolean) => void
+    setTournamentListError: (error: string | null) => void
+    setRegistrationStatus: (tournamentId: string, status: any) => void
+    getRegistrationStatus: (tournamentId: string) => any | null
+    updateRegistrationStatus: (tournamentId: string, updates: Partial<any>) => void
+    clearRegistrationStatus: (tournamentId: string) => void
+    clearAllRegistrationStatus: () => void
+    setFilters: (filters: any) => void
+    resetFilters: () => void
+    invalidateTournament: (tournamentId: string) => void
+    invalidateTournamentList: () => void
+    resetTournamentStore: () => void
+  } | null>(null)
   
   if (!actionsRef.current) {
     const state = useTournamentStore.getState()
@@ -197,7 +215,8 @@ export const useTournamentActions = () => {
     }
   }
   
-  return actionsRef.current
+  // Non-null assertion since we initialize it above
+  return actionsRef.current!
 }
 
 // Combined hooks for common use cases
