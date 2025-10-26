@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useSession } from './session-provider'
-import { useFormDraft } from '@/hooks/useFormDraft'
+import { useZustandForm } from '@/hooks/use-form-zustand'
 import { profileUpdateSchema, type ProfileUpdateFormData } from '@/lib/validation/schemas'
 import { 
   EnhancedForm, 
@@ -13,8 +13,8 @@ import {
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
 import { trpc } from '@/lib/trpc/client'
+import { useLoading, useError } from '@/stores/loading-store'
 
 interface ProfileFormProps {
   isOpen: boolean
@@ -27,24 +27,33 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
 
   const formId = `profile-form-${user?.id || 'anonymous'}`
 
+  // Loading and error state management
+  const { setLoading } = useLoading('update-profile')
+  const { setError, clearError } = useError('update-profile')
+  
   // Profile update mutation with enhanced error handling
-  const updateProfile = useTRPCMutationWithLoading(
-    'update-profile',
-    () => trpc.user.updateProfile.useMutation(),
-    {
-      onSuccess: () => {
-        updateSession()
-        onSave?.()
-        onClose()
-      },
-      onError: (error) => {
-        console.error(`Failed to update profile: ${error instanceof Error ? error.message : String(error)}`)
-      },
-    }
-  )
+  const updateProfile = trpc.user.updateProfile.useMutation({
+    onMutate: () => {
+      setLoading(true)
+      clearError()
+    },
+    onSuccess: () => {
+      updateSession()
+      onSave?.()
+      onClose()
+      setLoading(false)
+    },
+    onError: (error) => {
+      console.error(`Failed to update profile: ${error instanceof Error ? error.message : String(error)}`)
+      setError(error.message)
+      setLoading(false)
+    },
+  })
 
-  // Enhanced form state using Zustand-based draft system
-  const formState = useFormDraft<ProfileUpdateFormData>({
+  // Enhanced form state using Zustand-based form system
+  const formState = useZustandForm<ProfileUpdateFormData>({
+    formId,
+    formType: 'profile-update',
     initialData: {
       name: user?.name || '',
       email: user?.email || '',
@@ -65,18 +74,9 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
       console.error("Profile update error:", error)
     },
     showLoadingBar: true,
-    // Enhanced Zustand features
-    formId,
     enableAutoSave: true,
     autoSaveDelay: 2000,
-    enableDraftPersistence: true,
-    enableUserPreferences: true,
-    onAutoSave: (data) => {
-      console.log('Auto-saved profile draft:', data)
-    },
-    onDraftRestore: (data) => {
-      console.log('Restored profile draft:', data)
-    },
+    userId: user?.id,
   })
 
   if (!user) {
@@ -92,12 +92,12 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
       isOpen={isOpen}
       onClose={onClose}
       size="lg"
-      closeOnOverlayClick={!formState.isSubmitting && !updateProfile.isLoading}
+      closeOnOverlayClick={!formState.isSubmitting && !updateProfile.isPending}
     >
       <EnhancedForm
         title="Profile Settings"
         description="Update your profile information and preferences"
-        onSubmit={formState.handleSubmit}
+          onSubmit={formState.submit}
         showAutoSaveStatus={true}
         isAutoSaving={formState.isAutoSaving}
         lastSaved={formState.lastSaved}

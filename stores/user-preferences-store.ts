@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { useMemo } from 'react'
-import type { UserPreferencesFormData } from '@/lib/validation/schemas'
 import { storageConfigs } from './persistence-config'
 
 // Base user preferences interface - this can be extended as features evolve

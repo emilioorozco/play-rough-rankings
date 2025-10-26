@@ -145,7 +145,7 @@ const initialInteractionState = {
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
   // Initial state
   modals: {
     tournamentRegistration: { ...initialModalState },
@@ -427,7 +427,7 @@ export const useModal = (modalName: keyof UIState['modals']) => {
     open: (data?: Record<string, any>) => openModal(modalName, data),
     close: () => closeModal(modalName),
     toggle: () => toggleModal(modalName),
-  }), [modal.isOpen, modal.data, modalName]) // Remove functions from dependencies
+  }), [modal.isOpen, modal.data, modalName, openModal, closeModal, toggleModal])
 }
 
 export const useConfirmationModal = () => {
@@ -455,7 +455,7 @@ export const useTab = (tabGroup: keyof UIState['tabs']) => {
     availableTabs: tab.availableTabs,
     setActiveTab: (tab: string) => setActiveTab(tabGroup, tab),
     setAvailableTabs: (tabs: string[]) => setAvailableTabs(tabGroup, tabs),
-  }), [tab.activeTab, tab.availableTabs, tabGroup])
+  }), [tab.activeTab, tab.availableTabs, tabGroup, setActiveTab, setAvailableTabs])
 }
 
 export const useFilters = (filterGroup: keyof UIState['filters']) => {

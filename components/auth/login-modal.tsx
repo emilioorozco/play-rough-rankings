@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useSession } from "./session-provider";
-import { useFormState } from "@/hooks/useFormState";
+import { useSimpleZustandForm } from "@/hooks/use-form-zustand";
 import { loginSchema, type LoginFormData } from "@/lib/validation/schemas";
 import { ModalForm, FormInput, FormCheckbox, FormActions, FormStatus } from "../ui/form-components";
 import { Modal } from "../ui/modal";
@@ -25,8 +25,8 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
   // Don't show sign up link if we're on the sign-up page
   const showSignUpLink = pathname !== '/sign-up';
 
-  // Initialize form state using the base form system
-  const formState = useFormState<LoginFormData>({
+  // Initialize form state using Zustand-based form system
+  const formState = useSimpleZustandForm<LoginFormData>({
     initialData: {
       email: '',
       password: '',
@@ -105,7 +105,7 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       <ModalForm
         title="Welcome Back"
         description="Sign in to your account to continue"
-        onSubmit={formState.handleSubmit}
+          onSubmit={formState.submit}
       >
         <FormStatus 
           success={undefined}

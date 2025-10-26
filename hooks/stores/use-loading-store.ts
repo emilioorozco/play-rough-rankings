@@ -1,10 +1,9 @@
 import { useCallback } from 'react'
-import { useLoadingStore, useLoading, useError, useProgress, useLoadingBar } from '@/stores/loading-store'
-import { useLoadingStoreSelectors } from '@/stores/loading-store-selectors'
+import { useLoadingStore } from '@/stores/loading-store'
 
 // Loading State Hooks
 export function useLoadingState(key?: string) {
-  const isLoading = key ? useLoadingStore((state) => state.isLoading(key)) : false
+  const loadingValue = useLoadingStore((state) => key ? state.isLoading(key) : false)
   const setLoading = useLoadingStore((state) => state.setLoading)
   const clearLoading = useLoadingStore((state) => state.clearLoading)
 
@@ -21,14 +20,14 @@ export function useLoadingState(key?: string) {
   }, [key, clearLoading])
 
   return {
-    isLoading,
+    isLoading: loadingValue,
     set,
     clear,
   }
 }
 
 export function useErrorState(key?: string) {
-  const error = key ? useLoadingStore((state) => state.getError(key)) : null
+  const errorValue = useLoadingStore((state) => key ? state.getError(key) : null)
   const setError = useLoadingStore((state) => state.setError)
   const clearError = useLoadingStore((state) => state.clearError)
 
@@ -45,7 +44,7 @@ export function useErrorState(key?: string) {
   }, [key, clearError])
 
   return {
-    error,
+    error: errorValue,
     set,
     clear,
   }
@@ -53,7 +52,7 @@ export function useErrorState(key?: string) {
 
 // Progress Hooks
 export function useProgressState(key?: string) {
-  const progress = key ? useLoadingStore((state) => state.getProgress(key)) : 0
+  const progressValue = useLoadingStore((state) => key ? state.getProgress(key) : 0)
   const setProgress = useLoadingStore((state) => state.setProgress)
   const clearProgress = useLoadingStore((state) => state.clearProgress)
 
@@ -70,7 +69,7 @@ export function useProgressState(key?: string) {
   }, [key, clearProgress])
 
   return {
-    progress,
+    progress: progressValue,
     set,
     clear,
   }
@@ -112,7 +111,6 @@ export function useAsyncOperation(key: string) {
   const progress = useLoadingStore((state) => state.getProgress(key))
   const setLoading = useLoadingStore((state) => state.setLoading)
   const setError = useLoadingStore((state) => state.setError)
-  const setProgress = useLoadingStore((state) => state.setProgress)
   const clearLoading = useLoadingStore((state) => state.clearLoading)
   const clearError = useLoadingStore((state) => state.clearError)
   const clearProgress = useLoadingStore((state) => state.clearProgress)

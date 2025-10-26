@@ -5,8 +5,8 @@ const nextConfig = {
   },
   typedRoutes: true,
   eslint: {
-    // ESLint enabled during builds to catch issues before deployment
-    ignoreDuringBuilds: false,
+    // Default directories to lint during production builds
+    dirs: ['pages', 'components', 'lib', 'src', 'app'],
   },
 }
 

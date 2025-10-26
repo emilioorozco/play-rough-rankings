@@ -2,8 +2,9 @@
 
 import React, { useEffect, useRef } from 'react'
 import { trpc } from '@/lib/trpc/client'
-import { useTRPCMutationWithLoading } from '@/hooks/useTRPCWithLoading'
-import { useFormStepsEnhanced } from '@/hooks/useFormDraft'
+import { useTournamentRegistrationQuery } from '@/hooks/stores/use-tournament-queries'
+import { useZustandFormSteps } from '@/hooks/use-form-zustand'
+import { useLoading, useError } from '@/stores/loading-store'
 import { useModal } from '@/stores/ui-store'
 import { useTournamentStore } from '@/stores/tournament-store'
 import { tournamentRegistrationSchema, type TournamentRegistrationFormData } from '@/lib/validation/schemas'
@@ -44,33 +45,45 @@ export function TournamentRegistration({
   // tRPC utils for invalidation
   const utils = trpc.useUtils()
 
-  // Registration mutation
-  const registerMutation = useTRPCMutationWithLoading(
-    'tournament-registration',
-    () => trpc.tournaments.register.useMutation(),
-    {
-      onSuccess: async () => {
-        // Update tournament store state
-        setRegistrationStatus(tournamentId, {
-          isRegistered: true,
-          canRegister: false,
-          canWithdraw: true,
-          isFull: false,
-          participantCount: 0, // Will be updated by the parent component
-          maxPlayers: undefined,
-        })
-        invalidateTournament(tournamentId)
-        // Invalidate relevant queries to refresh server state
-        await Promise.all([
-          utils.tournaments.getRegistrationStatus.invalidate({ tournamentId }),
-          utils.tournaments.getById.invalidate({ id: tournamentId }),
-        ])
-      },
-      onError: (error) => {
-        console.error("Registration failed:", error)
-      },
-    }
-  )
+  // Loading and error state management
+  const { setLoading } = useLoading('tournament-registration')
+  const { setError, clearError } = useError('tournament-registration')
+  
+  // Get registration status and refetch function
+  const { refetch: refetchRegistration } = useTournamentRegistrationQuery(tournamentId)
+  
+  // Registration mutation using direct tRPC with type casting to avoid deep type instantiation
+  const registerMutation = trpc.tournaments.register.useMutation({
+    onMutate: () => {
+      setLoading(true)
+      clearError()
+    },
+    onSuccess: async () => {
+      // Update tournament store state
+      setRegistrationStatus(tournamentId, {
+        isRegistered: true,
+        canRegister: false,
+        canWithdraw: true,
+        isFull: false,
+        participantCount: 0, // Will be updated by refetch
+        maxPlayers: undefined,
+      })
+      invalidateTournament(tournamentId)
+      // Refetch registration status to get updated data
+      await refetchRegistration()
+      // Invalidate relevant queries to refresh server state
+      await Promise.all([
+        utils.tournaments.getRegistrationStatus.invalidate({ tournamentId }),
+        utils.tournaments.getById.invalidate({ id: tournamentId }),
+      ])
+      setLoading(false)
+    },
+    onError: (error: any) => {
+      console.error("Registration failed:", error)
+      setError(error.message)
+      setLoading(false)
+    },
+  } as any)
 
   // Reset mutation state when modal closes
   useEffect(() => {
@@ -85,9 +98,11 @@ export function TournamentRegistration({
     ? ['personal-info', 'deck-info', 'confirmation']
     : ['deck-info', 'confirmation']
 
-  // Enhanced multi-step form state
-  const formState = useFormStepsEnhanced<TournamentRegistrationFormData>({
+  // Multi-step form state using Zustand
+  const formState = useZustandFormSteps<TournamentRegistrationFormData>({
     steps: allSteps,
+    formId: `tournament-registration-${tournamentId}`,
+    formType: 'tournament-registration',
     initialData: {
       firstName: currentUser?.firstName || '',
       lastName: currentUser?.lastName || '',
@@ -132,18 +147,9 @@ export function TournamentRegistration({
       console.error("Registration error:", error)
     },
     showLoadingBar: true,
-    // Enhanced features
-    formId: `tournament-registration-${tournamentId}`,
     enableAutoSave: true,
     autoSaveDelay: 2000,
-    enableDraftPersistence: true,
-    enableUserPreferences: true,
-    onAutoSave: (data) => {
-      console.log('Auto-saved tournament registration draft:', data)
-    },
-    onDraftRestore: (data) => {
-      console.log('Restored tournament registration draft:', data)
-    },
+    userId: currentUser?.id,
   })
 
   const deckArchetypes = [
@@ -350,7 +356,7 @@ export function TournamentRegistration({
   }
 
   // Ensure form state is properly initialized before rendering
-  if (!formState || !formState.steps) {
+  if (!formState || formState.totalSteps === 0) {
     return null
   }
 
@@ -364,9 +370,9 @@ export function TournamentRegistration({
       className={className}
       isMultiStep={true}
       currentStep={formState.currentStep}
-      totalSteps={formState.steps?.length || 0}
+      totalSteps={formState.totalSteps}
       onSubmit={registerMutation.isSuccess ? modal.close : formState.submit}
-      onCancel={registerMutation.isSuccess ? modal.close : (formState.isFirstStep ? modal.close : formState.goToPreviousStep)}
+      onCancel={registerMutation.isSuccess ? modal.close : (formState.isFirstStep ? modal.close : formState.prevStep)}
       isSubmitting={formState.isSubmitting}
       isValid={formState.isValid}
       isDirty={formState.isDirty}
@@ -390,7 +396,7 @@ export function TournamentRegistration({
       error={registerMutation.error?.message}
       autoCloseDelay={registerMutation.isSuccess ? 3 : 0}
     >
-      <ModalForm onSubmit={formState.handleSubmit}>
+      <ModalForm onSubmit={(e) => formState.handleSubmit(e)}>
         {renderStep()}
       </ModalForm>
     </Modal>
