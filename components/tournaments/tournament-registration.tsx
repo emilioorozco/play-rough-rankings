@@ -371,10 +371,10 @@ export function TournamentRegistration({
       isMultiStep={true}
       currentStep={formState.currentStep}
       totalSteps={formState.totalSteps}
-      onSubmit={registerMutation.isSuccess ? modal.close : formState.submit}
+      onSubmit={registerMutation.isSuccess ? modal.close : (formState.isLastStep ? formState.submit : formState.nextStep)}
       onCancel={registerMutation.isSuccess ? modal.close : (formState.isFirstStep ? modal.close : formState.prevStep)}
       isSubmitting={formState.isSubmitting}
-      isValid={formState.isValid}
+      isValid={formState.isCurrentStepValid}
       isDirty={formState.isDirty}
       submitLabel={
         registerMutation.isSuccess 
@@ -396,7 +396,7 @@ export function TournamentRegistration({
       error={registerMutation.error?.message}
       autoCloseDelay={registerMutation.isSuccess ? 3 : 0}
     >
-      <ModalForm onSubmit={(e) => formState.handleSubmit(e)}>
+      <ModalForm onSubmit={(e) => { e.preventDefault();}}>
         {renderStep()}
       </ModalForm>
     </Modal>

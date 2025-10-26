@@ -325,6 +325,14 @@ export const useFormDraftStore = create<FormDraftState>()(
         const draftId = `${formType}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         const now = new Date()
         
+        console.log('[createDraft] Creating new draft:', { 
+          draftId, 
+          formType, 
+          metadata, 
+          formId: metadata?.formId,
+          hasFormId: !!metadata?.formId 
+        })
+        
         const draft: ExtendedFormDraft = {
           id: draftId,
           formType,
@@ -345,6 +353,8 @@ export const useFormDraftStore = create<FormDraftState>()(
           submitAttempted: false,
         }
         
+        console.log('[createDraft] Draft created with metadata:', draft.metadata)
+        
         set((state: FormDraftState) => ({
           drafts: {
             ...state.drafts,
@@ -352,6 +362,8 @@ export const useFormDraftStore = create<FormDraftState>()(
           },
           activeDraftId: draftId,
         }))
+        
+        console.log('[createDraft] Draft stored in state with ID:', draftId)
         
         return draftId
       },
@@ -376,12 +388,17 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       updateDraftData: (draftId: string, data: Record<string, any>) => {
+        console.log('[updateDraftData] called:', { draftId, data })
         set((state: FormDraftState) => {
           const draft = state.drafts[draftId]
-          if (!draft) return state
+          if (!draft) {
+            console.log('[updateDraftData] draft not found!', draftId)
+            return state
+          }
           
           // Update the data
           const updatedData = { ...draft.data, ...data }
+          console.log('[updateDraftData] updatedData:', updatedData)
           
           // Validate the updated data
           const validation = get().validateDraftData(draft.formType, updatedData)
@@ -892,16 +909,29 @@ export const useFormDraftStore = create<FormDraftState>()(
       
       // Enhanced form management functions
       saveDraft: (formId: string, data: any) => {
-        const existingDraft = Object.values(get().drafts).find(
+        const allDrafts = Object.values(get().drafts)
+        console.log('[saveDraft] Looking for formId:', formId)
+        console.log('[saveDraft] all drafts:', allDrafts.map((d: any) => ({ 
+          id: d.id, 
+          formType: d.formType,
+          metadataFormId: d.metadata?.formId,
+          matches: d.metadata?.formId === formId
+        })))
+        
+        const existingDraft = allDrafts.find(
           (draft: any) => draft.metadata?.formId === formId
-        )
+        ) as ExtendedFormDraft | undefined
+        
+        console.log('[saveDraft] called:', { formId, dataKeys: Object.keys(data), existingDraft: existingDraft?.id, foundMatch: !!existingDraft })
         
         if (existingDraft) {
           // Update existing draft
-          get().updateDraftData((existingDraft as ExtendedFormDraft).id, data)
+          console.log('[saveDraft] updating existing draft:', existingDraft.id, 'with data:', data)
+          get().updateDraftData(existingDraft.id, data)
         } else {
           // Create new draft
-          get().createDraft('enhanced-form', data, {
+          console.log('[saveDraft] creating new draft')
+          const newDraftId = get().createDraft('enhanced-form', data, {
             formId,
             displayName: 'Enhanced Form',
             description: 'Auto-saved form data',
@@ -910,6 +940,7 @@ export const useFormDraftStore = create<FormDraftState>()(
             autoExpire: true,
             expireAfter: 24 * 60 * 60 * 1000, // 24 hours
           })
+          console.log('[saveDraft] created draft:', newDraftId)
         }
       },
       

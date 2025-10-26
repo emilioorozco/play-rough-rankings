@@ -5,7 +5,7 @@ import { useAppStore, useTheme, useActivity, useRealtime } from '@/stores/app-st
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { theme, mounted, setTheme, setMounted } = useTheme()
-  const { setActivity, markActive } = useActivity()
+  const { activity, setActivity, markActive } = useActivity()
   const { triggerLeaderboardUpdate } = useRealtime()
 
   // Theme initialization
@@ -65,7 +65,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Set up activity timeout
     const activityTimeout = setInterval(() => {
       const now = new Date()
-      const timeSinceLastActivity = now.getTime() - useAppStore.getState().activity.lastActivity.getTime()
+      const timeSinceLastActivity = now.getTime() - activity.lastActivity.getTime()
       
       // Mark as inactive after 5 minutes of no activity
       if (timeSinceLastActivity > 5 * 60 * 1000) {
@@ -80,7 +80,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       clearInterval(activityTimeout)
     }
-  }, [markActive, setActivity])
+  }, [activity.lastActivity, markActive, setActivity])
 
   // Update current page when pathname changes
   useEffect(() => {

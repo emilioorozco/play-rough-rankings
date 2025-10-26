@@ -480,6 +480,9 @@ export function MultiStepForm({
   children, 
   className 
 }: MultiStepFormProps) {
+  // Progress goes from 0% to ~90% across steps, leaving room for final submission
+  const progress = Math.min((currentStep / totalSteps) * 100 + (100 / totalSteps / 2), 90)
+  
   return (
     <Card className={className}>
       <CardHeader>
@@ -489,7 +492,7 @@ export function MultiStepForm({
           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
             <div 
               className="h-full bg-primary transition-[width] duration-500 ease-out"
-              style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
+              style={{ width: `${progress}%` }}
             />
           </div>
         </div>
