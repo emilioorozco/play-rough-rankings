@@ -6,14 +6,7 @@ export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, onChange, value, ...props }, ref) => {
-    console.log('[Input] render:', { value, hasOnChange: !!onChange })
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      console.log('[Input] onChange event:', {
-        eventTargetValue: e.target.value,
-        currentPropsValue: value,
-        inputElement: e.target,
-        actualInputValue: e.currentTarget.value
-      })
       onChange?.(e)
     }
     return (

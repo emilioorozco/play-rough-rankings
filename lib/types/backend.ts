@@ -143,6 +143,23 @@ export type FileFormat =
   | { type: 'TDF'; data: string[] }
 
 // ============================================================================
+// TOURNAMENT ENTRY METADATA TYPES
+// ============================================================================
+
+/**
+ * Tournament entry metadata interface for player-specific data
+ * Stores player-specific information for each tournament entry
+ */
+export interface TournamentEntryMetadata {
+  /** Player's specific deck list for this tournament entry */
+  deckList?: string
+  /** Whether the player wants to share their deck list publicly */
+  shareDeckList?: boolean
+  /** Any additional entry-specific metadata */
+  [key: string]: unknown
+}
+
+// ============================================================================
 // DECK STATISTICS TYPES
 // ============================================================================
 

@@ -51,8 +51,6 @@ export default function RegisterPage() {
       }),
     },
     onSubmit: async (data) => {
-      console.log("Registration data:", data);
-      
       const result = await signUp.email({
         email: data.email.trim().toLowerCase(),
         password: data.password,
@@ -65,7 +63,6 @@ export default function RegisterPage() {
       } as any);
 
       if (result.error) {
-        console.error("Registration error:", result.error);
         
         // Provide more specific error messages
         let errorMessage = result.error.message || "Registration failed";
@@ -81,16 +78,11 @@ export default function RegisterPage() {
         
         throw new Error(errorMessage);
       } else {
-        console.log("Registration successful");
         router.push("/");
       }
     },
-    onSuccess: () => {
-      console.log("Registration completed successfully!");
-    },
-    onError: (error) => {
-      console.error("Registration error:", error);
-    },
+    onSuccess: () => {},
+    onError: () => {},
     showLoadingBar: true,
     enableAutoSave: true,
     autoSaveDelay: 2000,

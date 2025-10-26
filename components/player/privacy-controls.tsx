@@ -42,9 +42,7 @@ export function PrivacyControls({ currentVisibility }: PrivacyControlsProps) {
       await updateProfileMutation.mutateAsync({
         profileVisibility: visibility,
       })
-    } catch {
-      // Error handled by mutation onError
-    }
+    } catch {}
   }
 
   const handleReset = () => {

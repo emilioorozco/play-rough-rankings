@@ -52,12 +52,9 @@ export function useZustandForm<T extends Record<string, any>>({
   const submitAttempted = useDraftSubmitAttemptedByFormId(formId)
   // const isValid = useIsDraftValid(formId) // Not used in current implementation
   
-  console.log('[useZustandForm] State:', { formId, draftId, hasDraft: !!draft, hasData: !!draftData })
-  
   // Initialize draft if it doesn't exist (use useEffect to avoid render-time side effects)
   React.useEffect(() => {
     if (!draft) {
-      console.log('[useZustandForm] Creating draft for formId:', formId)
       const newDraftId = actions.createDraft(formType, initialData, {
         formId, // CRITICAL: Pass formId in metadata so saveDraft can find it!
         formType,
@@ -66,7 +63,6 @@ export function useZustandForm<T extends Record<string, any>>({
         autoExpire: true,
         expireAfter: 24 * 60 * 60 * 1000, // 24 hours
       })
-      console.log('[useZustandForm] Created draft with ID:', newDraftId, 'for formId:', formId)
       // Use the newly created draftId for updateDraft
       actions.updateDraft(newDraftId, {
         userId,
@@ -101,8 +97,7 @@ export function useZustandForm<T extends Record<string, any>>({
   
   React.useEffect(() => {
     if (draft && draftId && validationResult.success !== draft.isValid) {
-      console.log('[useZustandForm] Updating validation state:', { draftId, isValid: validationResult.success })
-      actions.updateDraft(draftId, { 
+      actions.updateDraft(draftId, {
         isValid: validationResult.success,
         errors: validationResult.errors as Record<string, string>
       })
@@ -129,13 +124,9 @@ export function useZustandForm<T extends Record<string, any>>({
   
   // Update field value
   const setField = useCallback((field: keyof T, value: any) => {
-    console.log('[useZustandForm] setField called:', { field, value, formId, draftId })
     const currentData = actions.loadDraft(formId) || initialData
-    console.log('[useZustandForm] currentData:', currentData)
     const updatedData = { ...currentData, [field]: value }
-    console.log('[useZustandForm] updatedData:', updatedData)
     actions.saveDraft(formId, updatedData)
-    console.log('[useZustandForm] saveDraft complete')
     
     // Mark field as touched when user interacts with it (use draftId if available)
     if (draftId) {
@@ -323,7 +314,6 @@ export function useZustandFormSteps<T extends Record<string, any>>({
   // Navigate between steps
   const goToStep = useCallback((stepIndex: number) => {
     if (draftId && stepIndex >= 0 && stepIndex < totalSteps) {
-      console.log('[useZustandFormSteps] goToStep:', { draftId, stepIndex })
       actions.updateDraftStep(draftId, stepIndex)
     }
   }, [draftId, actions, totalSteps])

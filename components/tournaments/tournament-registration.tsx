@@ -79,7 +79,6 @@ export function TournamentRegistration({
       setLoading(false)
     },
     onError: (error: any) => {
-      console.error("Registration failed:", error)
       setError(error.message)
       setLoading(false)
     },
@@ -140,12 +139,8 @@ export function TournamentRegistration({
         ...data,
       })
     },
-    onSuccess: () => {
-      // Success is handled by the mutation's onSuccess callback
-    },
-    onError: (error) => {
-      console.error("Registration error:", error)
-    },
+    onSuccess: () => {},
+    onError: () => {},
     showLoadingBar: true,
     enableAutoSave: true,
     autoSaveDelay: 2000,

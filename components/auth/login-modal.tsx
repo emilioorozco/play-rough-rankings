@@ -34,14 +34,10 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
     },
     validationSchema: loginSchema,
     onSubmit: async (data) => {
-      console.log("Attempting login with email:", data.email);
-      
       const result = await signIn.email({
         email: data.email,
         password: data.password,
       });
-
-      console.log("Login result:", result);
 
       if (result.error) {
         console.error("Login error details:", result.error);
@@ -59,7 +55,6 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
         
         throw new Error(errorMessage);
       } else {
-        console.log("Login successful");
         // Call onSuccess callback if provided
         if (onSuccess) {
           onSuccess();
@@ -67,9 +62,7 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
         onClose(); // Close modal on successful login
       }
     },
-    onSuccess: () => {
-      console.log("Login successful");
-    },
+    onSuccess: () => {},
     onError: (error) => {
       console.error("Login error:", error);
       // Set a general error that can be displayed in the form
@@ -87,7 +80,6 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       });
       onClose(); // Close modal on successful social login
     } catch (error: unknown) {
-      console.error("Social login failed:", error);
       // Set form error for social login failures
       formState.setFieldError('email', (error as Error).message || "Social login failed");
     } finally {
