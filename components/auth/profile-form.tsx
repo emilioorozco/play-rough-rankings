@@ -67,12 +67,8 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
     onSubmit: async (data) => {
       await updateProfile.mutateAsync(data as any)
     },
-    onSuccess: () => {
-      // Success is handled by the mutation's onSuccess callback
-    },
-    onError: (error) => {
-      console.error("Profile update error:", error)
-    },
+    onSuccess: () => {},
+    onError: () => {},
     showLoadingBar: true,
     enableAutoSave: true,
     autoSaveDelay: 2000,

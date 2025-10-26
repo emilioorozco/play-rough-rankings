@@ -37,10 +37,8 @@ export function TournamentUploadInterface({ tournament }: TournamentUploadInterf
     initialData: { fileType: 'CSV' },
     onSubmit: async (data) => {
       // Form submission is handled by handleUpload
-      console.log('Upload form submitted with:', data)
     },
     onSuccess: () => {
-      console.log('Upload form submitted successfully')
     },
     onError: (error) => {
       console.error('Upload form error:', error)

@@ -66,12 +66,8 @@ export function UserPreferencesWithStore({ className }: UserPreferencesProps) {
     onSubmit: async (data) => {
       await updatePreferences.mutateAsync(data)
     },
-    onSuccess: () => {
-      // Success is handled by the mutation's onSuccess callback
-    },
-    onError: (error) => {
-      console.error("Preferences update error:", error)
-    },
+    onSuccess: () => {},
+    onError: () => {},
     showLoadingBar: true,
     enableAutoSave: true,
     autoSaveDelay: 2000,

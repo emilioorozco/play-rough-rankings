@@ -49,18 +49,26 @@ export const tournamentEntriesRouter = router({
         ],
       })
 
-      // Filter out private player information
-      const filteredEntries = entries.map(entry => ({
-        ...entry,
-        player: {
-          id: entry.player.id,
-          displayName: getPublicDisplayName(entry.player.user),
-          isPublic: entry.player.user?.userPreferences?.profileVisibility === 'PUBLIC',
-        },
-        deck: entry.deck && (entry.player.user?.userPreferences?.profileVisibility === 'PUBLIC') 
-          ? entry.deck 
-          : null,
-      }))
+      // Filter out private player information and handle deck list privacy
+      const filteredEntries = entries.map(entry => {
+        const isPublicProfile = entry.player.user?.userPreferences?.profileVisibility === 'PUBLIC'
+        const entryMetadata = entry.metadata as { deckList?: string; shareDeckList?: boolean } | null
+        const shareDeckList = entryMetadata?.shareDeckList ?? false
+        
+        return {
+          ...entry,
+          player: {
+            id: entry.player.id,
+            displayName: getPublicDisplayName(entry.player.user),
+            isPublic: isPublicProfile,
+          },
+          deck: entry.deck && isPublicProfile ? entry.deck : null,
+          // Only expose deck list if profile is public AND shareDeckList is true
+          metadata: isPublicProfile && shareDeckList && entryMetadata
+            ? { deckList: entryMetadata.deckList, shareDeckList: entryMetadata.shareDeckList }
+            : null,
+        }
+      })
 
       return {
         tournament,
@@ -144,13 +152,27 @@ export const tournamentEntriesRouter = router({
         take: input.limit,
       })
 
+      // Filter deck lists based on privacy settings
+      const filteredEntries = entries.map(entry => {
+        const entryMetadata = entry.metadata as { deckList?: string; shareDeckList?: boolean } | null
+        const shareDeckList = entryMetadata?.shareDeckList ?? false
+        
+        return {
+          ...entry,
+          // Only expose deck list if shareDeckList is true
+          metadata: shareDeckList && entryMetadata
+            ? { deckList: entryMetadata.deckList, shareDeckList: entryMetadata.shareDeckList }
+            : null,
+        }
+      })
+
       return {
         player: {
           id: player.id,
           displayName: getDisplayName(player.user),
         },
-        entries,
-        totalEntries: entries.length,
+        entries: filteredEntries,
+        totalEntries: filteredEntries.length,
       }
     }),
 
@@ -197,7 +219,6 @@ export const tournamentEntriesRouter = router({
               role: 'player',
             },
           })
-          console.log(`Created missing User record for player ${player.id}`)
         } catch (error) {
           console.error('Error creating User record for existing player:', error)
           throw new TRPCError({
@@ -445,7 +466,6 @@ export const tournamentEntriesRouter = router({
               })
             )
           )
-          console.log(`Created missing User records for ${playersWithoutUsers.length} players`)
         } catch (error) {
           console.error('Error creating User records for existing players:', error)
           throw new TRPCError({

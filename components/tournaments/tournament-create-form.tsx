@@ -51,7 +51,6 @@ export function TournamentCreateForm({
       setLoading(false)
     },
     onError: (error: any) => {
-      console.error("Tournament creation failed:", error);
       setError(error.message)
       setLoading(false)
     },
@@ -128,12 +127,8 @@ export function TournamentCreateForm({
       };
       await createTournament.mutateAsync(transformed as any);
     },
-    onSuccess: () => {
-      console.log("Tournament created successfully!");
-    },
-    onError: (error) => {
-      console.error("Tournament creation error:", error);
-    },
+    onSuccess: () => {},
+    onError: () => {},
     showLoadingBar: true,
     enableAutoSave: true,
     autoSaveDelay: 2000,

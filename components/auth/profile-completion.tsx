@@ -46,12 +46,8 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
     onSubmit: async (data) => {
       await updateProfile.mutateAsync(data)
     },
-    onSuccess: () => {
-      console.log('Profile completion successful')
-    },
-    onError: (error) => {
-      console.error('Profile completion error:', error)
-    },
+    onSuccess: () => {},
+    onError: () => {},
     showLoadingBar: true,
   })
 

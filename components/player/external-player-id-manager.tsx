@@ -55,18 +55,14 @@ export function ExternalPlayerIdManager({
         gameId,
         externalId: newExternalId.trim(),
       })
-    } catch {
-      // Error handled by mutation onError
-    }
+    } catch {}
   }
 
   const handleRemoveExternalId = async (gameId: string) => {
     if (window.confirm('Are you sure you want to remove this external player ID?')) {
       try {
         await removeExternalIdMutation.mutateAsync({ gameId })
-      } catch {
-        // Error handled by mutation onError
-      }
+      } catch {}
     }
   }
 
