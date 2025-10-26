@@ -117,7 +117,18 @@ export const useLoadingProgressPercentage = () => {
 
 // Action hooks - stable reference to prevent infinite loops
 export const useLoadingActions = () => {
-  const actionsRef = useRef<ReturnType<typeof useLoadingStore.getState> | null>(null)
+  const actionsRef = useRef<{
+    setLoading: (key: string, isLoading: boolean) => void
+    setError: (key: string, error: string | Error | null) => void
+    clearError: (key: string) => void
+    clearAllErrors: () => void
+    setGlobalLoading: (isLoading: boolean) => void
+    setGlobalError: (error: string | Error | null) => void
+    clearGlobalError: () => void
+    showLoadingBar: (initialProgress?: number, message?: string) => void
+    hideLoadingBar: () => void
+    setLoadingBarProgress: (progress: number, message?: string) => void
+  } | null>(null)
   
   if (!actionsRef.current) {
     const state = useLoadingStore.getState()
@@ -135,9 +146,9 @@ export const useLoadingActions = () => {
     }
   }
   
-  return actionsRef.current
+  // Non-null assertion since we initialize it above
+  return actionsRef.current!
 }
-
 // Combined hooks for common use cases
 export const useLoadingState = (key: string) => {
   const isLoading = useLoading(key)

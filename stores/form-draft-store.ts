@@ -38,6 +38,10 @@ interface ExtendedFormDraft extends BaseFormDraft {
   isAutoSaving?: boolean
   lastAutoSaved?: Date
   
+  // Validation UX state
+  touchedFields?: Record<string, boolean>
+  submitAttempted?: boolean
+  
   // Form lifecycle
   createdAt?: Date
   expiresAt?: Date
@@ -128,6 +132,11 @@ interface FormDraftState {
   // Actions for validation
   validateDraft: (draftId: string) => { isValid: boolean; errors: Record<string, string> }
   validateDraftData: (formType: string, data: Record<string, any>) => { isValid: boolean; errors: Record<string, string> }
+  
+  // Actions for touched field tracking
+  markFieldTouched: (draftId: string, field: string) => void
+  markSubmitAttempted: (draftId: string) => void
+  resetTouchedState: (draftId: string) => void
   
   // Actions for enhanced form management
   saveDraft: (formId: string, data: any) => void
@@ -332,6 +341,8 @@ export const useFormDraftStore = create<FormDraftState>()(
           createdAt: now,
           expiresAt: metadata?.autoExpire ? new Date(now.getTime() + (metadata.expireAfter || 7 * 24 * 60 * 60 * 1000)) : undefined,
           isExpired: false,
+          touchedFields: {},
+          submitAttempted: false,
         }
         
         set((state: FormDraftState) => ({
@@ -527,6 +538,65 @@ export const useFormDraftStore = create<FormDraftState>()(
           }
           return { isValid: false, errors: { general: 'Validation failed' } }
         }
+      },
+      
+      // Touched field tracking actions (pure Zustand pattern - no get() calls)
+      markFieldTouched: (draftId: string, field: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                touchedFields: {
+                  ...draft.touchedFields,
+                  [field]: true,
+                },
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      markSubmitAttempted: (draftId: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                submitAttempted: true,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      resetTouchedState: (draftId: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                touchedFields: {},
+                submitAttempted: false,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
       },
       
       // Auto-save actions

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { useDraft, useFormDraftActions, useDraftData, useDraftErrors, useIsDraftDirty } from '@/stores/form-draft-store-selectors'
+import { useDraft, useFormDraftActions, useDraftData, useDraftErrors, useIsDraftDirty, useDraftTouchedFields, useDraftSubmitAttempted } from '@/stores/form-draft-store-selectors'
 import { useLoadingActions } from '@/stores/loading-store-selectors'
 import { useCallback, useMemo } from 'react'
 
@@ -46,6 +46,8 @@ export function useZustandForm<T extends Record<string, any>>({
   const draftData = useDraftData(formId) as T || initialData
   const errors = useDraftErrors(formId)
   const isDirty = useIsDraftDirty(formId)
+  const touchedFields = useDraftTouchedFields(formId)
+  const submitAttempted = useDraftSubmitAttempted(formId)
   // const isValid = useIsDraftValid(formId) // Not used in current implementation
   
   // Initialize draft if it doesn't exist
@@ -95,11 +97,32 @@ export function useZustandForm<T extends Record<string, any>>({
     })
   }
   
+  // Compute display errors - only show errors for touched fields OR after submit attempt
+  const displayErrors = useMemo(() => {
+    if (submitAttempted) {
+      // After submit attempt, show all validation errors
+      return validationResult.errors as Record<keyof T, string>
+    }
+    
+    // Before submit, only show errors for touched fields
+    const filtered: Record<string, string> = {}
+    const errorObj = validationResult.errors as Record<string, string>
+    Object.keys(errorObj).forEach((key) => {
+      if (touchedFields[key]) {
+        filtered[key] = errorObj[key]
+      }
+    })
+    return filtered as Record<keyof T, string>
+  }, [validationResult.errors, touchedFields, submitAttempted])
+  
   // Update field value
   const setField = useCallback((field: keyof T, value: any) => {
     const currentData = actions.loadDraft(formId) || initialData
     const updatedData = { ...currentData, [field]: value }
     actions.saveDraft(formId, updatedData)
+    
+    // Mark field as touched when user interacts with it
+    actions.markFieldTouched(formId, field as string)
     
     // Clear field error when user starts typing
     if (errors[field as string]) {
@@ -154,10 +177,14 @@ export function useZustandForm<T extends Record<string, any>>({
       isDirty: false,
       isSubmitting: false 
     })
+    actions.resetTouchedState(formId)
   }, [formId, actions, initialData])
   
   // Submit form
   const submit = useCallback(async () => {
+    // Mark that submit was attempted - this triggers showing all validation errors
+    actions.markSubmitAttempted(formId)
+    
     if (!validationResult.success) {
       setMultipleErrors(validationResult.errors as Record<keyof T, string>)
       return
@@ -208,10 +235,10 @@ export function useZustandForm<T extends Record<string, any>>({
   return {
     // State from Zustand store
     data: draftData,
-    errors: validationResult.errors as Record<keyof T, string>,
+    errors: displayErrors, // Use filtered errors for display
     isSubmitting: draft?.isSubmitting || false,
     isDirty: isDirty,
-    isValid: validationResult.success,
+    isValid: validationResult.success, // Full validation for button disable logic
     
     // Auto-save state
     isAutoSaving: draft?.isAutoSaving || false,
