@@ -36,3 +36,8 @@ export {
 // Export business logic classes
 export { AuditLogger } from './audit-logger'
 export type { AuditTrailFilters } from './audit-logger'
+
+export { PairingGenerator } from './pairing-generator'
+
+export { TournamentProcessor } from './tournament-processor'
+export type { StartTournamentResult } from './tournament-processor'
