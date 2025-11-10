@@ -1326,4 +1326,506 @@ describe('TournamentProcessor', () => {
       ).rejects.toThrow('Cannot complete tournament with no rounds played')
     })
   })
+
+  describe('pauseTournament', () => {
+    const tournamentId = 'tournament-123'
+    const organizerId = 'organizer-456'
+
+    const mockTournament = {
+      id: tournamentId,
+      name: 'Test Tournament',
+      status: 'ACTIVE',
+      tournamentStructure: 'SWISS',
+      gameId: 'game-123',
+      organizerId,
+      storeId: 'store-123',
+      date: new Date(),
+      format: 'Standard',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      description: null,
+      entryFee: null,
+      maxPlayers: null,
+      metadata: null,
+      prizePool: null,
+      registrationDeadline: null,
+      rules: [],
+      totalRounds: 3,
+      tournamentLevel: null
+    }
+
+    it('should successfully pause an ACTIVE tournament', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'PAUSED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.pauseTournament(tournamentId, organizerId, 'Lunch break')
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.status).toBe('PAUSED')
+    })
+
+    it('should pause tournament without reason', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'PAUSED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.pauseTournament(tournamentId, organizerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.status).toBe('PAUSED')
+    })
+
+    it('should throw NOT_FOUND error when tournament does not exist', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.pauseTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Tournament not found')
+    })
+
+    it('should throw BAD_REQUEST error when tournament is not ACTIVE', async () => {
+      // Setup mocks with COMPLETED tournament
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'COMPLETED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.pauseTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot pause tournament with status COMPLETED')
+    })
+
+    it('should throw BAD_REQUEST error when tournament is UPCOMING', async () => {
+      // Setup mocks with UPCOMING tournament
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'UPCOMING'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.pauseTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot pause tournament with status UPCOMING')
+    })
+
+    it('should throw BAD_REQUEST error when tournament is already PAUSED', async () => {
+      // Setup mocks with already PAUSED tournament
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'PAUSED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.pauseTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot pause tournament with status PAUSED')
+    })
+  })
+
+  describe('resumeTournament', () => {
+    const tournamentId = 'tournament-123'
+    const organizerId = 'organizer-456'
+
+    const mockTournament = {
+      id: tournamentId,
+      name: 'Test Tournament',
+      status: 'PAUSED',
+      tournamentStructure: 'SWISS',
+      gameId: 'game-123',
+      organizerId,
+      storeId: 'store-123',
+      date: new Date(),
+      format: 'Standard',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      description: null,
+      entryFee: null,
+      maxPlayers: null,
+      metadata: null,
+      prizePool: null,
+      registrationDeadline: null,
+      rules: [],
+      totalRounds: 3,
+      tournamentLevel: null
+    }
+
+    it('should successfully resume a PAUSED tournament', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'ACTIVE'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.resumeTournament(tournamentId, organizerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.status).toBe('ACTIVE')
+    })
+
+    it('should throw NOT_FOUND error when tournament does not exist', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.resumeTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Tournament not found')
+    })
+
+    it('should throw BAD_REQUEST error when tournament is not PAUSED', async () => {
+      // Setup mocks with ACTIVE tournament
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'ACTIVE'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.resumeTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot resume tournament with status ACTIVE')
+    })
+
+    it('should throw BAD_REQUEST error when tournament is COMPLETED', async () => {
+      // Setup mocks with COMPLETED tournament
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'COMPLETED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.resumeTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot resume tournament with status COMPLETED')
+    })
+
+    it('should throw BAD_REQUEST error when tournament is CANCELLED', async () => {
+      // Setup mocks with CANCELLED tournament
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'CANCELLED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.resumeTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot resume tournament with status CANCELLED')
+    })
+  })
+
+  describe('cancelTournament', () => {
+    const tournamentId = 'tournament-123'
+    const organizerId = 'organizer-456'
+
+    const mockTournament = {
+      id: tournamentId,
+      name: 'Test Tournament',
+      status: 'ACTIVE',
+      tournamentStructure: 'SWISS',
+      gameId: 'game-123',
+      organizerId,
+      storeId: 'store-123',
+      date: new Date(),
+      format: 'Standard',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      description: null,
+      entryFee: null,
+      maxPlayers: null,
+      metadata: null,
+      prizePool: null,
+      registrationDeadline: null,
+      rules: [],
+      totalRounds: 3,
+      tournamentLevel: null
+    }
+
+    const mockEntries = [
+      {
+        playerId: 'player-1'
+      },
+      {
+        playerId: 'player-2'
+      }
+    ]
+
+    it('should successfully cancel an ACTIVE tournament with reason', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries
+            }),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'CANCELLED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.cancelTournament(tournamentId, organizerId, 'Venue unavailable')
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.status).toBe('CANCELLED')
+    })
+
+    it('should successfully cancel an UPCOMING tournament', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'UPCOMING',
+              entries: mockEntries
+            }),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'CANCELLED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.cancelTournament(tournamentId, organizerId, 'Not enough players')
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.status).toBe('CANCELLED')
+    })
+
+    it('should successfully cancel a PAUSED tournament', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'PAUSED',
+              entries: mockEntries
+            }),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'CANCELLED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.cancelTournament(tournamentId, organizerId, 'Emergency situation')
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.status).toBe('CANCELLED')
+    })
+
+    it('should throw NOT_FOUND error when tournament does not exist', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.cancelTournament(tournamentId, organizerId, 'Test reason')
+      ).rejects.toThrow('Tournament not found')
+    })
+
+    it('should throw BAD_REQUEST error when tournament is COMPLETED', async () => {
+      // Setup mocks with COMPLETED tournament
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'COMPLETED',
+              entries: mockEntries
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.cancelTournament(tournamentId, organizerId, 'Test reason')
+      ).rejects.toThrow('Cannot cancel a completed tournament')
+    })
+
+    it('should throw BAD_REQUEST error when reason is empty', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.cancelTournament(tournamentId, organizerId, '')
+      ).rejects.toThrow('Cancellation reason is required')
+    })
+
+    it('should throw BAD_REQUEST error when reason is only whitespace', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.cancelTournament(tournamentId, organizerId, '   ')
+      ).rejects.toThrow('Cancellation reason is required')
+    })
+
+    it('should preserve match results when cancelling active tournament', async () => {
+      // This test verifies that cancellation doesn't delete data
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries
+            }),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'CANCELLED'
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.cancelTournament(tournamentId, organizerId, 'Test cancellation')
+
+      // Verify - tournament is cancelled but data is preserved
+      expect(result).toBeDefined()
+      expect(result.status).toBe('CANCELLED')
+      // The fact that we don't delete anything verifies preservation
+    })
+  })
 })
