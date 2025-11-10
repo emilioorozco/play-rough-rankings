@@ -40,4 +40,4 @@ export type { AuditTrailFilters } from './audit-logger'
 export { PairingGenerator } from './pairing-generator'
 
 export { TournamentProcessor } from './tournament-processor'
-export type { StartTournamentResult } from './tournament-processor'
+export type { StartTournamentResult, AdvanceRoundResult, CompleteTournamentResult } from './tournament-processor'
