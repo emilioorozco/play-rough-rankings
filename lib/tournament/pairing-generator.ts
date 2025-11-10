@@ -6,13 +6,339 @@
  * and table assignments.
  */
 
-import type { TournamentEntry } from '@prisma/client'
+import type { TournamentEntry, Match } from '@prisma/client'
 import type { Pairing, TournamentStructure } from './types'
+
+/**
+ * Interface for player standings used in Swiss pairing
+ */
+interface PlayerStanding {
+  playerId: string
+  entry: TournamentEntry
+  matchPoints: number
+  gameWinPercentage: number
+  opponentMatchWinPercentage: number
+}
 
 /**
  * PairingGenerator class for creating tournament match pairings
  */
 export class PairingGenerator {
+  /**
+   * Generate Swiss pairings for next round
+   * 
+   * Pairs players based on current standings, avoiding repeat pairings
+   * from previous rounds. Players with similar records are paired together.
+   * 
+   * @param entries - Tournament entries with current records
+   * @param previousMatches - All matches from previous rounds
+   * @param _round - Current round number (unused but kept for API consistency)
+   * @returns Array of pairings for the next round
+   */
+  generateSwissPairings(
+    entries: TournamentEntry[],
+    previousMatches: Match[],
+    _round: number
+  ): Pairing[] {
+    // Filter out dropped players
+    const activeEntries = entries.filter(entry => !entry.dropped)
+
+    if (activeEntries.length < 2) {
+      throw new Error('Insufficient active players for pairings')
+    }
+
+    // Calculate standings for all active players
+    const standings = this.calculateStandings(activeEntries, previousMatches)
+
+    // Sort by match points (descending), then by tiebreakers
+    standings.sort((a, b) => {
+      if (a.matchPoints !== b.matchPoints) {
+        return b.matchPoints - a.matchPoints
+      }
+      if (a.opponentMatchWinPercentage !== b.opponentMatchWinPercentage) {
+        return b.opponentMatchWinPercentage - a.opponentMatchWinPercentage
+      }
+      return b.gameWinPercentage - a.gameWinPercentage
+    })
+
+    // Build pairing history to avoid rematches
+    const pairingHistory = this.buildPairingHistory(previousMatches)
+
+    // Generate pairings
+    const pairings: Pairing[] = []
+    const paired = new Set<string>()
+    let tableNumber = 1
+
+    // Handle odd number of players - assign bye first
+    let byePlayerId: string | null = null
+    if (standings.length % 2 === 1) {
+      byePlayerId = this.assignBye(activeEntries, previousMatches)
+      if (byePlayerId) {
+        paired.add(byePlayerId)
+        pairings.push({
+          player1Id: byePlayerId,
+          player2Id: byePlayerId,
+          table: tableNumber++,
+          isBye: true,
+        })
+      }
+    }
+
+    // Pair remaining players
+    for (let i = 0; i < standings.length; i++) {
+      const player1 = standings[i]
+      
+      if (paired.has(player1.playerId)) {
+        continue
+      }
+
+      // Find best opponent for this player
+      let opponent: PlayerStanding | null = null
+      
+      // Try to find opponent with similar record who hasn't been paired yet
+      for (let j = i + 1; j < standings.length; j++) {
+        const player2 = standings[j]
+        
+        if (paired.has(player2.playerId)) {
+          continue
+        }
+
+        // Check if these players have already played each other
+        const havePlayed = this.havePreviouslyPlayed(
+          player1.playerId,
+          player2.playerId,
+          pairingHistory
+        )
+
+        if (!havePlayed) {
+          opponent = player2
+          break
+        }
+      }
+
+      // If no opponent found without rematch, pair with closest available
+      if (!opponent) {
+        for (let j = i + 1; j < standings.length; j++) {
+          const player2 = standings[j]
+          
+          if (!paired.has(player2.playerId)) {
+            opponent = player2
+            break
+          }
+        }
+      }
+
+      if (opponent) {
+        paired.add(player1.playerId)
+        paired.add(opponent.playerId)
+        
+        pairings.push({
+          player1Id: player1.playerId,
+          player2Id: opponent.playerId,
+          table: tableNumber++,
+        })
+      }
+    }
+
+    return pairings
+  }
+
+  /**
+   * Assign bye to a player in Swiss tournament
+   * 
+   * Assigns bye to the lowest-ranked player who hasn't received a bye yet.
+   * If all players have had a bye, assigns to the lowest-ranked player.
+   * 
+   * @param entries - Active tournament entries
+   * @param previousMatches - All matches from previous rounds
+   * @returns Player ID who receives the bye, or null if no bye needed
+   */
+  assignBye(
+    entries: TournamentEntry[],
+    previousMatches: Match[]
+  ): string | null {
+    const activeEntries = entries.filter(entry => !entry.dropped)
+
+    // No bye needed for even number of players
+    if (activeEntries.length % 2 === 0) {
+      return null
+    }
+
+    // Find players who have already received byes
+    const playersWithByes = new Set<string>()
+    previousMatches.forEach(match => {
+      // Bye matches have same player for both sides
+      if (match.player1Id === match.player2Id) {
+        playersWithByes.add(match.player1Id)
+      }
+    })
+
+    // Calculate standings to find lowest-ranked player
+    const standings = this.calculateStandings(activeEntries, previousMatches)
+    
+    // Sort by match points (ascending) to get lowest-ranked first
+    standings.sort((a, b) => {
+      if (a.matchPoints !== b.matchPoints) {
+        return a.matchPoints - b.matchPoints
+      }
+      if (a.opponentMatchWinPercentage !== b.opponentMatchWinPercentage) {
+        return a.opponentMatchWinPercentage - b.opponentMatchWinPercentage
+      }
+      return a.gameWinPercentage - b.gameWinPercentage
+    })
+
+    // Find lowest-ranked player without a bye
+    for (const standing of standings) {
+      if (!playersWithByes.has(standing.playerId)) {
+        return standing.playerId
+      }
+    }
+
+    // If all players have had byes, give it to the lowest-ranked player
+    return standings[0]?.playerId || null
+  }
+
+  /**
+   * Calculate standings for all players
+   * 
+   * @param entries - Tournament entries
+   * @param matches - All completed matches
+   * @returns Array of player standings
+   */
+  private calculateStandings(
+    entries: TournamentEntry[],
+    matches: Match[]
+  ): PlayerStanding[] {
+    const standings: PlayerStanding[] = []
+
+    for (const entry of entries) {
+      const playerId = entry.playerId
+      
+      // Get player's matches
+      const playerMatches = matches.filter(
+        m => m.player1Id === playerId || m.player2Id === playerId
+      )
+
+      // Calculate match points (3 for win, 1 for draw, 0 for loss)
+      let matchPoints = 0
+      let gamesWon = 0
+      let gamesPlayed = 0
+      const opponentIds: string[] = []
+
+      playerMatches.forEach(match => {
+        if (match.status !== 'COMPLETED') {
+          return
+        }
+
+        // Handle bye matches
+        if (match.player1Id === match.player2Id) {
+          matchPoints += 3 // Bye counts as a win
+          return
+        }
+
+        const isPlayer1 = match.player1Id === playerId
+        const opponentId = isPlayer1 ? match.player2Id : match.player1Id
+        opponentIds.push(opponentId)
+
+        const playerScore = isPlayer1 ? match.player1Score : match.player2Score
+        const opponentScore = isPlayer1 ? match.player2Score : match.player1Score
+
+        if (playerScore !== null && opponentScore !== null) {
+          gamesWon += playerScore
+          gamesPlayed += playerScore + opponentScore
+
+          if (match.winnerId === playerId) {
+            matchPoints += 3
+          } else if (match.winnerId === null) {
+            matchPoints += 1 // Draw
+          }
+        }
+      })
+
+      // Calculate game win percentage
+      const gameWinPercentage = gamesPlayed > 0 ? gamesWon / gamesPlayed : 0
+
+      // Calculate opponent match win percentage
+      let opponentMatchWinPercentage = 0
+      if (opponentIds.length > 0) {
+        const opponentEntries = entries.filter(e => opponentIds.includes(e.playerId))
+        const opponentStandings = opponentEntries.map(e => {
+          const oppMatches = matches.filter(
+            m => (m.player1Id === e.playerId || m.player2Id === e.playerId) && m.status === 'COMPLETED'
+          )
+          let oppPoints = 0
+          oppMatches.forEach(m => {
+            if (m.player1Id === m.player2Id) {
+              oppPoints += 3
+            } else if (m.winnerId === e.playerId) {
+              oppPoints += 3
+            } else if (m.winnerId === null) {
+              oppPoints += 1
+            }
+          })
+          const oppMatchesPlayed = oppMatches.filter(m => m.player1Id !== m.player2Id).length
+          return oppMatchesPlayed > 0 ? oppPoints / (oppMatchesPlayed * 3) : 0
+        })
+        opponentMatchWinPercentage = opponentStandings.reduce((a, b) => a + b, 0) / opponentStandings.length
+      }
+
+      standings.push({
+        playerId,
+        entry,
+        matchPoints,
+        gameWinPercentage,
+        opponentMatchWinPercentage,
+      })
+    }
+
+    return standings
+  }
+
+  /**
+   * Build pairing history from previous matches
+   * 
+   * @param matches - All previous matches
+   * @returns Map of player pairs that have played each other
+   */
+  private buildPairingHistory(matches: Match[]): Map<string, Set<string>> {
+    const history = new Map<string, Set<string>>()
+
+    matches.forEach(match => {
+      // Skip bye matches
+      if (match.player1Id === match.player2Id) {
+        return
+      }
+
+      if (!history.has(match.player1Id)) {
+        history.set(match.player1Id, new Set())
+      }
+      if (!history.has(match.player2Id)) {
+        history.set(match.player2Id, new Set())
+      }
+
+      history.get(match.player1Id)!.add(match.player2Id)
+      history.get(match.player2Id)!.add(match.player1Id)
+    })
+
+    return history
+  }
+
+  /**
+   * Check if two players have previously played each other
+   * 
+   * @param player1Id - First player ID
+   * @param player2Id - Second player ID
+   * @param pairingHistory - Pairing history map
+   * @returns True if players have played each other before
+   */
+  private havePreviouslyPlayed(
+    player1Id: string,
+    player2Id: string,
+    pairingHistory: Map<string, Set<string>>
+  ): boolean {
+    const player1Opponents = pairingHistory.get(player1Id)
+    return player1Opponents ? player1Opponents.has(player2Id) : false
+  }
   /**
    * Generate initial pairings for tournament start
    * 

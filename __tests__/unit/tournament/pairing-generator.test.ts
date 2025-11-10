@@ -319,4 +319,354 @@ describe('PairingGenerator', () => {
       })
     })
   })
+
+  describe('generateSwissPairings', () => {
+    // Helper to create mock matches
+    const createMockMatches = (
+      tournamentId: string,
+      round: number,
+      matchData: Array<{
+        player1Id: string
+        player2Id: string
+        winnerId: string | null
+        player1Score: number
+        player2Score: number
+      }>
+    ): any[] => {
+      return matchData.map((data, index) => ({
+        id: `match-${round}-${index + 1}`,
+        tournamentId,
+        round,
+        status: 'COMPLETED',
+        table: index + 1,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...data,
+      }))
+    }
+
+    it('should throw error with insufficient active players', () => {
+      const entries = createMockEntries(2)
+      entries[0].dropped = true
+      entries[1].dropped = true
+
+      expect(() => generator.generateSwissPairings(entries, [], 2)).toThrow(
+        'Insufficient active players for pairings'
+      )
+    })
+
+    it('should pair players based on standings', () => {
+      const entries = createMockEntries(4)
+      
+      // Round 1 results: player-1 beats player-2, player-3 beats player-4
+      const round1Matches = createMockMatches('tournament-1', 1, [
+        { player1Id: 'player-1', player2Id: 'player-2', winnerId: 'player-1', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-3', player2Id: 'player-4', winnerId: 'player-3', player1Score: 2, player2Score: 1 },
+      ])
+
+      const pairings = generator.generateSwissPairings(entries, round1Matches, 2)
+
+      expect(pairings).toHaveLength(2)
+      
+      // Winners should be paired together (player-1 vs player-3)
+      // Losers should be paired together (player-2 vs player-4)
+      const winnersPairing = pairings.find(
+        p => (p.player1Id === 'player-1' && p.player2Id === 'player-3') ||
+             (p.player1Id === 'player-3' && p.player2Id === 'player-1')
+      )
+      const losersPairing = pairings.find(
+        p => (p.player1Id === 'player-2' && p.player2Id === 'player-4') ||
+             (p.player1Id === 'player-4' && p.player2Id === 'player-2')
+      )
+
+      expect(winnersPairing).toBeDefined()
+      expect(losersPairing).toBeDefined()
+    })
+
+    it('should avoid repeat pairings from previous rounds', () => {
+      const entries = createMockEntries(4)
+      
+      // Round 1: player-1 vs player-2, player-3 vs player-4
+      const round1Matches = createMockMatches('tournament-1', 1, [
+        { player1Id: 'player-1', player2Id: 'player-2', winnerId: 'player-1', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-3', player2Id: 'player-4', winnerId: 'player-3', player1Score: 2, player2Score: 0 },
+      ])
+
+      const pairings = generator.generateSwissPairings(entries, round1Matches, 2)
+
+      // Should not repeat round 1 pairings
+      const hasRepeatPairing = pairings.some(
+        p => (p.player1Id === 'player-1' && p.player2Id === 'player-2') ||
+             (p.player1Id === 'player-2' && p.player2Id === 'player-1') ||
+             (p.player1Id === 'player-3' && p.player2Id === 'player-4') ||
+             (p.player1Id === 'player-4' && p.player2Id === 'player-3')
+      )
+
+      expect(hasRepeatPairing).toBe(false)
+    })
+
+    it('should handle odd player count with bye', () => {
+      const entries = createMockEntries(5)
+      
+      const pairings = generator.generateSwissPairings(entries, [], 1)
+
+      expect(pairings).toHaveLength(3) // 2 regular matches + 1 bye
+      
+      const byeMatches = pairings.filter(p => p.isBye)
+      expect(byeMatches).toHaveLength(1)
+      expect(byeMatches[0].player1Id).toBe(byeMatches[0].player2Id)
+    })
+
+    it('should exclude dropped players from pairings', () => {
+      const entries = createMockEntries(6)
+      entries[5].dropped = true // Drop player-6
+
+      const pairings = generator.generateSwissPairings(entries, [], 1)
+
+      // Should only pair 5 active players (2 matches + 1 bye)
+      expect(pairings).toHaveLength(3)
+      
+      // Verify dropped player is not in any pairing
+      const hasDroppedPlayer = pairings.some(
+        p => p.player1Id === 'player-6' || p.player2Id === 'player-6'
+      )
+      expect(hasDroppedPlayer).toBe(false)
+    })
+
+    it('should handle complex standings with tiebreakers', () => {
+      const entries = createMockEntries(8)
+      
+      // Create a scenario with various records
+      const round1Matches = createMockMatches('tournament-1', 1, [
+        { player1Id: 'player-1', player2Id: 'player-2', winnerId: 'player-1', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-3', player2Id: 'player-4', winnerId: 'player-3', player1Score: 2, player2Score: 1 },
+        { player1Id: 'player-5', player2Id: 'player-6', winnerId: 'player-5', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-7', player2Id: 'player-8', winnerId: 'player-7', player1Score: 2, player2Score: 1 },
+      ])
+
+      const pairings = generator.generateSwissPairings(entries, round1Matches, 2)
+
+      expect(pairings).toHaveLength(4)
+      
+      // All pairings should be valid (different players)
+      pairings.forEach(pairing => {
+        if (!pairing.isBye) {
+          expect(pairing.player1Id).not.toBe(pairing.player2Id)
+        }
+      })
+    })
+
+    it('should assign sequential table numbers', () => {
+      const entries = createMockEntries(6)
+      
+      const pairings = generator.generateSwissPairings(entries, [], 1)
+
+      expect(pairings[0].table).toBe(1)
+      expect(pairings[1].table).toBe(2)
+      expect(pairings[2].table).toBe(3)
+    })
+  })
+
+  describe('assignBye', () => {
+    const createMockMatches = (
+      byePlayerIds: string[]
+    ): any[] => {
+      return byePlayerIds.map((playerId, index) => ({
+        id: `bye-match-${index + 1}`,
+        tournamentId: 'tournament-1',
+        player1Id: playerId,
+        player2Id: playerId, // Bye match has same player
+        winnerId: playerId,
+        round: index + 1,
+        status: 'COMPLETED',
+        player1Score: 2,
+        player2Score: 0,
+        table: 1,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }))
+    }
+
+    it('should return null for even player count', () => {
+      const entries = createMockEntries(4)
+      const byePlayerId = generator.assignBye(entries, [])
+
+      expect(byePlayerId).toBeNull()
+    })
+
+    it('should assign bye to lowest-ranked player without previous bye', () => {
+      const entries = createMockEntries(5)
+      
+      // Create matches where player-1 has won, others have lost
+      const matches = [
+        {
+          id: 'match-1',
+          tournamentId: 'tournament-1',
+          player1Id: 'player-1',
+          player2Id: 'player-2',
+          winnerId: 'player-1',
+          round: 1,
+          status: 'COMPLETED',
+          player1Score: 2,
+          player2Score: 0,
+          table: 1,
+          scheduledTime: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as any[]
+
+      const byePlayerId = generator.assignBye(entries, matches)
+
+      // Should be one of the players without a win (player-2, 3, 4, or 5)
+      expect(byePlayerId).toBeDefined()
+      expect(['player-2', 'player-3', 'player-4', 'player-5']).toContain(byePlayerId)
+    })
+
+    it('should not assign bye to player who already had one', () => {
+      const entries = createMockEntries(5)
+      
+      // player-5 already had a bye
+      const matches = createMockMatches(['player-5'])
+
+      const byePlayerId = generator.assignBye(entries, matches)
+
+      // Should not be player-5
+      expect(byePlayerId).not.toBe('player-5')
+    })
+
+    it('should assign bye to lowest-ranked when all have had byes', () => {
+      const entries = createMockEntries(5)
+      
+      // All players have had byes
+      const matches = createMockMatches(['player-1', 'player-2', 'player-3', 'player-4', 'player-5'])
+
+      const byePlayerId = generator.assignBye(entries, matches)
+
+      // Should still assign a bye (to lowest-ranked)
+      expect(byePlayerId).toBeDefined()
+      expect(['player-1', 'player-2', 'player-3', 'player-4', 'player-5']).toContain(byePlayerId)
+    })
+
+    it('should exclude dropped players from bye assignment', () => {
+      const entries = createMockEntries(5)
+      entries[4].dropped = true // Drop player-5
+
+      const byePlayerId = generator.assignBye(entries, [])
+
+      // Should not assign bye to dropped player
+      expect(byePlayerId).not.toBe('player-5')
+    })
+  })
+
+  describe('Swiss tournament multi-round scenarios', () => {
+    const createMockMatches = (
+      tournamentId: string,
+      round: number,
+      matchData: Array<{
+        player1Id: string
+        player2Id: string
+        winnerId: string | null
+        player1Score: number
+        player2Score: number
+      }>
+    ): any[] => {
+      return matchData.map((data, index) => ({
+        id: `match-${round}-${index + 1}`,
+        tournamentId,
+        round,
+        status: 'COMPLETED',
+        table: index + 1,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...data,
+      }))
+    }
+
+    it('should handle 3-round Swiss tournament', () => {
+      const entries = createMockEntries(8)
+      
+      // Round 1
+      const round1Matches = createMockMatches('tournament-1', 1, [
+        { player1Id: 'player-1', player2Id: 'player-2', winnerId: 'player-1', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-3', player2Id: 'player-4', winnerId: 'player-3', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-5', player2Id: 'player-6', winnerId: 'player-5', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-7', player2Id: 'player-8', winnerId: 'player-7', player1Score: 2, player2Score: 0 },
+      ])
+
+      const round2Pairings = generator.generateSwissPairings(entries, round1Matches, 2)
+      expect(round2Pairings).toHaveLength(4)
+
+      // Simulate round 2 results
+      const round2Matches = createMockMatches('tournament-1', 2, [
+        { player1Id: round2Pairings[0].player1Id, player2Id: round2Pairings[0].player2Id, winnerId: round2Pairings[0].player1Id, player1Score: 2, player2Score: 0 },
+        { player1Id: round2Pairings[1].player1Id, player2Id: round2Pairings[1].player2Id, winnerId: round2Pairings[1].player1Id, player1Score: 2, player2Score: 1 },
+        { player1Id: round2Pairings[2].player1Id, player2Id: round2Pairings[2].player2Id, winnerId: round2Pairings[2].player1Id, player1Score: 2, player2Score: 0 },
+        { player1Id: round2Pairings[3].player1Id, player2Id: round2Pairings[3].player2Id, winnerId: round2Pairings[3].player1Id, player1Score: 2, player2Score: 1 },
+      ])
+
+      const allMatches = [...round1Matches, ...round2Matches]
+      const round3Pairings = generator.generateSwissPairings(entries, allMatches, 3)
+      
+      expect(round3Pairings).toHaveLength(4)
+      
+      // Verify no repeat pairings across all rounds
+      const allPairings = [...round1Matches, ...round2Matches, ...round3Pairings]
+      const pairingSet = new Set<string>()
+      
+      allPairings.forEach(pairing => {
+        const key1 = `${pairing.player1Id}-${pairing.player2Id}`
+        const key2 = `${pairing.player2Id}-${pairing.player1Id}`
+        
+        if (pairing.player1Id !== pairing.player2Id) { // Skip bye matches
+          expect(pairingSet.has(key1) || pairingSet.has(key2)).toBe(false)
+          pairingSet.add(key1)
+        }
+      })
+    })
+
+    it('should handle draws in standings calculation', () => {
+      const entries = createMockEntries(4)
+      
+      // Round 1 with a draw
+      const round1Matches = createMockMatches('tournament-1', 1, [
+        { player1Id: 'player-1', player2Id: 'player-2', winnerId: null, player1Score: 1, player2Score: 1 }, // Draw
+        { player1Id: 'player-3', player2Id: 'player-4', winnerId: 'player-3', player1Score: 2, player2Score: 0 },
+      ])
+
+      const pairings = generator.generateSwissPairings(entries, round1Matches, 2)
+
+      expect(pairings).toHaveLength(2)
+      // Should successfully generate pairings despite draw
+    })
+
+    it('should handle player drop mid-tournament', () => {
+      const entries = createMockEntries(8)
+      
+      // Round 1
+      const round1Matches = createMockMatches('tournament-1', 1, [
+        { player1Id: 'player-1', player2Id: 'player-2', winnerId: 'player-1', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-3', player2Id: 'player-4', winnerId: 'player-3', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-5', player2Id: 'player-6', winnerId: 'player-5', player1Score: 2, player2Score: 0 },
+        { player1Id: 'player-7', player2Id: 'player-8', winnerId: 'player-7', player1Score: 2, player2Score: 0 },
+      ])
+
+      // Player 2 drops after round 1
+      entries[1].dropped = true
+
+      const round2Pairings = generator.generateSwissPairings(entries, round1Matches, 2)
+
+      // Should have 3 matches + 1 bye (7 active players)
+      expect(round2Pairings).toHaveLength(4)
+      
+      // Verify player-2 is not in any pairing
+      const hasDroppedPlayer = round2Pairings.some(
+        p => p.player1Id === 'player-2' || p.player2Id === 'player-2'
+      )
+      expect(hasDroppedPlayer).toBe(false)
+    })
+  })
 })
