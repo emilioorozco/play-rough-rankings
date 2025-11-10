@@ -53,14 +53,16 @@ export function useTournamentQueries({
   // Use tRPC query
   const tournamentsQuery = trpc.tournaments.list.useQuery(queryParams, {
     enabled,
-  })
+  }) as any
 
   // Handle loading state changes
   useEffect(() => {
     if (tournamentsQuery.isLoading && !storeLoading) {
       handleQueryLoading('tournamentList')
     }
-  }, [tournamentsQuery.isLoading, storeLoading, handleQueryLoading])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentsQuery.isLoading, storeLoading])
 
   // Handle success
   useEffect(() => {
@@ -68,7 +70,9 @@ export function useTournamentQueries({
       setTournaments(tournamentsQuery.data.tournaments, tournamentsQuery.data.total)
       handleQuerySuccess('tournamentList', tournamentsQuery.data)
     }
-  }, [tournamentsQuery.data, tournamentsQuery.isLoading, setTournaments, handleQuerySuccess])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentsQuery.data, tournamentsQuery.isLoading])
 
   // Handle error
   useEffect(() => {
@@ -76,7 +80,9 @@ export function useTournamentQueries({
       setError(tournamentsQuery.error.message)
       handleQueryError('tournamentList', tournamentsQuery.error.message)
     }
-  }, [tournamentsQuery.error, setError, handleQueryError])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentsQuery.error])
 
   return {
     // Tournament data from Zustand store
@@ -102,7 +108,13 @@ export function useTournamentQueries({
 /**
  * Hook for fetching a single tournament by ID
  */
-export function useTournamentQuery(tournamentId: string, enabled = true) {
+export function useTournamentQuery(tournamentId: string, enabled = true): {
+  tournament: any
+  isLoading: boolean
+  error: string | undefined
+  refetch: () => void
+  isFetching: boolean
+} {
   const currentTournament = useTournamentStore((state) => state.currentTournament)
   const setCurrentTournament = useTournamentStore((state) => state.setCurrentTournament)
   const handleQueryLoading = useTournamentStore((state) => state.handleQueryLoading)
@@ -114,14 +126,16 @@ export function useTournamentQuery(tournamentId: string, enabled = true) {
     {
       enabled: enabled && !!tournamentId,
     }
-  )
+  ) as any
 
   // Handle loading state
   useEffect(() => {
     if (tournamentQuery.isLoading) {
       handleQueryLoading('currentTournament')
     }
-  }, [tournamentQuery.isLoading, handleQueryLoading])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentQuery.isLoading])
 
   // Handle success
   useEffect(() => {
@@ -129,23 +143,31 @@ export function useTournamentQuery(tournamentId: string, enabled = true) {
       setCurrentTournament(tournamentQuery.data as any)
       handleQuerySuccess('currentTournament', tournamentQuery.data)
     }
-  }, [tournamentQuery.data, tournamentQuery.isLoading, setCurrentTournament, handleQuerySuccess])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentQuery.data, tournamentQuery.isLoading])
 
   // Handle error
   useEffect(() => {
     if (tournamentQuery.error) {
       handleQueryError('currentTournament', tournamentQuery.error.message)
     }
-  }, [tournamentQuery.error, handleQueryError])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentQuery.error])
 
-  const tournament = tournamentQuery.data as any || currentTournament as any
+  const tournament = (tournamentQuery.data || currentTournament) as any
+  const refetch = tournamentQuery.refetch
+  const isFetching = tournamentQuery.isFetching
+  const isLoading = tournamentQuery.isLoading
+  const error = tournamentQuery.error?.message
   
   return {
     tournament,
-    isLoading: tournamentQuery.isLoading,
-    error: tournamentQuery.error?.message,
-    refetch: tournamentQuery.refetch,
-    isFetching: tournamentQuery.isFetching,
+    isLoading,
+    error,
+    refetch: refetch as any,
+    isFetching,
   }
 }
 
@@ -166,14 +188,16 @@ export function useTournamentRegistrationQuery(tournamentId: string, enabled = t
     {
       enabled: enabled && !!tournamentId,
     }
-  )
+  ) as any
 
   // Handle loading state
   useEffect(() => {
     if (registrationQuery.isLoading) {
       handleQueryLoading('registrationStatus')
     }
-  }, [registrationQuery.isLoading, handleQueryLoading])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registrationQuery.isLoading])
 
   // Handle success
   useEffect(() => {
@@ -181,14 +205,18 @@ export function useTournamentRegistrationQuery(tournamentId: string, enabled = t
       setRegistrationStatus(tournamentId, registrationQuery.data as any)
       handleQuerySuccess('registrationStatus', registrationQuery.data)
     }
-  }, [registrationQuery.data, registrationQuery.isLoading, tournamentId, setRegistrationStatus, handleQuerySuccess])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registrationQuery.data, registrationQuery.isLoading, tournamentId])
 
   // Handle error
   useEffect(() => {
     if (registrationQuery.error) {
       handleQueryError('registrationStatus', registrationQuery.error.message)
     }
-  }, [registrationQuery.error, handleQueryError])
+    // Zustand store functions are stable and don't need to be in dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registrationQuery.error])
 
   return {
     status: registrationQuery.data || registrationStatus || {
@@ -208,28 +236,29 @@ export function useTournamentRegistrationQuery(tournamentId: string, enabled = t
  * Hook for tournament mutations (create, update, delete)
  */
 export function useTournamentMutations() {
-  const setTournamentListError = useTournamentStore((state) => state.setTournamentListError)
-  const cacheTournament = useTournamentStore((state) => state.cacheTournament)
-  const invalidateTournamentList = useTournamentStore((state) => state.invalidateTournamentList)
+  const store = useTournamentStore() as any
+  const setTournamentListError = store.setTournamentListError
+  const cacheTournament = store.cacheTournament
+  const invalidateTournamentList = store.invalidateTournamentList
 
-  const createTournament = trpc.tournaments.create.useMutation({
-    onSuccess: (tournament) => {
+  const createTournament = (trpc.tournaments.create as any).useMutation({
+    onSuccess: (tournament: any) => {
       // Cache the new tournament
-      cacheTournament(tournament as any)
+      cacheTournament(tournament)
       // Invalidate list to force refetch
       invalidateTournamentList()
     },
-    onError: (error) => {
+    onError: (error: any) => {
       setTournamentListError(error.message)
     },
   })
 
-  const updateTournament = trpc.tournaments.update.useMutation({
-    onSuccess: (tournament) => {
+  const updateTournament = (trpc.tournaments.update as any).useMutation({
+    onSuccess: (tournament: any) => {
       // Update cached tournament
-      cacheTournament(tournament as any)
+      cacheTournament(tournament)
     },
-    onError: (error) => {
+    onError: (error: any) => {
       setTournamentListError(error.message)
     },
   })

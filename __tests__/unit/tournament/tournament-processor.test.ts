@@ -799,4 +799,531 @@ describe('TournamentProcessor', () => {
       ).rejects.toThrow('No winners found in current round')
     })
   })
+
+  describe('completeTournament', () => {
+    const tournamentId = 'tournament-123'
+    const organizerId = 'organizer-456'
+
+    const mockTournament = {
+      id: tournamentId,
+      name: 'Test Tournament',
+      status: 'ACTIVE',
+      tournamentStructure: 'SWISS',
+      gameId: 'game-123',
+      organizerId,
+      storeId: 'store-123',
+      date: new Date(),
+      format: 'Standard',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      description: null,
+      entryFee: null,
+      maxPlayers: null,
+      metadata: null,
+      prizePool: null,
+      registrationDeadline: null,
+      rules: [],
+      totalRounds: 3,
+      tournamentLevel: 'LOCAL'
+    }
+
+    const mockEntries = [
+      {
+        id: 'entry-1',
+        tournamentId,
+        playerId: 'player-1',
+        deckId: null,
+        placement: null,
+        record: { wins: 3, losses: 0, draws: 0 },
+        seed: 1,
+        registrationDate: new Date(),
+        dropped: false,
+        metadata: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        player: {
+          id: 'player-1',
+          userId: 'user-1',
+          externalPlayerIds: null,
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          gameStats: []
+        }
+      },
+      {
+        id: 'entry-2',
+        tournamentId,
+        playerId: 'player-2',
+        deckId: null,
+        placement: null,
+        record: { wins: 2, losses: 1, draws: 0 },
+        seed: 2,
+        registrationDate: new Date(),
+        dropped: false,
+        metadata: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        player: {
+          id: 'player-2',
+          userId: 'user-2',
+          externalPlayerIds: null,
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          gameStats: []
+        }
+      },
+      {
+        id: 'entry-3',
+        tournamentId,
+        playerId: 'player-3',
+        deckId: null,
+        placement: null,
+        record: { wins: 1, losses: 2, draws: 0 },
+        seed: 3,
+        registrationDate: new Date(),
+        dropped: false,
+        metadata: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        player: {
+          id: 'player-3',
+          userId: 'user-3',
+          externalPlayerIds: null,
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          gameStats: []
+        }
+      },
+      {
+        id: 'entry-4',
+        tournamentId,
+        playerId: 'player-4',
+        deckId: null,
+        placement: null,
+        record: { wins: 0, losses: 3, draws: 0 },
+        seed: 4,
+        registrationDate: new Date(),
+        dropped: false,
+        metadata: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        player: {
+          id: 'player-4',
+          userId: 'user-4',
+          externalPlayerIds: null,
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          gameStats: []
+        }
+      }
+    ]
+
+    const mockCompletedMatches = [
+      // Round 1
+      {
+        id: 'match-1',
+        tournamentId,
+        player1Id: 'player-1',
+        player2Id: 'player-2',
+        winnerId: 'player-1',
+        round: 1,
+        table: 1,
+        status: 'COMPLETED',
+        player1Score: 2,
+        player2Score: 1,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        id: 'match-2',
+        tournamentId,
+        player1Id: 'player-3',
+        player2Id: 'player-4',
+        winnerId: 'player-3',
+        round: 1,
+        table: 2,
+        status: 'COMPLETED',
+        player1Score: 2,
+        player2Score: 0,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      // Round 2
+      {
+        id: 'match-3',
+        tournamentId,
+        player1Id: 'player-1',
+        player2Id: 'player-3',
+        winnerId: 'player-1',
+        round: 2,
+        table: 1,
+        status: 'COMPLETED',
+        player1Score: 2,
+        player2Score: 1,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        id: 'match-4',
+        tournamentId,
+        player1Id: 'player-2',
+        player2Id: 'player-4',
+        winnerId: 'player-2',
+        round: 2,
+        table: 2,
+        status: 'COMPLETED',
+        player1Score: 2,
+        player2Score: 0,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      // Round 3
+      {
+        id: 'match-5',
+        tournamentId,
+        player1Id: 'player-1',
+        player2Id: 'player-4',
+        winnerId: 'player-1',
+        round: 3,
+        table: 1,
+        status: 'COMPLETED',
+        player1Score: 2,
+        player2Score: 0,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        id: 'match-6',
+        tournamentId,
+        player1Id: 'player-2',
+        player2Id: 'player-3',
+        winnerId: 'player-2',
+        round: 3,
+        table: 2,
+        status: 'COMPLETED',
+        player1Score: 2,
+        player2Score: 1,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ]
+
+    const mockPlayerStats = {
+      id: 'stats-1',
+      playerId: 'player-1',
+      gameId: 'game-123',
+      currentRating: 1200,
+      seasonalStats: { wins: 0, losses: 0, draws: 0, tournaments: 0 },
+      bestFinish: null,
+      totalEarnings: 0,
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    it('should successfully complete a Swiss tournament with rating updates', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries,
+              matches: mockCompletedMatches,
+              game: { id: 'game-123', name: 'Test Game' }
+            }),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'COMPLETED'
+            })
+          },
+          tournamentEntry: {
+            update: jest.fn<any>().mockImplementation((args: any) => {
+              const entry = mockEntries.find(e => e.id === args.where.id)
+              return Promise.resolve({
+                ...entry,
+                placement: args.data.placement
+              })
+            })
+          },
+          playerGameStats: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockPlayerStats),
+            create: jest.fn<any>().mockResolvedValue(mockPlayerStats),
+            update: jest.fn<any>().mockImplementation((args: any) => {
+              return Promise.resolve({
+                ...mockPlayerStats,
+                currentRating: args.data.currentRating || mockPlayerStats.currentRating
+              })
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.completeTournament(tournamentId, organizerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.tournament.status).toBe('COMPLETED')
+      expect(result.finalStandings).toHaveLength(4)
+      expect(result.finalStandings[0].placement).toBe(1)
+      expect(result.ratingUpdates.length).toBeGreaterThan(0)
+    })
+
+    it('should throw NOT_FOUND error when tournament does not exist', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.completeTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Tournament not found')
+    })
+
+    it('should throw BAD_REQUEST error when tournament is not ACTIVE', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'COMPLETED',
+              entries: mockEntries,
+              matches: mockCompletedMatches,
+              game: { id: 'game-123', name: 'Test Game' }
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.completeTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot complete tournament with status COMPLETED')
+    })
+
+    it('should throw BAD_REQUEST error when matches are incomplete', async () => {
+      const incompleteMatches = [
+        ...mockCompletedMatches.slice(0, -1),
+        {
+          ...mockCompletedMatches[mockCompletedMatches.length - 1],
+          status: 'PENDING'
+        }
+      ]
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries,
+              matches: incompleteMatches,
+              game: { id: 'game-123', name: 'Test Game' }
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.completeTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot complete tournament')
+    })
+
+    it('should calculate correct final placements for Swiss tournament', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries,
+              matches: mockCompletedMatches,
+              game: { id: 'game-123', name: 'Test Game' }
+            }),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'COMPLETED'
+            })
+          },
+          tournamentEntry: {
+            update: jest.fn<any>().mockImplementation((args: any) => {
+              const entry = mockEntries.find(e => e.id === args.where.id)
+              return Promise.resolve({
+                ...entry,
+                placement: args.data.placement
+              })
+            })
+          },
+          playerGameStats: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockPlayerStats),
+            create: jest.fn<any>().mockResolvedValue(mockPlayerStats),
+            update: jest.fn<any>().mockResolvedValue(mockPlayerStats)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.completeTournament(tournamentId, organizerId)
+
+      // Verify placements are in correct order (player-1 should be 1st with 3 wins)
+      expect(result.finalStandings[0].playerId).toBe('player-1')
+      expect(result.finalStandings[0].placement).toBe(1)
+      expect(result.finalStandings[1].playerId).toBe('player-2')
+      expect(result.finalStandings[1].placement).toBe(2)
+    })
+
+    it('should handle elimination tournament completion', async () => {
+      const eliminationTournament = {
+        ...mockTournament,
+        tournamentStructure: 'ELIMINATION'
+      }
+
+      const eliminationMatches = [
+        // Round 1 (semifinals)
+        {
+          ...mockCompletedMatches[0],
+          winnerId: 'player-1'
+        },
+        {
+          ...mockCompletedMatches[1],
+          winnerId: 'player-3'
+        },
+        // Round 2 (finals)
+        {
+          ...mockCompletedMatches[2],
+          round: 2,
+          player1Id: 'player-1',
+          player2Id: 'player-3',
+          winnerId: 'player-1'
+        }
+      ]
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...eliminationTournament,
+              entries: mockEntries,
+              matches: eliminationMatches,
+              game: { id: 'game-123', name: 'Test Game' }
+            }),
+            update: jest.fn<any>().mockResolvedValue({
+              ...eliminationTournament,
+              status: 'COMPLETED'
+            })
+          },
+          tournamentEntry: {
+            update: jest.fn<any>().mockImplementation((args: any) => {
+              const entry = mockEntries.find(e => e.id === args.where.id)
+              return Promise.resolve({
+                ...entry,
+                placement: args.data.placement
+              })
+            })
+          },
+          playerGameStats: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockPlayerStats),
+            create: jest.fn<any>().mockResolvedValue(mockPlayerStats),
+            update: jest.fn<any>().mockResolvedValue(mockPlayerStats)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.completeTournament(tournamentId, organizerId)
+
+      // Verify
+      expect(result.tournament.status).toBe('COMPLETED')
+      expect(result.finalStandings[0].playerId).toBe('player-1') // Winner
+    })
+
+    it('should create PlayerGameStats if not exists', async () => {
+      // Setup mocks with no existing stats
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries,
+              matches: mockCompletedMatches,
+              game: { id: 'game-123', name: 'Test Game' }
+            }),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              status: 'COMPLETED'
+            })
+          },
+          tournamentEntry: {
+            update: jest.fn<any>().mockImplementation((args: any) => {
+              const entry = mockEntries.find(e => e.id === args.where.id)
+              return Promise.resolve({
+                ...entry,
+                placement: args.data.placement
+              })
+            })
+          },
+          playerGameStats: {
+            findUnique: jest.fn<any>().mockResolvedValue(null), // No existing stats
+            create: jest.fn<any>().mockResolvedValue(mockPlayerStats),
+            update: jest.fn<any>().mockResolvedValue(mockPlayerStats)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.completeTournament(tournamentId, organizerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.tournament.status).toBe('COMPLETED')
+    })
+
+    it('should throw error when tournament has no rounds played', async () => {
+      // Setup mocks with no matches
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockTournament,
+              entries: mockEntries,
+              matches: [], // No matches
+              game: { id: 'game-123', name: 'Test Game' }
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.completeTournament(tournamentId, organizerId)
+      ).rejects.toThrow('Cannot complete tournament with no rounds played')
+    })
+  })
 })
