@@ -897,4 +897,271 @@ export class TournamentProcessor {
       })
     }
   }
+
+  /**
+   * Pause tournament
+   * 
+   * Validates tournament is ACTIVE, updates status to PAUSED, and logs the action
+   * with an optional reason. Prevents new match submissions and round advancement
+   * while paused.
+   * 
+   * @param tournamentId - ID of the tournament to pause
+   * @param organizerId - ID of the user pausing the tournament
+   * @param reason - Optional reason for pausing
+   * @returns Updated tournament with PAUSED status
+   * @throws TRPCError if validation fails or tournament cannot be paused
+   * 
+   * Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
+   */
+  async pauseTournament(
+    tournamentId: string,
+    organizerId: string,
+    reason?: string
+  ): Promise<Tournament> {
+    try {
+      // Use transaction for atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Fetch tournament
+        const tournament = await tx.tournament.findUnique({
+          where: { id: tournamentId }
+        })
+
+        if (!tournament) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Tournament not found'
+          })
+        }
+
+        // Validate tournament is ACTIVE
+        if (tournament.status !== 'ACTIVE') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot pause tournament with status ${tournament.status}. Tournament must be ACTIVE.`
+          })
+        }
+
+        // Update status to PAUSED
+        const updatedTournament = await tx.tournament.update({
+          where: { id: tournamentId },
+          data: {
+            status: 'PAUSED',
+            updatedAt: new Date()
+          }
+        })
+
+        // Log action with AuditLogger (using transaction client)
+        const txAuditLogger = new AuditLogger(tx as any)
+        await txAuditLogger.logAction({
+          id: crypto.randomUUID(),
+          tournamentId: tournament.id,
+          action: 'PAUSE',
+          performedBy: organizerId,
+          timestamp: new Date(),
+          details: {
+            reason: reason || 'No reason provided',
+            previousStatus: tournament.status
+          }
+        })
+
+        return updatedTournament
+      })
+
+      return result
+    } catch (error) {
+      // Re-throw TRPCError as-is
+      if (error instanceof TRPCError) {
+        throw error
+      }
+
+      // Wrap other errors
+      console.error('Error pausing tournament:', error)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to pause tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+    }
+  }
+
+  /**
+   * Resume tournament
+   * 
+   * Validates tournament is PAUSED, updates status to ACTIVE, and logs the action.
+   * Restores normal match submission and progression capabilities.
+   * 
+   * @param tournamentId - ID of the tournament to resume
+   * @param organizerId - ID of the user resuming the tournament
+   * @returns Updated tournament with ACTIVE status
+   * @throws TRPCError if validation fails or tournament cannot be resumed
+   * 
+   * Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
+   */
+  async resumeTournament(
+    tournamentId: string,
+    organizerId: string
+  ): Promise<Tournament> {
+    try {
+      // Use transaction for atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Fetch tournament
+        const tournament = await tx.tournament.findUnique({
+          where: { id: tournamentId }
+        })
+
+        if (!tournament) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Tournament not found'
+          })
+        }
+
+        // Validate tournament is PAUSED
+        if (tournament.status !== 'PAUSED') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot resume tournament with status ${tournament.status}. Tournament must be PAUSED.`
+          })
+        }
+
+        // Update status to ACTIVE
+        const updatedTournament = await tx.tournament.update({
+          where: { id: tournamentId },
+          data: {
+            status: 'ACTIVE',
+            updatedAt: new Date()
+          }
+        })
+
+        // Log action with AuditLogger (using transaction client)
+        const txAuditLogger = new AuditLogger(tx as any)
+        await txAuditLogger.logAction({
+          id: crypto.randomUUID(),
+          tournamentId: tournament.id,
+          action: 'RESUME',
+          performedBy: organizerId,
+          timestamp: new Date(),
+          details: {
+            previousStatus: tournament.status
+          }
+        })
+
+        return updatedTournament
+      })
+
+      return result
+    } catch (error) {
+      // Re-throw TRPCError as-is
+      if (error instanceof TRPCError) {
+        throw error
+      }
+
+      // Wrap other errors
+      console.error('Error resuming tournament:', error)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to resume tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+    }
+  }
+
+  /**
+   * Cancel tournament
+   * 
+   * Validates tournament is not COMPLETED, updates status to CANCELLED, logs the
+   * action with reason, and preserves all match results and standings for record
+   * keeping. Prevents any further match submissions or tournament progression.
+   * 
+   * @param tournamentId - ID of the tournament to cancel
+   * @param organizerId - ID of the user cancelling the tournament
+   * @param reason - Reason for cancellation (required)
+   * @returns Updated tournament with CANCELLED status
+   * @throws TRPCError if validation fails or tournament cannot be cancelled
+   * 
+   * Requirements: 14.1, 14.2, 14.3, 14.4, 14.5
+   */
+  async cancelTournament(
+    tournamentId: string,
+    organizerId: string,
+    reason: string
+  ): Promise<Tournament> {
+    try {
+      // Use transaction for atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Fetch tournament with entries for notification purposes
+        const tournament = await tx.tournament.findUnique({
+          where: { id: tournamentId },
+          include: {
+            entries: {
+              select: {
+                playerId: true
+              }
+            }
+          }
+        })
+
+        if (!tournament) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Tournament not found'
+          })
+        }
+
+        // Validate tournament is not COMPLETED
+        if (tournament.status === 'COMPLETED') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Cannot cancel a completed tournament.'
+          })
+        }
+
+        // Validate reason is provided
+        if (!reason || reason.trim() === '') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Cancellation reason is required.'
+          })
+        }
+
+        // Update status to CANCELLED
+        const updatedTournament = await tx.tournament.update({
+          where: { id: tournamentId },
+          data: {
+            status: 'CANCELLED',
+            updatedAt: new Date()
+          }
+        })
+
+        // Log action with AuditLogger (using transaction client)
+        const txAuditLogger = new AuditLogger(tx as any)
+        await txAuditLogger.logAction({
+          id: crypto.randomUUID(),
+          tournamentId: tournament.id,
+          action: 'CANCEL',
+          performedBy: organizerId,
+          timestamp: new Date(),
+          details: {
+            reason: reason.trim(),
+            previousStatus: tournament.status,
+            participantCount: tournament.entries.length
+          }
+        })
+
+        return updatedTournament
+      })
+
+      return result
+    } catch (error) {
+      // Re-throw TRPCError as-is
+      if (error instanceof TRPCError) {
+        throw error
+      }
+
+      // Wrap other errors
+      console.error('Error cancelling tournament:', error)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to cancel tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+    }
+  }
 }
