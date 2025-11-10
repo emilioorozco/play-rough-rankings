@@ -1164,4 +1164,187 @@ export class TournamentProcessor {
       })
     }
   }
+
+  /**
+   * Drop player from tournament
+   * 
+   * Validates player is registered in tournament, updates TournamentEntry.dropped
+   * to true, handles tournament-specific logic (Swiss: exclude from future pairings,
+   * Elimination: advance opponent if match is pending), updates affected matches,
+   * and logs the action.
+   * 
+   * @param tournamentId - ID of the tournament
+   * @param playerId - ID of the player to drop
+   * @returns Updated entry and affected matches
+   * @throws TRPCError if validation fails or player cannot be dropped
+   * 
+   * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5
+   */
+  async dropPlayer(
+    tournamentId: string,
+    playerId: string
+  ): Promise<{ entry: TournamentEntry; affectedMatches: Match[] }> {
+    try {
+      // Use transaction for atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Fetch tournament with structure info
+        const tournament = await tx.tournament.findUnique({
+          where: { id: tournamentId },
+          select: {
+            id: true,
+            status: true,
+            tournamentStructure: true
+          }
+        })
+
+        if (!tournament) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Tournament not found'
+          })
+        }
+
+        // Validate player is registered in tournament
+        const entry = await tx.tournamentEntry.findUnique({
+          where: {
+            tournamentId_playerId: {
+              tournamentId,
+              playerId
+            }
+          }
+        })
+
+        if (!entry) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Player is not registered in this tournament'
+          })
+        }
+
+        // Check if player is already dropped
+        if (entry.dropped) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Player has already dropped from this tournament'
+          })
+        }
+
+        // Update TournamentEntry.dropped to true
+        const updatedEntry = await tx.tournamentEntry.update({
+          where: { id: entry.id },
+          data: {
+            dropped: true,
+            updatedAt: new Date()
+          }
+        })
+
+        // Determine tournament structure
+        const tournamentStructure = (tournament.tournamentStructure?.toUpperCase() || 'SWISS') as TournamentStructure
+
+        // Handle affected matches based on tournament structure
+        const affectedMatches: Match[] = []
+
+        if (tournamentStructure === 'ELIMINATION') {
+          // For Elimination: if pending match, advance opponent
+          const pendingMatches = await tx.match.findMany({
+            where: {
+              tournamentId,
+              status: 'PENDING',
+              OR: [
+                { player1Id: playerId },
+                { player2Id: playerId }
+              ]
+            }
+          })
+
+          for (const match of pendingMatches) {
+            // Determine the opponent (the player who should advance)
+            const opponentId = match.player1Id === playerId ? match.player2Id : match.player1Id
+
+            // Update match to mark opponent as winner
+            const updatedMatch = await tx.match.update({
+              where: { id: match.id },
+              data: {
+                winnerId: opponentId,
+                status: 'COMPLETED',
+                // Award 2-0 to the opponent (standard bye score)
+                player1Score: match.player1Id === opponentId ? 2 : 0,
+                player2Score: match.player2Id === opponentId ? 2 : 0,
+                updatedAt: new Date()
+              }
+            })
+
+            affectedMatches.push(updatedMatch)
+          }
+        } else {
+          // For Swiss: matches remain but player is excluded from future pairings
+          // Find any pending matches involving this player
+          const pendingMatches = await tx.match.findMany({
+            where: {
+              tournamentId,
+              status: 'PENDING',
+              OR: [
+                { player1Id: playerId },
+                { player2Id: playerId }
+              ]
+            }
+          })
+
+          // Mark these matches as completed with opponent winning
+          for (const match of pendingMatches) {
+            const opponentId = match.player1Id === playerId ? match.player2Id : match.player1Id
+
+            const updatedMatch = await tx.match.update({
+              where: { id: match.id },
+              data: {
+                winnerId: opponentId,
+                status: 'COMPLETED',
+                // Award 2-0 to the opponent
+                player1Score: match.player1Id === opponentId ? 2 : 0,
+                player2Score: match.player2Id === opponentId ? 2 : 0,
+                updatedAt: new Date()
+              }
+            })
+
+            affectedMatches.push(updatedMatch)
+          }
+        }
+
+        // Log action with AuditLogger (using transaction client)
+        const txAuditLogger = new AuditLogger(tx as any)
+        await txAuditLogger.logAction({
+          id: crypto.randomUUID(),
+          tournamentId: tournament.id,
+          action: 'PLAYER_DROP',
+          performedBy: playerId, // Player dropping themselves
+          timestamp: new Date(),
+          details: {
+            playerId,
+            tournamentStructure,
+            affectedMatchCount: affectedMatches.length,
+            matchIds: affectedMatches.map(m => m.id)
+          }
+        })
+
+        return {
+          entry: updatedEntry,
+          affectedMatches
+        }
+      })
+
+      return result
+    } catch (error) {
+      // Re-throw TRPCError as-is
+      if (error instanceof TRPCError) {
+        throw error
+      }
+
+      // Wrap other errors
+      console.error('Error dropping player from tournament:', error)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to drop player from tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+    }
+  }
 }

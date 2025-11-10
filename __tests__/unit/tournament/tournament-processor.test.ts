@@ -1828,4 +1828,387 @@ describe('TournamentProcessor', () => {
       // The fact that we don't delete anything verifies preservation
     })
   })
+
+  describe('dropPlayer', () => {
+    const tournamentId = 'tournament-123'
+    const playerId = 'player-1'
+
+    const mockTournament = {
+      id: tournamentId,
+      status: 'ACTIVE',
+      tournamentStructure: 'SWISS'
+    }
+
+    const mockEntry = {
+      id: 'entry-1',
+      tournamentId,
+      playerId,
+      deckId: null,
+      placement: null,
+      record: null,
+      seed: 1,
+      registrationDate: new Date(),
+      dropped: false,
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    it('should successfully drop player from Swiss tournament', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament),
+            update: jest.fn<any>().mockResolvedValue(mockTournament)
+          },
+          tournamentEntry: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockEntry),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockEntry,
+              dropped: true
+            })
+          },
+          match: {
+            findMany: jest.fn<any>().mockResolvedValue([]),
+            update: jest.fn<any>()
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.dropPlayer(tournamentId, playerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.entry).toBeDefined()
+      expect(result.entry.dropped).toBe(true)
+      expect(result.affectedMatches).toEqual([])
+    })
+
+    it('should advance opponent in elimination tournament when player drops with pending match', async () => {
+      const opponentId = 'player-2'
+      const mockEliminationTournament = {
+        ...mockTournament,
+        tournamentStructure: 'ELIMINATION'
+      }
+
+      const mockPendingMatch = {
+        id: 'match-1',
+        tournamentId,
+        player1Id: playerId,
+        player2Id: opponentId,
+        winnerId: null,
+        round: 1,
+        table: 1,
+        status: 'PENDING',
+        player1Score: null,
+        player2Score: null,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockEliminationTournament),
+            update: jest.fn<any>().mockResolvedValue(mockEliminationTournament)
+          },
+          tournamentEntry: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockEntry),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockEntry,
+              dropped: true
+            })
+          },
+          match: {
+            findMany: jest.fn<any>().mockResolvedValue([mockPendingMatch]),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockPendingMatch,
+              winnerId: opponentId,
+              status: 'COMPLETED',
+              player1Score: 0,
+              player2Score: 2
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.dropPlayer(tournamentId, playerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.entry.dropped).toBe(true)
+      expect(result.affectedMatches).toHaveLength(1)
+      expect(result.affectedMatches[0].winnerId).toBe(opponentId)
+      expect(result.affectedMatches[0].status).toBe('COMPLETED')
+    })
+
+    it('should handle Swiss tournament player drop with pending match', async () => {
+      const opponentId = 'player-2'
+      const mockPendingMatch = {
+        id: 'match-1',
+        tournamentId,
+        player1Id: playerId,
+        player2Id: opponentId,
+        winnerId: null,
+        round: 2,
+        table: 1,
+        status: 'PENDING',
+        player1Score: null,
+        player2Score: null,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament),
+            update: jest.fn<any>().mockResolvedValue(mockTournament)
+          },
+          tournamentEntry: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockEntry),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockEntry,
+              dropped: true
+            })
+          },
+          match: {
+            findMany: jest.fn<any>().mockResolvedValue([mockPendingMatch]),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockPendingMatch,
+              winnerId: opponentId,
+              status: 'COMPLETED',
+              player1Score: 0,
+              player2Score: 2
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.dropPlayer(tournamentId, playerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.entry.dropped).toBe(true)
+      expect(result.affectedMatches).toHaveLength(1)
+      expect(result.affectedMatches[0].winnerId).toBe(opponentId)
+      expect(result.affectedMatches[0].status).toBe('COMPLETED')
+      expect(result.affectedMatches[0].player2Score).toBe(2)
+    })
+
+    it('should throw NOT_FOUND error when tournament does not exist', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.dropPlayer(tournamentId, playerId)
+      ).rejects.toThrow('Tournament not found')
+    })
+
+    it('should throw NOT_FOUND error when player is not registered', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament)
+          },
+          tournamentEntry: {
+            findUnique: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.dropPlayer(tournamentId, playerId)
+      ).rejects.toThrow('Player is not registered in this tournament')
+    })
+
+    it('should throw BAD_REQUEST error when player has already dropped', async () => {
+      // Setup mocks with already dropped player
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament)
+          },
+          tournamentEntry: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              ...mockEntry,
+              dropped: true
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.dropPlayer(tournamentId, playerId)
+      ).rejects.toThrow('Player has already dropped from this tournament')
+    })
+
+    it('should handle multiple pending matches in elimination tournament', async () => {
+      const opponentId = 'player-2'
+      const mockEliminationTournament = {
+        ...mockTournament,
+        tournamentStructure: 'ELIMINATION'
+      }
+
+      const mockPendingMatches = [
+        {
+          id: 'match-1',
+          tournamentId,
+          player1Id: playerId,
+          player2Id: opponentId,
+          winnerId: null,
+          round: 1,
+          table: 1,
+          status: 'PENDING',
+          player1Score: null,
+          player2Score: null,
+          scheduledTime: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 'match-2',
+          tournamentId,
+          player1Id: opponentId,
+          player2Id: playerId,
+          winnerId: null,
+          round: 2,
+          table: 1,
+          status: 'PENDING',
+          player1Score: null,
+          player2Score: null,
+          scheduledTime: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ]
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockEliminationTournament),
+            update: jest.fn<any>().mockResolvedValue(mockEliminationTournament)
+          },
+          tournamentEntry: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockEntry),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockEntry,
+              dropped: true
+            })
+          },
+          match: {
+            findMany: jest.fn<any>().mockResolvedValue(mockPendingMatches),
+            update: jest.fn<any>()
+              .mockResolvedValueOnce({
+                ...mockPendingMatches[0],
+                winnerId: opponentId,
+                status: 'COMPLETED',
+                player1Score: 0,
+                player2Score: 2
+              })
+              .mockResolvedValueOnce({
+                ...mockPendingMatches[1],
+                winnerId: opponentId,
+                status: 'COMPLETED',
+                player1Score: 2,
+                player2Score: 0
+              })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.dropPlayer(tournamentId, playerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.entry.dropped).toBe(true)
+      expect(result.affectedMatches).toHaveLength(2)
+      expect(result.affectedMatches[0].winnerId).toBe(opponentId)
+      expect(result.affectedMatches[1].winnerId).toBe(opponentId)
+    })
+
+    it('should correctly award scores when dropped player is player2', async () => {
+      const opponentId = 'player-2'
+      const mockPendingMatch = {
+        id: 'match-1',
+        tournamentId,
+        player1Id: opponentId,
+        player2Id: playerId,
+        winnerId: null,
+        round: 1,
+        table: 1,
+        status: 'PENDING',
+        player1Score: null,
+        player2Score: null,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament),
+            update: jest.fn<any>().mockResolvedValue(mockTournament)
+          },
+          tournamentEntry: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockEntry),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockEntry,
+              dropped: true
+            })
+          },
+          match: {
+            findMany: jest.fn<any>().mockResolvedValue([mockPendingMatch]),
+            update: jest.fn<any>().mockResolvedValue({
+              ...mockPendingMatch,
+              winnerId: opponentId,
+              status: 'COMPLETED',
+              player1Score: 2,
+              player2Score: 0
+            })
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.dropPlayer(tournamentId, playerId)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.affectedMatches).toHaveLength(1)
+      expect(result.affectedMatches[0].winnerId).toBe(opponentId)
+      expect(result.affectedMatches[0].player1Score).toBe(2)
+      expect(result.affectedMatches[0].player2Score).toBe(0)
+    })
+  })
 })
