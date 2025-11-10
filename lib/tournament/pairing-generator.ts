@@ -144,6 +144,79 @@ export class PairingGenerator {
   }
 
   /**
+   * Generate elimination bracket pairings for next round
+   * 
+   * Promotes winners from the previous round to the next bracket level.
+   * Handles bracket structure progression (quarterfinals, semifinals, finals).
+   * 
+   * @param winners - Array of player IDs who won in the previous round
+   * @param _round - Current round number (unused but kept for API consistency)
+   * @returns Array of pairings for the next round
+   */
+  generateEliminationPairings(
+    winners: string[],
+    _round: number
+  ): Pairing[] {
+    if (winners.length < 2) {
+      throw new Error('Insufficient winners for next round (minimum 2 required)')
+    }
+
+    if (winners.length === 1) {
+      throw new Error('Tournament complete - only one player remains')
+    }
+
+    // Validate that winners count is even (or will be after byes)
+    if (winners.length % 2 !== 0) {
+      throw new Error('Odd number of winners - elimination tournaments require even player counts per round')
+    }
+
+    const pairings: Pairing[] = []
+    let tableNumber = 1
+
+    // Pair winners sequentially (bracket order is maintained)
+    for (let i = 0; i < winners.length; i += 2) {
+      pairings.push({
+        player1Id: winners[i],
+        player2Id: winners[i + 1],
+        table: tableNumber++,
+      })
+    }
+
+    return pairings
+  }
+
+  /**
+   * Determine round name based on remaining players
+   * 
+   * Returns the traditional bracket round name based on how many
+   * players remain in the tournament.
+   * 
+   * @param remainingPlayers - Number of players still in the tournament
+   * @returns Round name (e.g., "Finals", "Semifinals", "Quarterfinals")
+   */
+  getRoundName(remainingPlayers: number): string {
+    switch (remainingPlayers) {
+      case 2:
+        return 'Finals'
+      case 4:
+        return 'Semifinals'
+      case 8:
+        return 'Quarterfinals'
+      case 16:
+        return 'Round of 16'
+      case 32:
+        return 'Round of 32'
+      case 64:
+        return 'Round of 64'
+      default:
+        if (remainingPlayers > 64) {
+          return `Round of ${remainingPlayers}`
+        }
+        return `Round ${Math.ceil(Math.log2(remainingPlayers))}`
+    }
+  }
+
+  /**
    * Assign bye to a player in Swiss tournament
    * 
    * Assigns bye to the lowest-ranked player who hasn't received a bye yet.
