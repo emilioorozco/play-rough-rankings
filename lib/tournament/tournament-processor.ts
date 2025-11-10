@@ -23,6 +23,20 @@ export interface StartTournamentResult {
 }
 
 /**
+ * Result of advancing to the next round
+ */
+export interface AdvanceRoundResult {
+  /** Updated tournament with incremented round number */
+  tournament: Tournament
+  /** Array of created matches for the new round */
+  newMatches: Match[]
+  /** Current round number after advancement */
+  currentRound: number
+  /** Whether the tournament has ended (all rounds complete or one player remains) */
+  tournamentEnded: boolean
+}
+
+/**
  * TournamentProcessor class for managing tournament lifecycle
  */
 export class TournamentProcessor {
@@ -181,6 +195,215 @@ export class TournamentProcessor {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: `Failed to start tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+    }
+  }
+
+  /**
+   * Advance tournament to the next round
+   * 
+   * Validates all current round matches are completed, generates pairings for
+   * the next round based on tournament structure (Swiss or Elimination), creates
+   * new Match records, updates tournament round number, and logs the action.
+   * Detects end-of-tournament conditions.
+   * 
+   * @param tournamentId - ID of the tournament to advance
+   * @param organizerId - ID of the user advancing the tournament
+   * @returns Tournament, new matches, current round, and tournament ended flag
+   * @throws TRPCError if validation fails or tournament cannot be advanced
+   * 
+   * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+   */
+  async advanceRound(
+    tournamentId: string,
+    organizerId: string
+  ): Promise<AdvanceRoundResult> {
+    try {
+      // Use transaction for atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Fetch tournament with entries and matches
+        const tournament = await tx.tournament.findUnique({
+          where: { id: tournamentId },
+          include: {
+            entries: {
+              where: { dropped: false },
+              orderBy: { seed: 'asc' }
+            },
+            matches: {
+              orderBy: [{ round: 'asc' }, { table: 'asc' }]
+            }
+          }
+        })
+
+        if (!tournament) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Tournament not found'
+          })
+        }
+
+        // Validate tournament status is ACTIVE
+        if (tournament.status !== 'ACTIVE') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot advance tournament with status ${tournament.status}. Tournament must be ACTIVE.`
+          })
+        }
+
+        // Determine current round from matches
+        const currentRound = tournament.matches.length > 0
+          ? Math.max(...tournament.matches.map(m => m.round))
+          : 0
+
+        // Validate all current round matches are completed
+        const currentRoundMatches = tournament.matches.filter(m => m.round === currentRound)
+        const incompleteMatches = currentRoundMatches.filter(m => m.status !== 'COMPLETED')
+
+        if (incompleteMatches.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot advance round. ${incompleteMatches.length} match(es) in round ${currentRound} are not completed.`
+          })
+        }
+
+        // Determine tournament structure
+        const tournamentStructure = (tournament.tournamentStructure?.toUpperCase() || 'SWISS') as TournamentStructure
+
+        if (tournamentStructure !== 'SWISS' && tournamentStructure !== 'ELIMINATION') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Unsupported tournament structure: ${tournament.tournamentStructure}`
+          })
+        }
+
+        const nextRound = currentRound + 1
+        let pairings: Pairing[] = []
+        let tournamentEnded = false
+
+        // Generate pairings based on tournament structure
+        if (tournamentStructure === 'SWISS') {
+          // Check if all Swiss rounds are complete
+          if (tournament.totalRounds && currentRound >= tournament.totalRounds) {
+            tournamentEnded = true
+          } else {
+            // Generate Swiss pairings based on current standings
+            try {
+              pairings = this.pairingGenerator.generateSwissPairings(
+                tournament.entries,
+                tournament.matches,
+                nextRound
+              )
+            } catch (error) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: `Failed to generate Swiss pairings: ${error instanceof Error ? error.message : 'Unknown error'}`
+              })
+            }
+          }
+        } else if (tournamentStructure === 'ELIMINATION') {
+          // Get winners from current round
+          const winners = currentRoundMatches
+            .filter(m => m.winnerId !== null)
+            .map(m => m.winnerId as string)
+
+          // Check if only one player remains (tournament complete)
+          if (winners.length === 1) {
+            tournamentEnded = true
+          } else if (winners.length === 0) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'No winners found in current round. Cannot advance elimination tournament.'
+            })
+          } else {
+            // Generate elimination pairings for winners
+            try {
+              pairings = this.pairingGenerator.generateEliminationPairings(
+                winners,
+                nextRound
+              )
+            } catch (error) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: `Failed to generate elimination pairings: ${error instanceof Error ? error.message : 'Unknown error'}`
+              })
+            }
+          }
+        }
+
+        let newMatches: Match[] = []
+
+        // Create new matches if tournament hasn't ended
+        if (!tournamentEnded && pairings.length > 0) {
+          for (const pairing of pairings) {
+            const match = await tx.match.create({
+              data: {
+                tournamentId: tournament.id,
+                player1Id: pairing.player1Id,
+                player2Id: pairing.player2Id,
+                round: nextRound,
+                table: pairing.table,
+                status: 'PENDING',
+                // For bye matches, automatically set winner and scores
+                ...(pairing.isBye ? {
+                  winnerId: pairing.player1Id,
+                  player1Score: 2,
+                  player2Score: 0,
+                  status: 'COMPLETED'
+                } : {})
+              }
+            })
+            newMatches.push(match)
+          }
+        }
+
+        // Update tournament (no status change, just updatedAt)
+        const updatedTournament = await tx.tournament.update({
+          where: { id: tournamentId },
+          data: {
+            updatedAt: new Date()
+          }
+        })
+
+        // Log action with AuditLogger (using transaction client)
+        const txAuditLogger = new AuditLogger(tx as any)
+        await txAuditLogger.logAction({
+          id: crypto.randomUUID(),
+          tournamentId: tournament.id,
+          action: 'ADVANCE_ROUND',
+          performedBy: organizerId,
+          timestamp: new Date(),
+          details: {
+            round: nextRound,
+            previousRound: currentRound,
+            matchCount: newMatches.length,
+            tournamentStructure,
+            tournamentEnded,
+            ...(tournamentStructure === 'ELIMINATION' && {
+              remainingPlayers: pairings.length * 2
+            })
+          }
+        })
+
+        return {
+          tournament: updatedTournament,
+          newMatches,
+          currentRound: tournamentEnded ? currentRound : nextRound,
+          tournamentEnded
+        }
+      })
+
+      return result
+    } catch (error) {
+      // Re-throw TRPCError as-is
+      if (error instanceof TRPCError) {
+        throw error
+      }
+
+      // Wrap other errors
+      console.error('Error advancing tournament round:', error)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to advance tournament round: ${error instanceof Error ? error.message : 'Unknown error'}`
       })
     }
   }
