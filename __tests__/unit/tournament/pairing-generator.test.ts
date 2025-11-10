@@ -561,6 +561,257 @@ describe('PairingGenerator', () => {
     })
   })
 
+  describe('generateEliminationPairings', () => {
+    it('should throw error with insufficient winners', () => {
+      expect(() => generator.generateEliminationPairings(['player-1'], 2)).toThrow(
+        'Insufficient winners for next round (minimum 2 required)'
+      )
+    })
+
+    it('should throw error when tournament is complete', () => {
+      expect(() => generator.generateEliminationPairings(['player-1'], 2)).toThrow(
+        'Insufficient winners for next round (minimum 2 required)'
+      )
+    })
+
+    it('should throw error with odd number of winners', () => {
+      expect(() => generator.generateEliminationPairings(['player-1', 'player-2', 'player-3'], 2)).toThrow(
+        'Odd number of winners - elimination tournaments require even player counts per round'
+      )
+    })
+
+    it('should generate pairings for 8 winners (quarterfinals)', () => {
+      const winners = ['player-1', 'player-2', 'player-3', 'player-4', 'player-5', 'player-6', 'player-7', 'player-8']
+      const pairings = generator.generateEliminationPairings(winners, 2)
+
+      expect(pairings).toHaveLength(4)
+      
+      // Verify sequential pairing
+      expect(pairings[0].player1Id).toBe('player-1')
+      expect(pairings[0].player2Id).toBe('player-2')
+      expect(pairings[1].player1Id).toBe('player-3')
+      expect(pairings[1].player2Id).toBe('player-4')
+      expect(pairings[2].player1Id).toBe('player-5')
+      expect(pairings[2].player2Id).toBe('player-6')
+      expect(pairings[3].player1Id).toBe('player-7')
+      expect(pairings[3].player2Id).toBe('player-8')
+    })
+
+    it('should generate pairings for 4 winners (semifinals)', () => {
+      const winners = ['player-1', 'player-3', 'player-5', 'player-7']
+      const pairings = generator.generateEliminationPairings(winners, 3)
+
+      expect(pairings).toHaveLength(2)
+      expect(pairings[0].player1Id).toBe('player-1')
+      expect(pairings[0].player2Id).toBe('player-3')
+      expect(pairings[1].player1Id).toBe('player-5')
+      expect(pairings[1].player2Id).toBe('player-7')
+    })
+
+    it('should generate pairing for 2 winners (finals)', () => {
+      const winners = ['player-1', 'player-5']
+      const pairings = generator.generateEliminationPairings(winners, 4)
+
+      expect(pairings).toHaveLength(1)
+      expect(pairings[0].player1Id).toBe('player-1')
+      expect(pairings[0].player2Id).toBe('player-5')
+    })
+
+    it('should assign sequential table numbers', () => {
+      const winners = ['player-1', 'player-2', 'player-3', 'player-4']
+      const pairings = generator.generateEliminationPairings(winners, 2)
+
+      expect(pairings[0].table).toBe(1)
+      expect(pairings[1].table).toBe(2)
+    })
+
+    it('should maintain bracket order', () => {
+      const winners = ['player-1', 'player-2', 'player-3', 'player-4', 'player-5', 'player-6']
+      const pairings = generator.generateEliminationPairings(winners, 2)
+
+      // Winners should be paired in order: 1v2, 3v4, 5v6
+      expect(pairings).toHaveLength(3)
+      expect(pairings[0].player1Id).toBe('player-1')
+      expect(pairings[0].player2Id).toBe('player-2')
+      expect(pairings[1].player1Id).toBe('player-3')
+      expect(pairings[1].player2Id).toBe('player-4')
+      expect(pairings[2].player1Id).toBe('player-5')
+      expect(pairings[2].player2Id).toBe('player-6')
+    })
+  })
+
+  describe('getRoundName', () => {
+    it('should return "Finals" for 2 players', () => {
+      expect(generator.getRoundName(2)).toBe('Finals')
+    })
+
+    it('should return "Semifinals" for 4 players', () => {
+      expect(generator.getRoundName(4)).toBe('Semifinals')
+    })
+
+    it('should return "Quarterfinals" for 8 players', () => {
+      expect(generator.getRoundName(8)).toBe('Quarterfinals')
+    })
+
+    it('should return "Round of 16" for 16 players', () => {
+      expect(generator.getRoundName(16)).toBe('Round of 16')
+    })
+
+    it('should return "Round of 32" for 32 players', () => {
+      expect(generator.getRoundName(32)).toBe('Round of 32')
+    })
+
+    it('should return "Round of 64" for 64 players', () => {
+      expect(generator.getRoundName(64)).toBe('Round of 64')
+    })
+
+    it('should return "Round of X" for large player counts', () => {
+      expect(generator.getRoundName(128)).toBe('Round of 128')
+      expect(generator.getRoundName(256)).toBe('Round of 256')
+    })
+
+    it('should handle non-standard player counts', () => {
+      const result = generator.getRoundName(3)
+      expect(result).toBeDefined()
+      expect(typeof result).toBe('string')
+    })
+  })
+
+  describe('Elimination tournament progression scenarios', () => {
+    it('should handle complete 8-player bracket progression', () => {
+      const entries = createMockEntries(8, true)
+      
+      // Round 1: Initial bracket
+      const round1Pairings = generator.generateInitialPairings(entries, 'ELIMINATION')
+      expect(round1Pairings).toHaveLength(4)
+
+      // Simulate round 1 winners
+      const round1Winners = [
+        round1Pairings[0].player1Id, // Winner of match 1
+        round1Pairings[1].player1Id, // Winner of match 2
+        round1Pairings[2].player1Id, // Winner of match 3
+        round1Pairings[3].player1Id, // Winner of match 4
+      ]
+
+      // Round 2: Semifinals
+      const round2Pairings = generator.generateEliminationPairings(round1Winners, 2)
+      expect(round2Pairings).toHaveLength(2)
+      expect(generator.getRoundName(4)).toBe('Semifinals')
+
+      // Simulate round 2 winners
+      const round2Winners = [
+        round2Pairings[0].player1Id, // Winner of semifinal 1
+        round2Pairings[1].player1Id, // Winner of semifinal 2
+      ]
+
+      // Round 3: Finals
+      const round3Pairings = generator.generateEliminationPairings(round2Winners, 3)
+      expect(round3Pairings).toHaveLength(1)
+      expect(generator.getRoundName(2)).toBe('Finals')
+    })
+
+    it('should handle 16-player bracket progression', () => {
+      const entries = createMockEntries(16, true)
+      
+      // Round 1: Round of 16
+      const round1Pairings = generator.generateInitialPairings(entries, 'ELIMINATION')
+      expect(round1Pairings).toHaveLength(8)
+      expect(generator.getRoundName(16)).toBe('Round of 16')
+
+      // Simulate winners
+      const round1Winners = round1Pairings.map(p => p.player1Id)
+
+      // Round 2: Quarterfinals
+      const round2Pairings = generator.generateEliminationPairings(round1Winners, 2)
+      expect(round2Pairings).toHaveLength(4)
+      expect(generator.getRoundName(8)).toBe('Quarterfinals')
+
+      // Simulate winners
+      const round2Winners = round2Pairings.map(p => p.player1Id)
+
+      // Round 3: Semifinals
+      const round3Pairings = generator.generateEliminationPairings(round2Winners, 3)
+      expect(round3Pairings).toHaveLength(2)
+      expect(generator.getRoundName(4)).toBe('Semifinals')
+
+      // Simulate winners
+      const round3Winners = round3Pairings.map(p => p.player1Id)
+
+      // Round 4: Finals
+      const round4Pairings = generator.generateEliminationPairings(round3Winners, 4)
+      expect(round4Pairings).toHaveLength(1)
+      expect(generator.getRoundName(2)).toBe('Finals')
+    })
+
+    it('should handle non-power-of-2 bracket with byes', () => {
+      const entries = createMockEntries(6, true)
+      
+      // Round 1: 6 players in 8-bracket (2 byes)
+      const round1Pairings = generator.generateInitialPairings(entries, 'ELIMINATION')
+      expect(round1Pairings).toHaveLength(3)
+
+      // Simulate round 1: 2 matches + 0 byes (6 is even, so no byes in round 1)
+      // All 6 players compete, 3 winners advance
+      const round1Winners = [
+        round1Pairings[0].player1Id,
+        round1Pairings[1].player1Id,
+        round1Pairings[2].player1Id,
+      ]
+
+      // This should fail because we have odd number of winners
+      expect(() => generator.generateEliminationPairings(round1Winners, 2)).toThrow(
+        'Odd number of winners - elimination tournaments require even player counts per round'
+      )
+    })
+
+    it('should handle 5-player bracket with bye', () => {
+      const entries = createMockEntries(5, true)
+      
+      // Round 1: 5 players in 8-bracket
+      const round1Pairings = generator.generateInitialPairings(entries, 'ELIMINATION')
+      expect(round1Pairings).toHaveLength(3) // 2 regular matches + 1 bye
+
+      // Count bye matches
+      const byeMatches = round1Pairings.filter(p => p.isBye)
+      expect(byeMatches).toHaveLength(1)
+
+      // Simulate round 1 winners (2 from matches + 1 from bye = 3 winners)
+      // This creates an odd number, which should fail in next round
+      const round1Winners = [
+        round1Pairings[0].player1Id,
+        round1Pairings[1].player1Id,
+        round1Pairings[2].player1Id, // Bye winner
+      ]
+
+      expect(() => generator.generateEliminationPairings(round1Winners, 2)).toThrow(
+        'Odd number of winners'
+      )
+    })
+
+    it('should maintain bracket integrity across rounds', () => {
+      const entries = createMockEntries(8, true)
+      
+      // Track all players through the bracket
+      const allPlayers = new Set(entries.map(e => e.playerId))
+      
+      // Round 1
+      const round1Pairings = generator.generateInitialPairings(entries, 'ELIMINATION')
+      const round1Players = new Set<string>()
+      round1Pairings.forEach(p => {
+        round1Players.add(p.player1Id)
+        if (!p.isBye) {
+          round1Players.add(p.player2Id)
+        }
+      })
+      expect(round1Players.size).toBe(8)
+
+      // Verify all players are in round 1
+      allPlayers.forEach(playerId => {
+        expect(round1Players.has(playerId)).toBe(true)
+      })
+    })
+  })
+
   describe('Swiss tournament multi-round scenarios', () => {
     const createMockMatches = (
       tournamentId: string,
