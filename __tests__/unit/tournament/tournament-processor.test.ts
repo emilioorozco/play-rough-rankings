@@ -2211,4 +2211,606 @@ describe('TournamentProcessor', () => {
       expect(result.affectedMatches[0].player2Score).toBe(0)
     })
   })
+
+  describe('createManualPairings', () => {
+    const tournamentId = 'tournament-123'
+    const organizerId = 'organizer-456'
+
+    const mockTournament = {
+      id: tournamentId,
+      status: 'UPCOMING',
+      tournamentStructure: 'SWISS',
+      entries: [
+        {
+          id: 'entry-1',
+          tournamentId,
+          playerId: 'player-1',
+          dropped: false,
+          seed: 1,
+          deckId: null,
+          placement: null,
+          record: null,
+          registrationDate: new Date(),
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 'entry-2',
+          tournamentId,
+          playerId: 'player-2',
+          dropped: false,
+          seed: 2,
+          deckId: null,
+          placement: null,
+          record: null,
+          registrationDate: new Date(),
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 'entry-3',
+          tournamentId,
+          playerId: 'player-3',
+          dropped: false,
+          seed: 3,
+          deckId: null,
+          placement: null,
+          record: null,
+          registrationDate: new Date(),
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 'entry-4',
+          tournamentId,
+          playerId: 'player-4',
+          dropped: false,
+          seed: 4,
+          deckId: null,
+          placement: null,
+          record: null,
+          registrationDate: new Date(),
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ],
+      matches: []
+    }
+
+    const mockPairings = [
+      { player1Id: 'player-1', player2Id: 'player-2', table: 1 },
+      { player1Id: 'player-3', player2Id: 'player-4', table: 2 }
+    ]
+
+    it('should successfully create manual pairings for UPCOMING tournament', async () => {
+      const mockCreatedMatches = mockPairings.map((pairing, index) => ({
+        id: `match-${index + 1}`,
+        tournamentId,
+        player1Id: pairing.player1Id,
+        player2Id: pairing.player2Id,
+        round: 1,
+        table: pairing.table,
+        status: 'PENDING',
+        winnerId: null,
+        player1Score: null,
+        player2Score: null,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }))
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament),
+            update: jest.fn<any>().mockResolvedValue(mockTournament)
+          },
+          match: {
+            create: jest.fn<any>()
+              .mockResolvedValueOnce(mockCreatedMatches[0])
+              .mockResolvedValueOnce(mockCreatedMatches[1])
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.createManualPairings(tournamentId, organizerId, mockPairings)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result).toHaveLength(2)
+      expect(result[0].player1Id).toBe('player-1')
+      expect(result[0].player2Id).toBe('player-2')
+      expect(result[0].table).toBe(1)
+      expect(result[1].player1Id).toBe('player-3')
+      expect(result[1].player2Id).toBe('player-4')
+      expect(result[1].table).toBe(2)
+    })
+
+    it('should successfully create manual pairings for ACTIVE tournament', async () => {
+      const activeTournament = {
+        ...mockTournament,
+        status: 'ACTIVE',
+        matches: [
+          {
+            id: 'match-1',
+            tournamentId,
+            player1Id: 'player-1',
+            player2Id: 'player-2',
+            round: 1,
+            table: 1,
+            status: 'COMPLETED',
+            winnerId: 'player-1',
+            player1Score: 2,
+            player2Score: 0,
+            scheduledTime: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        ]
+      }
+
+      const mockCreatedMatch = {
+        id: 'match-2',
+        tournamentId,
+        player1Id: 'player-3',
+        player2Id: 'player-4',
+        round: 2,
+        table: 1,
+        status: 'PENDING',
+        winnerId: null,
+        player1Score: null,
+        player2Score: null,
+        scheduledTime: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(activeTournament),
+            update: jest.fn<any>().mockResolvedValue(activeTournament)
+          },
+          match: {
+            create: jest.fn<any>().mockResolvedValue(mockCreatedMatch)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.createManualPairings(
+        tournamentId,
+        organizerId,
+        [{ player1Id: 'player-3', player2Id: 'player-4', table: 1 }]
+      )
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result).toHaveLength(1)
+      expect(result[0].round).toBe(2)
+    })
+
+    it('should throw BAD_REQUEST error when tournament status is invalid', async () => {
+      const completedTournament = {
+        ...mockTournament,
+        status: 'COMPLETED'
+      }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(completedTournament)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.createManualPairings(tournamentId, organizerId, mockPairings)
+      ).rejects.toThrow('Cannot create manual pairings for tournament with status COMPLETED')
+    })
+
+    it('should throw BAD_REQUEST error when player is not registered', async () => {
+      const invalidPairings = [
+        { player1Id: 'player-1', player2Id: 'player-999', table: 1 }
+      ]
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.createManualPairings(tournamentId, organizerId, invalidPairings)
+      ).rejects.toThrow('Invalid players in pairings')
+    })
+
+    it('should throw BAD_REQUEST error when duplicate pairing exists', async () => {
+      const duplicatePairings = [
+        { player1Id: 'player-1', player2Id: 'player-2', table: 1 },
+        { player1Id: 'player-2', player2Id: 'player-1', table: 2 }
+      ]
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.createManualPairings(tournamentId, organizerId, duplicatePairings)
+      ).rejects.toThrow('Duplicate pairing detected')
+    })
+
+    it('should throw BAD_REQUEST error when player is paired multiple times', async () => {
+      const invalidPairings = [
+        { player1Id: 'player-1', player2Id: 'player-2', table: 1 },
+        { player1Id: 'player-1', player2Id: 'player-3', table: 2 }
+      ]
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockTournament)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.createManualPairings(tournamentId, organizerId, invalidPairings)
+      ).rejects.toThrow('is paired multiple times in the same round')
+    })
+  })
+
+  describe('updateManualPairing', () => {
+    const matchId = 'match-123'
+    const organizerId = 'organizer-456'
+    const tournamentId = 'tournament-123'
+
+    const mockMatch = {
+      id: matchId,
+      tournamentId,
+      player1Id: 'player-1',
+      player2Id: 'player-2',
+      round: 1,
+      table: 1,
+      status: 'PENDING',
+      winnerId: null,
+      player1Score: null,
+      player2Score: null,
+      scheduledTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tournament: {
+        id: tournamentId,
+        entries: [
+          {
+            id: 'entry-1',
+            playerId: 'player-1',
+            dropped: false,
+            tournamentId,
+            deckId: null,
+            placement: null,
+            record: null,
+            seed: 1,
+            registrationDate: new Date(),
+            metadata: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          {
+            id: 'entry-2',
+            playerId: 'player-2',
+            dropped: false,
+            tournamentId,
+            deckId: null,
+            placement: null,
+            record: null,
+            seed: 2,
+            registrationDate: new Date(),
+            metadata: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          {
+            id: 'entry-3',
+            playerId: 'player-3',
+            dropped: false,
+            tournamentId,
+            deckId: null,
+            placement: null,
+            record: null,
+            seed: 3,
+            registrationDate: new Date(),
+            metadata: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        ]
+      }
+    }
+
+    it('should successfully update table number', async () => {
+      const updates = { table: 5 }
+      const updatedMatch = { ...mockMatch, table: 5 }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({ id: tournamentId, metadata: {} }),
+            update: jest.fn<any>().mockResolvedValue({ id: tournamentId, metadata: {} })
+          },
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockMatch),
+            update: jest.fn<any>().mockResolvedValue(updatedMatch),
+            findFirst: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.updateManualPairing(matchId, organizerId, updates)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.table).toBe(5)
+    })
+
+    it('should successfully update player assignments', async () => {
+      const updates = { player1Id: 'player-3' }
+      const updatedMatch = { ...mockMatch, player1Id: 'player-3' }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({ id: tournamentId, metadata: {} }),
+            update: jest.fn<any>().mockResolvedValue({ id: tournamentId, metadata: {} })
+          },
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockMatch),
+            update: jest.fn<any>().mockResolvedValue(updatedMatch),
+            findFirst: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      const result = await processor.updateManualPairing(matchId, organizerId, updates)
+
+      // Verify
+      expect(result).toBeDefined()
+      expect(result.player1Id).toBe('player-3')
+    })
+
+    it('should throw NOT_FOUND error when match does not exist', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.updateManualPairing(matchId, organizerId, { table: 5 })
+      ).rejects.toThrow('Match not found')
+    })
+
+    it('should throw BAD_REQUEST error when match is not PENDING', async () => {
+      const completedMatch = { ...mockMatch, status: 'COMPLETED' }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(completedMatch)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.updateManualPairing(matchId, organizerId, { table: 5 })
+      ).rejects.toThrow('Cannot update match with status COMPLETED')
+    })
+
+    it('should throw BAD_REQUEST error when player is not registered', async () => {
+      const updates = { player1Id: 'player-999' }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockMatch)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.updateManualPairing(matchId, organizerId, updates)
+      ).rejects.toThrow('is not registered or has dropped from the tournament')
+    })
+
+    it('should throw BAD_REQUEST error when pairing player against themselves', async () => {
+      const updates = { player2Id: 'player-1' }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockMatch)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.updateManualPairing(matchId, organizerId, updates)
+      ).rejects.toThrow('Cannot pair a player against themselves')
+    })
+
+    it('should throw BAD_REQUEST error when duplicate pairing exists', async () => {
+      const updates = { player1Id: 'player-3' }
+      const duplicateMatch = {
+        id: 'match-999',
+        tournamentId,
+        player1Id: 'player-3',
+        player2Id: 'player-2',
+        round: 1,
+        status: 'PENDING'
+      }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockMatch),
+            findFirst: jest.fn<any>().mockResolvedValue(duplicateMatch)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.updateManualPairing(matchId, organizerId, updates)
+      ).rejects.toThrow('This pairing already exists in round')
+    })
+  })
+
+  describe('deleteManualPairing', () => {
+    const matchId = 'match-123'
+    const organizerId = 'organizer-456'
+    const tournamentId = 'tournament-123'
+
+    const mockMatch = {
+      id: matchId,
+      tournamentId,
+      player1Id: 'player-1',
+      player2Id: 'player-2',
+      round: 1,
+      table: 1,
+      status: 'PENDING',
+      winnerId: null,
+      player1Score: null,
+      player2Score: null,
+      scheduledTime: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    it('should successfully delete manual pairing', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          tournament: {
+            findUnique: jest.fn<any>().mockResolvedValue({ id: tournamentId, metadata: {} }),
+            update: jest.fn<any>().mockResolvedValue({ id: tournamentId, metadata: {} })
+          },
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(mockMatch),
+            delete: jest.fn<any>().mockResolvedValue(mockMatch)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute
+      await processor.deleteManualPairing(matchId, organizerId)
+
+      // Verify - should not throw
+      expect(true).toBe(true)
+    })
+
+    it('should throw NOT_FOUND error when match does not exist', async () => {
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(null)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.deleteManualPairing(matchId, organizerId)
+      ).rejects.toThrow('Match not found')
+    })
+
+    it('should throw BAD_REQUEST error when match is not PENDING', async () => {
+      const completedMatch = { ...mockMatch, status: 'COMPLETED' }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(completedMatch)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.deleteManualPairing(matchId, organizerId)
+      ).rejects.toThrow('Cannot delete match with status COMPLETED')
+    })
+
+    it('should throw BAD_REQUEST error when match is IN_PROGRESS', async () => {
+      const inProgressMatch = { ...mockMatch, status: 'IN_PROGRESS' }
+
+      // Setup mocks
+      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+        const tx = {
+          match: {
+            findUnique: jest.fn<any>().mockResolvedValue(inProgressMatch)
+          }
+        }
+        return callback(tx)
+      })
+
+      // Execute and verify
+      await expect(
+        processor.deleteManualPairing(matchId, organizerId)
+      ).rejects.toThrow('Cannot delete match with status IN_PROGRESS')
+    })
+  })
 })
