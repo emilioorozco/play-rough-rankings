@@ -580,5 +580,294 @@ export const tournamentLifecycleRouter = router({
           message: `Failed to cancel tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
         })
       }
+    }),
+
+  /**
+   * Create Manual Pairings
+   * 
+   * Validates authorization, checks tournament state, validates all players
+   * are registered and not dropped, validates no duplicate pairings in same
+   * round, creates Match records with PENDING status, and logs the action.
+   * 
+   * Requirements: 15.1, 15.2, 15.3, 15.4, 15.5
+   */
+  createManualPairings: organizerProcedure
+    .input(
+      z.object({
+        tournamentId: z.string().uuid({
+          message: 'Invalid tournament ID format'
+        }),
+        pairings: z.array(
+          z.object({
+            player1Id: z.string().uuid({
+              message: 'Invalid player1 ID format'
+            }),
+            player2Id: z.string().uuid({
+              message: 'Invalid player2 ID format'
+            }),
+            table: z.number().int().positive().optional()
+          })
+        ).min(1, {
+          message: 'At least one pairing is required'
+        })
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Verify tournament exists and check authorization
+      const tournament = await ctx.prisma.tournament.findUnique({
+        where: { id: input.tournamentId },
+        select: {
+          id: true,
+          organizerId: true,
+          status: true,
+          name: true
+        }
+      })
+
+      if (!tournament) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tournament not found'
+        })
+      }
+
+      // Validate authorization (organizer or admin)
+      if (!canManageTournament(ctx.user.id, ctx.user.role, tournament)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the tournament organizer or an admin can create manual pairings'
+        })
+      }
+
+      // Initialize TournamentProcessor and create manual pairings
+      const processor = new TournamentProcessor(ctx.prisma as any)
+      
+      try {
+        const matches = await processor.createManualPairings(
+          input.tournamentId,
+          ctx.user.id,
+          input.pairings
+        )
+
+        return {
+          success: true,
+          message: `Created ${matches.length} manual pairing(s) for tournament "${tournament.name}"`,
+          matches
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error creating manual pairings:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to create manual pairings: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    }),
+
+  /**
+   * Update Manual Pairing
+   * 
+   * Validates authorization, checks match is PENDING (not started), updates
+   * player assignments or table number, and logs the action with previous
+   * values.
+   * 
+   * Requirements: 15.1, 15.2, 15.3, 15.4, 15.5
+   */
+  updateManualPairing: organizerProcedure
+    .input(
+      z.object({
+        matchId: z.string().uuid({
+          message: 'Invalid match ID format'
+        }),
+        player1Id: z.string().uuid({
+          message: 'Invalid player1 ID format'
+        }).optional(),
+        player2Id: z.string().uuid({
+          message: 'Invalid player2 ID format'
+        }).optional(),
+        table: z.number().int().positive().optional()
+      }).refine(
+        (data) => data.player1Id !== undefined || data.player2Id !== undefined || data.table !== undefined,
+        {
+          message: 'At least one field (player1Id, player2Id, or table) must be provided for update'
+        }
+      )
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Fetch match to get tournament info for authorization check
+      const match = await ctx.prisma.match.findUnique({
+        where: { id: input.matchId },
+        select: {
+          id: true,
+          tournamentId: true,
+          tournament: {
+            select: {
+              id: true,
+              organizerId: true,
+              name: true
+            }
+          }
+        }
+      })
+
+      if (!match) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Match not found'
+        })
+      }
+
+      // Validate authorization (organizer or admin)
+      if (!canManageTournament(ctx.user.id, ctx.user.role, match.tournament)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the tournament organizer or an admin can update manual pairings'
+        })
+      }
+
+      // Initialize TournamentProcessor and update manual pairing
+      const processor = new TournamentProcessor(ctx.prisma as any)
+      
+      try {
+        const updates: { player1Id?: string; player2Id?: string; table?: number } = {}
+        if (input.player1Id !== undefined) updates.player1Id = input.player1Id
+        if (input.player2Id !== undefined) updates.player2Id = input.player2Id
+        if (input.table !== undefined) updates.table = input.table
+
+        const updatedMatch = await processor.updateManualPairing(
+          input.matchId,
+          ctx.user.id,
+          updates
+        )
+
+        return {
+          success: true,
+          message: `Updated manual pairing in tournament "${match.tournament.name}"`,
+          match: updatedMatch
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error updating manual pairing:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to update manual pairing: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    }),
+
+  /**
+   * Delete Manual Pairing
+   * 
+   * Validates authorization, checks match is PENDING, deletes match record,
+   * and logs the action.
+   * 
+   * Requirements: 15.1, 15.2, 15.3, 15.4, 15.5
+   */
+  deleteManualPairing: organizerProcedure
+    .input(
+      z.object({
+        matchId: z.string().uuid({
+          message: 'Invalid match ID format'
+        })
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Fetch match to get tournament info for authorization check
+      const match = await ctx.prisma.match.findUnique({
+        where: { id: input.matchId },
+        select: {
+          id: true,
+          status: true,
+          tournamentId: true,
+          tournament: {
+            select: {
+              id: true,
+              organizerId: true,
+              name: true
+            }
+          }
+        }
+      })
+
+      if (!match) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Match not found'
+        })
+      }
+
+      // Validate match is PENDING
+      if (match.status !== 'PENDING') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Cannot delete match with status ${match.status}. Match must be PENDING.`
+        })
+      }
+
+      // Validate authorization (organizer or admin)
+      if (!canManageTournament(ctx.user.id, ctx.user.role, match.tournament)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the tournament organizer or an admin can delete manual pairings'
+        })
+      }
+
+      // Initialize TournamentProcessor and delete manual pairing
+      const processor = new TournamentProcessor(ctx.prisma as any)
+      
+      try {
+        await processor.deleteManualPairing(
+          input.matchId,
+          ctx.user.id
+        )
+
+        return {
+          success: true,
+          message: `Deleted manual pairing from tournament "${match.tournament.name}"`
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error deleting manual pairing:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to delete manual pairing: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
     })
 })
