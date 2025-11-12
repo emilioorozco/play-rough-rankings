@@ -44,3 +44,5 @@ export type { StartTournamentResult, AdvanceRoundResult, CompleteTournamentResul
 
 export { MatchProcessor } from './match-processor'
 export type { SubmitMatchResultResponse } from './match-processor'
+
+export { RatingCalculator } from './rating-calculator'
