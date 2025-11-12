@@ -41,3 +41,6 @@ export { PairingGenerator } from './pairing-generator'
 
 export { TournamentProcessor } from './tournament-processor'
 export type { StartTournamentResult, AdvanceRoundResult, CompleteTournamentResult } from './tournament-processor'
+
+export { MatchProcessor } from './match-processor'
+export type { SubmitMatchResultResponse } from './match-processor'
