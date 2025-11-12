@@ -280,6 +280,8 @@ describe('RatingCalculator', () => {
         id: tournamentId,
         gameId,
         tournamentLevel: 'LOCAL',
+        status: 'COMPLETED',
+        date: new Date('2024-01-15'),
         matches: [],
       })
 
@@ -319,6 +321,103 @@ describe('RatingCalculator', () => {
       expect(mockPrisma.$transaction).toHaveBeenCalled()
     })
 
+    it('should update seasonal stats with tournament results', async () => {
+      const tournamentId = 'tournament-123'
+      const gameId = 'game-123'
+      const playerId = 'player-1'
+
+      mockPrisma.tournament.findUnique.mockResolvedValue({
+        id: tournamentId,
+        gameId,
+        tournamentLevel: 'LOCAL',
+        status: 'COMPLETED',
+        date: new Date('2024-01-15'),
+        matches: [],
+      })
+
+      mockPrisma.tournamentEntry.findMany.mockResolvedValue([
+        {
+          playerId,
+          player: {
+            gameStats: [
+              {
+                currentRating: 1200,
+                seasonalStats: { 
+                  totalGames: 10,
+                  wins: 5,
+                  losses: 5,
+                  draws: 0,
+                  tournaments: 2
+                },
+              },
+            ],
+          },
+        },
+      ])
+
+      // Mock completed matches - player won 2, lost 1
+      mockPrisma.match.findMany.mockResolvedValue([
+        {
+          player1Id: playerId,
+          player2Id: 'player-2',
+          winnerId: playerId,
+          player1: {
+            gameStats: [{ currentRating: 1200, seasonalStats: { totalGames: 10 } }],
+          },
+          player2: {
+            gameStats: [{ currentRating: 1300, seasonalStats: { totalGames: 15 } }],
+          },
+        },
+        {
+          player1Id: playerId,
+          player2Id: 'player-3',
+          winnerId: playerId,
+          player1: {
+            gameStats: [{ currentRating: 1200, seasonalStats: { totalGames: 10 } }],
+          },
+          player2: {
+            gameStats: [{ currentRating: 1250, seasonalStats: { totalGames: 12 } }],
+          },
+        },
+        {
+          player1Id: playerId,
+          player2Id: 'player-4',
+          winnerId: 'player-4',
+          player1: {
+            gameStats: [{ currentRating: 1200, seasonalStats: { totalGames: 10 } }],
+          },
+          player2: {
+            gameStats: [{ currentRating: 1280, seasonalStats: { totalGames: 14 } }],
+          },
+        },
+      ])
+
+      let capturedSeasonalStats: any = null
+
+      // Mock transaction to capture the seasonal stats update
+      mockPrisma.$transaction.mockImplementation(async (callback: any) => {
+        return callback({
+          playerGameStats: {
+            updateMany: jest.fn().mockImplementation((args: any) => {
+              capturedSeasonalStats = args.data.seasonalStats
+              return Promise.resolve({ count: 1 })
+            }),
+          },
+        })
+      })
+
+      await ratingCalculator.applyRatingChanges(tournamentId)
+
+      // Verify seasonal stats were updated correctly
+      expect(capturedSeasonalStats).toBeDefined()
+      expect(capturedSeasonalStats.totalGames).toBe(13) // 10 + 3 new matches
+      expect(capturedSeasonalStats.wins).toBe(7) // 5 + 2 new wins
+      expect(capturedSeasonalStats.losses).toBe(6) // 5 + 1 new loss
+      expect(capturedSeasonalStats.draws).toBe(0)
+      expect(capturedSeasonalStats.tournaments).toBe(3) // 2 + 1 new tournament
+      expect(capturedSeasonalStats.lastTournamentDate).toBeDefined()
+    })
+
     it('should invalidate cache after applying changes', async () => {
       const tournamentId = 'tournament-123'
       const gameId = 'game-123'
@@ -327,6 +426,8 @@ describe('RatingCalculator', () => {
         id: tournamentId,
         gameId,
         tournamentLevel: 'LOCAL',
+        status: 'COMPLETED',
+        date: new Date('2024-01-15'),
         matches: [],
       })
 
@@ -358,13 +459,15 @@ describe('RatingCalculator', () => {
       await ratingCalculator.calculateProjectedRatings(tournamentId)
 
       // Apply changes (should invalidate cache)
+      // Note: applyRatingChanges now makes additional calls for tournament details and entries
       await ratingCalculator.applyRatingChanges(tournamentId)
 
       // Next call should hit database again
       await ratingCalculator.calculateProjectedRatings(tournamentId)
 
-      // Should call database twice (once before apply, once after)
-      expect(mockPrisma.tournament.findUnique).toHaveBeenCalledTimes(2)
+      // Should call database at least twice (once before apply, once after)
+      // The applyRatingChanges method makes additional calls for tournament details
+      expect(mockPrisma.tournament.findUnique).toHaveBeenCalledTimes(4)
     })
   })
 
