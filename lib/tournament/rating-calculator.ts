@@ -9,6 +9,7 @@
 import { PrismaClient } from '@prisma/client'
 import { TRPCError } from '@trpc/server'
 import { calculateMatchRatingChanges } from '@/lib/rating/elo'
+import { triggerRankingUpdate } from '@/lib/rating/ranking-system'
 import type { ProjectedRating, RatingChange, RatingConfidence } from './types'
 
 /**
@@ -228,26 +229,115 @@ export class RatingCalculator {
   /**
    * Apply rating changes to all players upon tournament completion
    * 
+   * This method:
+   * 1. Gets all completed matches for the tournament
+   * 2. Calculates rating changes using existing ELO functions
+   * 3. Updates PlayerGameStats.currentRating for all participants
+   * 4. Updates PlayerGameStats.seasonalStats with tournament results
+   * 5. Calls triggerRankingUpdate() to invalidate ranking cache
+   * 6. Returns array of rating changes
+   * 
    * @param tournamentId - ID of the completed tournament
    * @returns Array of rating changes applied
    */
   async applyRatingChanges(tournamentId: string): Promise<RatingChange[]> {
+    // Get tournament details
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: {
+        id: true,
+        gameId: true,
+        status: true,
+      }
+    })
+
+    if (!tournament) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Tournament not found'
+      })
+    }
+
     // Get projected ratings (which calculates all the changes)
     const projectedRatings = await this.calculateProjectedRatings(tournamentId)
 
+    // Get all tournament entries to update seasonal stats
+    const entries = await this.prisma.tournamentEntry.findMany({
+      where: { tournamentId },
+      include: {
+        player: {
+          include: {
+            gameStats: {
+              where: {
+                gameId: tournament.gameId
+              }
+            }
+          }
+        }
+      }
+    })
+
+    // Get all completed matches to calculate tournament performance
+    const completedMatches = await this.prisma.match.findMany({
+      where: {
+        tournamentId,
+        status: 'COMPLETED'
+      }
+    })
+
     const ratingChanges: RatingChange[] = []
 
-    // Apply each rating change in a transaction
+    // Apply each rating change in a transaction for atomicity
     await this.prisma.$transaction(async (tx) => {
       for (const projection of projectedRatings) {
-        // Update the player's game stats with the new rating
+        // Find the entry for this player
+        const entry = entries.find(e => e.playerId === projection.playerId)
+        if (!entry || entry.player.gameStats.length === 0) {
+          continue
+        }
+
+        const currentStats = entry.player.gameStats[0]
+        const currentSeasonalStats = (currentStats.seasonalStats as any) || {}
+
+        // Calculate player's tournament performance
+        const playerMatches = completedMatches.filter(
+          match => match.player1Id === projection.playerId || match.player2Id === projection.playerId
+        )
+
+        let wins = 0
+        let losses = 0
+        let draws = 0
+
+        for (const match of playerMatches) {
+          if (match.winnerId === projection.playerId) {
+            wins++
+          } else if (match.winnerId === null) {
+            draws++
+          } else {
+            losses++
+          }
+        }
+
+        // Update seasonal stats with tournament results
+        const updatedSeasonalStats = {
+          ...currentSeasonalStats,
+          totalGames: (currentSeasonalStats.totalGames || 0) + playerMatches.length,
+          wins: (currentSeasonalStats.wins || 0) + wins,
+          losses: (currentSeasonalStats.losses || 0) + losses,
+          draws: (currentSeasonalStats.draws || 0) + draws,
+          tournaments: (currentSeasonalStats.tournaments || 0) + 1,
+          lastTournamentDate: new Date().toISOString(),
+        }
+
+        // Update the player's game stats with the new rating and seasonal stats
         await tx.playerGameStats.updateMany({
           where: {
             playerId: projection.playerId,
             gameId: projection.gameId
           },
           data: {
-            currentRating: projection.projectedRating
+            currentRating: projection.projectedRating,
+            seasonalStats: updatedSeasonalStats
           }
         })
 
@@ -263,6 +353,9 @@ export class RatingCalculator {
 
     // Invalidate cache after applying changes
     this.invalidateCache(tournamentId)
+
+    // Trigger ranking update to invalidate ranking cache and recalculate rankings
+    await triggerRankingUpdate(this.prisma, tournamentId)
 
     return ratingChanges
   }
