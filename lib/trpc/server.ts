@@ -1892,161 +1892,49 @@ export const appRouter = router({
         return tournaments;
       }),
 
-    // Process individual match result
-    processMatchResult: organizerProcedure
-      .input(
-        z.object({
-          matchId: z.string().uuid(),
-          winnerId: z.string().uuid().optional(),
-        }),
-      )
-      .mutation(async ({ ctx, input }) => {
-        const { processMatchResult } = await import(
-          "@/lib/tournament/match-processor"
-        );
+    // TODO: These routes need to be updated to use the new MatchProcessor class
+    // Temporarily commented out until proper implementation
+    // See: lib/tournament/match-processor.ts for the new implementation
+    
+    // // Process individual match result
+    // processMatchResult: organizerProcedure
+    //   .input(
+    //     z.object({
+    //       matchId: z.string().uuid(),
+    //       winnerId: z.string().uuid().optional(),
+    //     }),
+    //   )
+    //   .mutation(async ({ ctx, input }) => {
+    //     // TODO: Implement using MatchProcessor.organizerSubmitResult()
+    //   }),
 
-        // Get match details
-        const match = await ctx.prisma.match.findUnique({
-          where: { id: input.matchId },
-          include: {
-            tournament: true,
-          },
-        });
+    // // Complete tournament and calculate final standings
+    // completeTournament: organizerProcedure
+    //   .input(
+    //     z.object({
+    //       tournamentId: z.string().uuid(),
+    //     }),
+    //   )
+    //   .mutation(async ({ ctx, input }) => {
+    //     // TODO: Implement using TournamentProcessor.completeTournament()
+    //   }),
 
-        if (!match) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Match not found",
-          });
-        }
-
-        // TODO: Add ownership check when auth is fully implemented
-        // Verify user has permission to update this match
-
-        const matchResult = {
-          matchId: input.matchId,
-          tournamentId: match.tournamentId,
-          player1Id: match.player1Id,
-          player2Id: match.player2Id,
-          winnerId: input.winnerId || null,
-          round: match.round,
-          table: match.table || undefined,
-        };
-
-        const result = await processMatchResult(ctx.basePrisma, matchResult);
-
-        return {
-          success: true,
-          message: "Match result processed successfully",
-          match: result.match,
-          playerUpdates: result.playerUpdates,
-        };
-      }),
-
-    // Complete tournament and calculate final standings
-    completeTournament: organizerProcedure
-      .input(
-        z.object({
-          tournamentId: z.string().uuid(),
-        }),
-      )
-      .mutation(async ({ ctx, input }) => {
-        const { processTournamentCompletion } = await import(
-          "@/lib/tournament/match-processor"
-        );
-
-        // TODO: Add ownership check when auth is fully implemented
-        // Verify user has permission to complete this tournament
-
-        const result = await processTournamentCompletion(
-          ctx.basePrisma,
-          input.tournamentId,
-        );
-
-        return {
-          success: true,
-          message: "Tournament completed successfully",
-          tournament: result.tournament,
-          standings: result.standings,
-          championshipPointsAwarded: result.championshipPointsAwarded,
-        };
-      }),
-
-    // Batch process multiple match results
-    batchProcessMatches: organizerProcedure
-      .input(
-        z.object({
-          tournamentId: z.string().uuid(),
-          matchResults: z.array(
-            z.object({
-              matchId: z.string().uuid(),
-              winnerId: z.string().uuid().optional(),
-            }),
-          ),
-        }),
-      )
-      .mutation(async ({ ctx, input }) => {
-        const { batchProcessMatchResults } = await import(
-          "@/lib/tournament/match-processor"
-        );
-
-        // Verify tournament exists and user has permission
-        const tournament = await ctx.prisma.tournament.findUnique({
-          where: { id: input.tournamentId },
-        });
-
-        if (!tournament) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Tournament not found",
-          });
-        }
-
-        // TODO: Add ownership check when auth is fully implemented
-
-        // Convert input to match results format
-        const matchResults = await Promise.all(
-          input.matchResults.map(async (mr) => {
-            const match = await ctx.prisma.match.findUnique({
-              where: { id: mr.matchId },
-            });
-
-            if (!match) {
-              throw new TRPCError({
-                code: "NOT_FOUND",
-                message: `Match not found: ${mr.matchId}`,
-              });
-            }
-
-            if (match.tournamentId !== input.tournamentId) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: `Match ${mr.matchId} does not belong to tournament ${input.tournamentId}`,
-              });
-            }
-
-            return {
-              matchId: mr.matchId,
-              tournamentId: match.tournamentId,
-              player1Id: match.player1Id,
-              player2Id: match.player2Id,
-              winnerId: mr.winnerId || null,
-              round: match.round,
-              table: match.table || undefined,
-            };
-          }),
-        );
-
-        const result = await batchProcessMatchResults(ctx.basePrisma, matchResults);
-
-        return {
-          success: true,
-          message: `Processed ${result.processedMatches.length} matches with ${result.errors.length} errors`,
-          processedMatches: result.processedMatches,
-          playerUpdates: result.playerUpdates,
-          errors: result.errors,
-        };
-      }),
+    // // Batch process multiple match results
+    // batchProcessMatches: organizerProcedure
+    //   .input(
+    //     z.object({
+    //       tournamentId: z.string().uuid(),
+    //       matchResults: z.array(
+    //         z.object({
+    //           matchId: z.string().uuid(),
+    //           winnerId: z.string().uuid().optional(),
+    //         }),
+    //       ),
+    //     }),
+    //   )
+    //   .mutation(async ({ ctx, input }) => {
+    //     // TODO: Implement batch processing with MatchProcessor
+    //   }),
   }),
 
   // Basic stores router
