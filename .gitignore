@@ -24,3 +24,5 @@ scripts/
 docs/
 .vercel
 .env*.local
+leaderboard_backup_*.sql
+schema-diff.sql
