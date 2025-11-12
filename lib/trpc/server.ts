@@ -77,6 +77,7 @@ import { leaderboardsRouter } from "./routers/leaderboards";
 import { decksRouter } from "./routers/decks";
 import { tournamentEntriesRouter } from "./routers/tournament-entries";
 import { userPreferencesRouter } from "./routers/user-preferences";
+import { tournamentLifecycleRouter } from "./routers/tournament-lifecycle";
 
 // Main app router with basic structure
 export const appRouter = router({
@@ -2817,6 +2818,9 @@ export const appRouter = router({
 
   // User preferences router
   userPreferences: userPreferencesRouter,
+
+  // Tournament lifecycle router
+  tournamentLifecycle: tournamentLifecycleRouter,
 });
 
 export type AppRouter = typeof appRouter;
