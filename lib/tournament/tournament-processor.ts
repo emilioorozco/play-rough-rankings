@@ -1347,4 +1347,436 @@ export class TournamentProcessor {
       })
     }
   }
+
+  /**
+   * Create manual pairings for current round
+   * 
+   * Validates tournament is in correct state for pairing, validates all players
+   * are registered and not dropped, validates no duplicate pairings in same round,
+   * creates Match records with PENDING status, and logs the action.
+   * 
+   * @param tournamentId - ID of the tournament
+   * @param organizerId - ID of the user creating pairings
+   * @param pairings - Array of manual pairings with player IDs and optional table numbers
+   * @returns Array of created matches
+   * @throws TRPCError if validation fails or pairings cannot be created
+   * 
+   * Requirements: 15.1, 15.2, 15.3, 15.4, 15.5
+   */
+  async createManualPairings(
+    tournamentId: string,
+    organizerId: string,
+    pairings: Array<{ player1Id: string; player2Id: string; table?: number }>
+  ): Promise<Match[]> {
+    try {
+      // Use transaction for atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Fetch tournament with entries and matches
+        const tournament = await tx.tournament.findUnique({
+          where: { id: tournamentId },
+          include: {
+            entries: {
+              where: { dropped: false }
+            },
+            matches: {
+              orderBy: [{ round: 'asc' }, { table: 'asc' }]
+            }
+          }
+        })
+
+        if (!tournament) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Tournament not found'
+          })
+        }
+
+        // Validate tournament is in correct state for pairing (UPCOMING or ACTIVE)
+        if (tournament.status !== 'UPCOMING' && tournament.status !== 'ACTIVE') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot create manual pairings for tournament with status ${tournament.status}. Tournament must be UPCOMING or ACTIVE.`
+          })
+        }
+
+        // Determine current round
+        const currentRound = tournament.matches.length > 0
+          ? Math.max(...tournament.matches.map(m => m.round))
+          : 0
+
+        // Determine the round for new pairings
+        const targetRound = tournament.status === 'UPCOMING' ? 1 : currentRound + 1
+
+        // Get active player IDs
+        const activePlayerIds = new Set(tournament.entries.map(e => e.playerId))
+
+        // Validate all players in pairings are registered and not dropped
+        const invalidPlayers: string[] = []
+        for (const pairing of pairings) {
+          if (!activePlayerIds.has(pairing.player1Id)) {
+            invalidPlayers.push(pairing.player1Id)
+          }
+          if (!activePlayerIds.has(pairing.player2Id)) {
+            invalidPlayers.push(pairing.player2Id)
+          }
+        }
+
+        if (invalidPlayers.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Invalid players in pairings: ${invalidPlayers.join(', ')}. All players must be registered and not dropped.`
+          })
+        }
+
+        // Validate no duplicate pairings in same round
+        const existingPairings = tournament.matches
+          .filter(m => m.round === targetRound)
+          .map(m => ({
+            player1Id: m.player1Id,
+            player2Id: m.player2Id
+          }))
+
+        // Check for duplicates within the new pairings
+        const pairingSet = new Set<string>()
+        const playerSet = new Set<string>()
+        
+        for (const pairing of pairings) {
+          // Create a normalized pairing key (sorted player IDs)
+          const pairingKey = [pairing.player1Id, pairing.player2Id].sort().join('-')
+          
+          if (pairingSet.has(pairingKey)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Duplicate pairing detected: ${pairing.player1Id} vs ${pairing.player2Id}`
+            })
+          }
+          pairingSet.add(pairingKey)
+
+          // Check if player is already paired in this batch
+          if (playerSet.has(pairing.player1Id)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Player ${pairing.player1Id} is paired multiple times in the same round`
+            })
+          }
+          if (playerSet.has(pairing.player2Id)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Player ${pairing.player2Id} is paired multiple times in the same round`
+            })
+          }
+          
+          playerSet.add(pairing.player1Id)
+          playerSet.add(pairing.player2Id)
+
+          // Check against existing pairings in the database
+          const existingPairing = existingPairings.find(ep => {
+            const existingKey = [ep.player1Id, ep.player2Id].sort().join('-')
+            return existingKey === pairingKey
+          })
+
+          if (existingPairing) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Pairing already exists in round ${targetRound}: ${pairing.player1Id} vs ${pairing.player2Id}`
+            })
+          }
+        }
+
+        // Create Match records with PENDING status
+        const createdMatches: Match[] = []
+        for (const pairing of pairings) {
+          const match = await tx.match.create({
+            data: {
+              tournamentId: tournament.id,
+              player1Id: pairing.player1Id,
+              player2Id: pairing.player2Id,
+              round: targetRound,
+              table: pairing.table,
+              status: 'PENDING'
+            }
+          })
+          createdMatches.push(match)
+        }
+
+        // Log action with AuditLogger (using transaction client)
+        const txAuditLogger = new AuditLogger(tx as any)
+        await txAuditLogger.logAction({
+          id: crypto.randomUUID(),
+          tournamentId: tournament.id,
+          action: 'START', // Using START action type for manual pairing creation
+          performedBy: organizerId,
+          timestamp: new Date(),
+          details: {
+            round: targetRound,
+            manualPairings: true,
+            pairingCount: createdMatches.length,
+            matchIds: createdMatches.map(m => m.id)
+          }
+        })
+
+        return createdMatches
+      })
+
+      return result
+    } catch (error) {
+      // Re-throw TRPCError as-is
+      if (error instanceof TRPCError) {
+        throw error
+      }
+
+      // Wrap other errors
+      console.error('Error creating manual pairings:', error)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to create manual pairings: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+    }
+  }
+
+  /**
+   * Update manual pairing
+   * 
+   * Validates match is PENDING (not started), updates player assignments or table
+   * number, and logs the action with previous values.
+   * 
+   * @param matchId - ID of the match to update
+   * @param organizerId - ID of the user updating the pairing
+   * @param updates - Updates to apply (player1Id, player2Id, or table)
+   * @returns Updated match
+   * @throws TRPCError if validation fails or pairing cannot be updated
+   * 
+   * Requirements: 15.1, 15.2, 15.3, 15.4, 15.5
+   */
+  async updateManualPairing(
+    matchId: string,
+    organizerId: string,
+    updates: { player1Id?: string; player2Id?: string; table?: number }
+  ): Promise<Match> {
+    try {
+      // Use transaction for atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Fetch match with tournament info
+        const match = await tx.match.findUnique({
+          where: { id: matchId },
+          include: {
+            tournament: {
+              include: {
+                entries: {
+                  where: { dropped: false }
+                }
+              }
+            }
+          }
+        })
+
+        if (!match) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Match not found'
+          })
+        }
+
+        // Validate match is PENDING (not started)
+        if (match.status !== 'PENDING') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot update match with status ${match.status}. Match must be PENDING.`
+          })
+        }
+
+        // Store previous values for audit log
+        const previousValues = {
+          player1Id: match.player1Id,
+          player2Id: match.player2Id,
+          table: match.table
+        }
+
+        // Validate player updates if provided
+        if (updates.player1Id || updates.player2Id) {
+          const activePlayerIds = new Set(match.tournament.entries.map(e => e.playerId))
+
+          if (updates.player1Id && !activePlayerIds.has(updates.player1Id)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Player ${updates.player1Id} is not registered or has dropped from the tournament`
+            })
+          }
+
+          if (updates.player2Id && !activePlayerIds.has(updates.player2Id)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Player ${updates.player2Id} is not registered or has dropped from the tournament`
+            })
+          }
+
+          // Ensure players are different
+          const newPlayer1Id = updates.player1Id || match.player1Id
+          const newPlayer2Id = updates.player2Id || match.player2Id
+
+          if (newPlayer1Id === newPlayer2Id) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Cannot pair a player against themselves'
+            })
+          }
+
+          // Check for duplicate pairings in the same round
+          const duplicatePairing = await tx.match.findFirst({
+            where: {
+              id: { not: matchId },
+              tournamentId: match.tournamentId,
+              round: match.round,
+              OR: [
+                {
+                  player1Id: newPlayer1Id,
+                  player2Id: newPlayer2Id
+                },
+                {
+                  player1Id: newPlayer2Id,
+                  player2Id: newPlayer1Id
+                }
+              ]
+            }
+          })
+
+          if (duplicatePairing) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `This pairing already exists in round ${match.round}`
+            })
+          }
+        }
+
+        // Update match with new values
+        const updatedMatch = await tx.match.update({
+          where: { id: matchId },
+          data: {
+            ...(updates.player1Id && { player1Id: updates.player1Id }),
+            ...(updates.player2Id && { player2Id: updates.player2Id }),
+            ...(updates.table !== undefined && { table: updates.table }),
+            updatedAt: new Date()
+          }
+        })
+
+        // Log action with AuditLogger (using transaction client)
+        const txAuditLogger = new AuditLogger(tx as any)
+        await txAuditLogger.logAction({
+          id: crypto.randomUUID(),
+          tournamentId: match.tournamentId,
+          action: 'START', // Using START action type for manual pairing updates
+          performedBy: organizerId,
+          timestamp: new Date(),
+          details: {
+            matchId,
+            round: match.round,
+            manualPairingUpdate: true,
+            previousValue: previousValues,
+            newValue: {
+              player1Id: updatedMatch.player1Id,
+              player2Id: updatedMatch.player2Id,
+              table: updatedMatch.table
+            }
+          }
+        })
+
+        return updatedMatch
+      })
+
+      return result
+    } catch (error) {
+      // Re-throw TRPCError as-is
+      if (error instanceof TRPCError) {
+        throw error
+      }
+
+      // Wrap other errors
+      console.error('Error updating manual pairing:', error)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to update manual pairing: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+    }
+  }
+
+  /**
+   * Delete manual pairing
+   * 
+   * Validates match is PENDING, deletes match record, and logs the action.
+   * 
+   * @param matchId - ID of the match to delete
+   * @param organizerId - ID of the user deleting the pairing
+   * @throws TRPCError if validation fails or pairing cannot be deleted
+   * 
+   * Requirements: 15.1, 15.2, 15.3, 15.4, 15.5
+   */
+  async deleteManualPairing(
+    matchId: string,
+    organizerId: string
+  ): Promise<void> {
+    try {
+      // Use transaction for atomicity
+      await this.prisma.$transaction(async (tx) => {
+        // Fetch match
+        const match = await tx.match.findUnique({
+          where: { id: matchId }
+        })
+
+        if (!match) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Match not found'
+          })
+        }
+
+        // Validate match is PENDING
+        if (match.status !== 'PENDING') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot delete match with status ${match.status}. Match must be PENDING.`
+          })
+        }
+
+        // Store match details for audit log before deletion
+        const matchDetails = {
+          matchId: match.id,
+          player1Id: match.player1Id,
+          player2Id: match.player2Id,
+          round: match.round,
+          table: match.table
+        }
+
+        // Delete match record
+        await tx.match.delete({
+          where: { id: matchId }
+        })
+
+        // Log action with AuditLogger (using transaction client)
+        const txAuditLogger = new AuditLogger(tx as any)
+        await txAuditLogger.logAction({
+          id: crypto.randomUUID(),
+          tournamentId: match.tournamentId,
+          action: 'START', // Using START action type for manual pairing deletion
+          performedBy: organizerId,
+          timestamp: new Date(),
+          details: {
+            manualPairingDelete: true,
+            deletedMatch: matchDetails
+          }
+        })
+      })
+    } catch (error) {
+      // Re-throw TRPCError as-is
+      if (error instanceof TRPCError) {
+        throw error
+      }
+
+      // Wrap other errors
+      console.error('Error deleting manual pairing:', error)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to delete manual pairing: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+    }
+  }
 }
