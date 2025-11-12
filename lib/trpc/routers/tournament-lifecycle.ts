@@ -11,8 +11,10 @@
 
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { router, organizerProcedure } from '../router-factory'
+import { router, organizerProcedure, protectedProcedure } from '../router-factory'
 import { TournamentProcessor } from '@/lib/tournament/tournament-processor'
+import { RatingCalculator } from '@/lib/tournament/rating-calculator'
+import { AuditLogger } from '@/lib/tournament/audit-logger'
 
 /**
  * Authorization helper to check if user can manage tournament
@@ -867,6 +869,311 @@ export const tournamentLifecycleRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Failed to delete manual pairing: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    }),
+
+  /**
+   * Drop Player
+   * 
+   * Allows a player to drop from a tournament, or allows an organizer/admin
+   * to drop a player. Updates TournamentEntry.dropped to true, excludes player
+   * from future pairings (Swiss), or advances opponent if match is pending
+   * (Elimination).
+   * 
+   * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5
+   */
+  dropPlayer: protectedProcedure
+    .input(
+      z.object({
+        tournamentId: z.string().uuid({
+          message: 'Invalid tournament ID format'
+        }),
+        playerId: z.string().uuid({
+          message: 'Invalid player ID format'
+        })
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Verify tournament exists
+      const tournament = await ctx.prisma.tournament.findUnique({
+        where: { id: input.tournamentId },
+        select: {
+          id: true,
+          organizerId: true,
+          name: true,
+          status: true
+        }
+      })
+
+      if (!tournament) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tournament not found'
+        })
+      }
+
+      // Get the player record for the user
+      const player = await ctx.prisma.player.findUnique({
+        where: { id: input.playerId },
+        select: {
+          id: true,
+          userId: true,
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              name: true
+            }
+          }
+        }
+      })
+
+      if (!player) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Player not found'
+        })
+      }
+
+      // Validate authorization: player can drop themselves, organizer/admin can drop anyone
+      const isOwnPlayer = player.userId === ctx.user.id
+      const canManage = canManageTournament(ctx.user.id, ctx.user.role, tournament)
+
+      if (!isOwnPlayer && !canManage) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You can only drop yourself from a tournament, unless you are the organizer or an admin'
+        })
+      }
+
+      // Initialize TournamentProcessor and drop player
+      const processor = new TournamentProcessor(ctx.prisma as any)
+      
+      try {
+        const result = await processor.dropPlayer(
+          input.tournamentId,
+          input.playerId
+        )
+
+        const playerName = player.user.firstName 
+          ? `${player.user.firstName} ${player.user.lastName || ''}`.trim()
+          : player.user.name || 'Unknown Player'
+
+        return {
+          success: true,
+          message: `${playerName} has been dropped from tournament "${tournament.name}"`,
+          entry: result.entry,
+          affectedMatches: result.affectedMatches,
+          stats: {
+            affectedMatchCount: result.affectedMatches.length
+          }
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error dropping player:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to drop player: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    }),
+
+  /**
+   * Get Projected Ratings
+   * 
+   * Calculates and returns projected rating changes for all participants in
+   * an active tournament based on current match results. Provides real-time
+   * feedback on how tournament performance will affect player ratings.
+   * 
+   * Requirements: 12.1, 12.2, 12.3, 12.4, 12.5
+   */
+  getProjectedRatings: protectedProcedure
+    .input(
+      z.object({
+        tournamentId: z.string().uuid({
+          message: 'Invalid tournament ID format'
+        })
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Verify tournament exists
+      const tournament = await ctx.prisma.tournament.findUnique({
+        where: { id: input.tournamentId },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          gameId: true
+        }
+      })
+
+      if (!tournament) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tournament not found'
+        })
+      }
+
+      // Initialize RatingCalculator and get projected ratings
+      const ratingCalculator = new RatingCalculator(ctx.prisma as any)
+      
+      try {
+        const projectedRatings = await ratingCalculator.calculateProjectedRatings(
+          input.tournamentId
+        )
+
+        return {
+          success: true,
+          tournamentId: input.tournamentId,
+          tournamentName: tournament.name,
+          tournamentStatus: tournament.status,
+          projectedRatings,
+          stats: {
+            totalPlayers: projectedRatings.length,
+            averageRatingChange: projectedRatings.length > 0
+              ? projectedRatings.reduce((sum, p) => sum + p.ratingChange, 0) / projectedRatings.length
+              : 0
+          }
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error calculating projected ratings:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to calculate projected ratings: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    }),
+
+  /**
+   * Get Audit Trail
+   * 
+   * Retrieves the complete audit trail for a tournament with optional filtering
+   * by action type, user, and date range. Provides transparency and accountability
+   * for all tournament actions.
+   * 
+   * Requirements: 11.1, 11.2, 11.3, 11.4, 11.5
+   */
+  getAuditTrail: organizerProcedure
+    .input(
+      z.object({
+        tournamentId: z.string().uuid({
+          message: 'Invalid tournament ID format'
+        }),
+        filters: z.object({
+          action: z.enum([
+            'START',
+            'ADVANCE_ROUND',
+            'SUBMIT_MATCH',
+            'OVERRIDE_MATCH',
+            'PAUSE',
+            'RESUME',
+            'CANCEL',
+            'COMPLETE',
+            'PLAYER_DROP',
+            'ASSIGN_BYE',
+            'CREATE_MANUAL_PAIRING',
+            'UPDATE_MANUAL_PAIRING',
+            'DELETE_MANUAL_PAIRING',
+            'RESOLVE_DISPUTE'
+          ]).optional(),
+          performedBy: z.string().uuid().optional(),
+          startDate: z.date().optional(),
+          endDate: z.date().optional()
+        }).optional()
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Verify tournament exists and check authorization
+      const tournament = await ctx.prisma.tournament.findUnique({
+        where: { id: input.tournamentId },
+        select: {
+          id: true,
+          organizerId: true,
+          name: true
+        }
+      })
+
+      if (!tournament) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tournament not found'
+        })
+      }
+
+      // Validate authorization (organizer or admin)
+      if (!canManageTournament(ctx.user.id, ctx.user.role, tournament)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the tournament organizer or an admin can view the audit trail'
+        })
+      }
+
+      // Initialize AuditLogger and get audit trail
+      const auditLogger = new AuditLogger(ctx.prisma as any)
+      
+      try {
+        const auditTrail = await auditLogger.getAuditTrail(
+          input.tournamentId,
+          input.filters
+        )
+
+        return {
+          success: true,
+          tournamentId: input.tournamentId,
+          tournamentName: tournament.name,
+          auditTrail,
+          stats: {
+            totalEntries: auditTrail.length,
+            dateRange: auditTrail.length > 0 ? {
+              earliest: auditTrail[auditTrail.length - 1].timestamp,
+              latest: auditTrail[0].timestamp
+            } : null
+          }
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error retrieving audit trail:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to retrieve audit trail: ${error instanceof Error ? error.message : 'Unknown error'}`
         })
       }
     })
