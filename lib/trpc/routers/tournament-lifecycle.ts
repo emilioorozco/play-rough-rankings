@@ -332,5 +332,253 @@ export const tournamentLifecycleRouter = router({
           message: `Failed to complete tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
         })
       }
+    }),
+
+  /**
+   * Pause Tournament
+   * 
+   * Validates authorization, checks tournament is ACTIVE, updates status to
+   * PAUSED, and logs the action with optional reason. Prevents new match
+   * submissions and round advancement while allowing in-progress matches
+   * to complete.
+   * 
+   * Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
+   */
+  pause: organizerProcedure
+    .input(
+      z.object({
+        tournamentId: z.string().uuid({
+          message: 'Invalid tournament ID format'
+        }),
+        reason: z.string().optional()
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Verify tournament exists and check authorization
+      const tournament = await ctx.prisma.tournament.findUnique({
+        where: { id: input.tournamentId },
+        select: {
+          id: true,
+          organizerId: true,
+          status: true,
+          name: true
+        }
+      })
+
+      if (!tournament) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tournament not found'
+        })
+      }
+
+      // Validate authorization (organizer or admin)
+      if (!canManageTournament(ctx.user.id, ctx.user.role, tournament)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the tournament organizer or an admin can pause this tournament'
+        })
+      }
+
+      // Initialize TournamentProcessor and pause tournament
+      const processor = new TournamentProcessor(ctx.prisma as any)
+      
+      try {
+        const result = await processor.pauseTournament(
+          input.tournamentId,
+          ctx.user.id,
+          input.reason
+        )
+
+        return {
+          success: true,
+          message: `Tournament "${tournament.name}" has been paused${input.reason ? `: ${input.reason}` : ''}`,
+          tournament: result
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error pausing tournament:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to pause tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    }),
+
+  /**
+   * Resume Tournament
+   * 
+   * Validates authorization, checks tournament is PAUSED, updates status to
+   * ACTIVE, and logs the action. Restores normal match submission and
+   * progression capabilities.
+   * 
+   * Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
+   */
+  resume: organizerProcedure
+    .input(
+      z.object({
+        tournamentId: z.string().uuid({
+          message: 'Invalid tournament ID format'
+        })
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Verify tournament exists and check authorization
+      const tournament = await ctx.prisma.tournament.findUnique({
+        where: { id: input.tournamentId },
+        select: {
+          id: true,
+          organizerId: true,
+          status: true,
+          name: true
+        }
+      })
+
+      if (!tournament) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tournament not found'
+        })
+      }
+
+      // Validate authorization (organizer or admin)
+      if (!canManageTournament(ctx.user.id, ctx.user.role, tournament)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the tournament organizer or an admin can resume this tournament'
+        })
+      }
+
+      // Initialize TournamentProcessor and resume tournament
+      const processor = new TournamentProcessor(ctx.prisma as any)
+      
+      try {
+        const result = await processor.resumeTournament(
+          input.tournamentId,
+          ctx.user.id
+        )
+
+        return {
+          success: true,
+          message: `Tournament "${tournament.name}" has been resumed`,
+          tournament: result
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error resuming tournament:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to resume tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
+    }),
+
+  /**
+   * Cancel Tournament
+   * 
+   * Validates authorization, checks tournament is not COMPLETED, updates
+   * status to CANCELLED, logs the action with reason, and preserves all
+   * match results and standings for record keeping. Prevents any further
+   * match submissions or tournament progression.
+   * 
+   * Requirements: 14.1, 14.2, 14.3, 14.4, 14.5
+   */
+  cancel: organizerProcedure
+    .input(
+      z.object({
+        tournamentId: z.string().uuid({
+          message: 'Invalid tournament ID format'
+        }),
+        reason: z.string().min(1, {
+          message: 'Cancellation reason is required'
+        })
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required'
+        })
+      }
+
+      // Verify tournament exists and check authorization
+      const tournament = await ctx.prisma.tournament.findUnique({
+        where: { id: input.tournamentId },
+        select: {
+          id: true,
+          organizerId: true,
+          status: true,
+          name: true
+        }
+      })
+
+      if (!tournament) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tournament not found'
+        })
+      }
+
+      // Validate authorization (organizer or admin)
+      if (!canManageTournament(ctx.user.id, ctx.user.role, tournament)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the tournament organizer or an admin can cancel this tournament'
+        })
+      }
+
+      // Initialize TournamentProcessor and cancel tournament
+      const processor = new TournamentProcessor(ctx.prisma as any)
+      
+      try {
+        const result = await processor.cancelTournament(
+          input.tournamentId,
+          ctx.user.id,
+          input.reason
+        )
+
+        return {
+          success: true,
+          message: `Tournament "${tournament.name}" has been cancelled: ${input.reason}`,
+          tournament: result
+        }
+      } catch (error) {
+        // Re-throw TRPCError as-is
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Wrap other errors
+        console.error('Error cancelling tournament:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to cancel tournament: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+      }
     })
 })
