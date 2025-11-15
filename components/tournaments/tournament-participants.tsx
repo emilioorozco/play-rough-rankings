@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useFilter } from '@/hooks/stores'
-import { Search, Filter, MoreVertical, UserCheck, Trophy, Medal, Award } from 'lucide-react'
+import { Search, Filter, MoreVertical, UserCheck, Trophy, Medal, Award, UserX } from 'lucide-react'
+import { trpc } from '@/lib/trpc/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,8 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { 
   Table, 
@@ -22,6 +24,8 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table'
+import { ConfirmationModal } from '@/components/ui/confirmation-modal'
+import { useConfirmationModal } from '@/stores/ui-store'
 import type { ApiTournament } from '@/lib/types/api'
 
 interface TournamentParticipantsProps {
@@ -32,30 +36,87 @@ interface TournamentParticipantsProps {
     role: string
     displayName?: string | null
   } | null
+  canManage?: boolean
+  onUpdate?: () => void
 }
 
-export function TournamentParticipants({ tournament, isOrganizer, currentUser }: TournamentParticipantsProps) {
+export function TournamentParticipants({ tournament, isOrganizer, currentUser, canManage = false, onUpdate }: TournamentParticipantsProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'seed' | 'wins' | 'rating'>('seed')
   
   // Use store for filter state
   const { filters, setFilter } = useFilter('tournament-participants')
   const filterStatus = filters.status || 'all'
-  const setFilterStatus = (status: 'all' | 'active' | 'eliminated') => setFilter({ status })
+  const setFilterStatus = (status: 'all' | 'active' | 'dropped') => setFilter({ status })
+
+  // Confirmation modal for player drop
+  const { openConfirmation } = useConfirmationModal()
+
+  // Drop player mutation
+  const dropPlayerMutation = trpc.tournamentLifecycle.dropPlayer.useMutation({
+    onSuccess: (data) => {
+      console.log('Player dropped successfully:', data.message)
+      // Refresh tournament data
+      if (onUpdate) {
+        onUpdate()
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to drop player:', error.message)
+    }
+  })
 
   const participants = tournament.participants || []
+
+  // Get tournament entries to check dropped status
+  const tournamentQuery = trpc.tournaments.getById.useQuery({
+    id: tournament.id,
+    includeParticipants: true
+  })
+
+  const entries = tournamentQuery.data?.entries || []
+
+  // Create a map of player ID to entry for quick lookup
+  const entryMap = new Map(entries.map((entry: any) => [entry.playerId, entry]))
 
   const filteredParticipants = participants
     .filter(participant => {
       const matchesSearch = participant.displayName.toLowerCase().includes(searchTerm.toLowerCase())
-      // For now, all participants are considered active since we don't have elimination data
-      const matchesFilter = filterStatus === 'all' || filterStatus === 'active'
+      const entry = entryMap.get(participant.id)
+      const isDropped = entry?.dropped || false
+      
+      // Filter by status
+      let matchesFilter = true
+      if (filterStatus === 'active') {
+        matchesFilter = !isDropped
+      } else if (filterStatus === 'dropped') {
+        matchesFilter = isDropped
+      }
+      
       return matchesSearch && matchesFilter
     })
     .sort((a, b) => {
       // For now, just sort by display name since we don't have detailed stats
       return a.displayName.localeCompare(b.displayName)
     })
+
+  // Handle player drop
+  const handleDropPlayer = (playerId: string, playerName: string) => {
+    openConfirmation({
+      title: 'Drop from Tournament',
+      message: `Are you sure you want to drop ${playerName} from this tournament?`,
+      description: 'This action will:\n• Remove the player from future pairings\n• Mark all pending matches as forfeited\n• Update tournament standings\n\nThis action cannot be undone.',
+      confirmLabel: 'Drop Player',
+      cancelLabel: 'Cancel',
+      variant: 'destructive',
+      onConfirm: () => {
+        dropPlayerMutation.mutate({
+          tournamentId: tournament.id,
+          playerId
+        })
+      }
+    })
+  }
 
   const getTierIcon = (rating?: number) => {
     if (!rating) return null
@@ -67,12 +128,28 @@ export function TournamentParticipants({ tournament, isOrganizer, currentUser }:
     return <Award className="h-4 w-4 text-primary" />
   }
 
-  const getStatusColor = () => {
-    return 'success' // All participants are active for now
+  const getStatusColor = (isDropped: boolean) => {
+    return isDropped ? 'destructive' : 'success'
+  }
+
+  const getStatusLabel = (isDropped: boolean) => {
+    return isDropped ? 'Dropped' : 'Active'
+  }
+
+  const getStatusIcon = (isDropped: boolean) => {
+    return isDropped ? UserX : UserCheck
   }
 
   const isCurrentUser = (participantId: string) => {
     return currentUser?.id === participantId
+  }
+
+  const canDropPlayer = (participantId: string) => {
+    // Can drop if:
+    // 1. User is the player themselves (and tournament is active)
+    // 2. User is organizer or admin
+    const isOwnPlayer = currentUser?.id === participantId
+    return (isOwnPlayer && tournament.status === 'ACTIVE') || canManage
   }
 
   return (
@@ -112,6 +189,9 @@ export function TournamentParticipants({ tournament, isOrganizer, currentUser }:
                   <DropdownMenuItem onClick={() => setFilterStatus('active')}>
                     Active Only
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilterStatus('dropped')}>
+                    Dropped Only
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               
@@ -148,85 +228,106 @@ export function TournamentParticipants({ tournament, isOrganizer, currentUser }:
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredParticipants.map((participant, index) => (
-                <TableRow 
-                  key={participant.id}
-                  className={isCurrentUser(participant.id) ? 'bg-primary/5' : ''}
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="w-8 h-8 p-0 flex items-center justify-center">
-                        {index + 1}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">
-                          {participant.displayName.split(' ').map(n => n[0]).join('').toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className={`font-medium ${isCurrentUser(participant.id) ? 'text-primary' : 'text-foreground'}`}>
-                            {participant.displayName}
-                          </span>
-                          {isCurrentUser(participant.id) && (
-                            <Badge variant="secondary" className="text-xs">You</Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-muted-foreground">Player</span>
-                          {getTierIcon()}
+              {filteredParticipants.map((participant, index) => {
+                const entry = entryMap.get(participant.id)
+                const isDropped = entry?.dropped || false
+                const StatusIcon = getStatusIcon(isDropped)
+                
+                return (
+                  <TableRow 
+                    key={participant.id}
+                    className={`${isCurrentUser(participant.id) ? 'bg-primary/5' : ''} ${isDropped ? 'opacity-60' : ''}`}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="w-8 h-8 p-0 flex items-center justify-center">
+                          {index + 1}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs">
+                            {participant.displayName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-medium ${isCurrentUser(participant.id) ? 'text-primary' : 'text-foreground'} ${isDropped ? 'line-through' : ''}`}>
+                              {participant.displayName}
+                            </span>
+                            {isCurrentUser(participant.id) && (
+                              <Badge variant="secondary" className="text-xs">You</Badge>
+                            )}
+                            {isDropped && (
+                              <Badge variant="destructive" className="text-xs">Dropped</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm text-muted-foreground">Player</span>
+                            {getTierIcon()}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm">
-                        N/A
-                      </span>
-                    </div>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <span className="font-mono">N/A</span>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Badge 
-                      variant={getStatusColor() as any}
-                      className="text-xs"
-                    >
-                      <UserCheck className="h-3 w-3 mr-1" />
-                      Active
-                    </Badge>
-                  </TableCell>
-                  
-                  <TableCell>
-                    {isOrganizer && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>View Profile</DropdownMenuItem>
-                          <DropdownMenuItem>Send Message</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
-                            Remove
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">
+                          N/A
+                        </span>
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell>
+                      <span className="font-mono">N/A</span>
+                    </TableCell>
+                    
+                    <TableCell>
+                      <Badge 
+                        variant={getStatusColor(isDropped) as any}
+                        className="text-xs"
+                      >
+                        <StatusIcon className="h-3 w-3 mr-1" />
+                        {getStatusLabel(isDropped)}
+                      </Badge>
+                    </TableCell>
+                    
+                    <TableCell>
+                      {(canManage || isCurrentUser(participant.id)) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem>View Profile</DropdownMenuItem>
+                            {canManage && (
+                              <>
+                                <DropdownMenuItem>Send Message</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
+                            {!isDropped && canDropPlayer(participant.id) && (
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleDropPlayer(participant.id, participant.displayName)}
+                                disabled={dropPlayerMutation.isPending}
+                              >
+                                <UserX className="h-4 w-4 mr-2" />
+                                Drop from Tournament
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>
@@ -236,6 +337,9 @@ export function TournamentParticipants({ tournament, isOrganizer, currentUser }:
             <p>No participants found matching your criteria.</p>
           </div>
         )}
+
+        {/* Confirmation Modal */}
+        <ConfirmationModal />
       </CardContent>
     </Card>
   )
