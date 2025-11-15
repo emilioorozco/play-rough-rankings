@@ -13,9 +13,12 @@ import { TournamentHeroSection } from '@/components/tournaments/tournament-hero-
 import { TournamentQuickInfo } from '@/components/tournaments/tournament-quick-info'
 import { TournamentTabs } from '@/components/tournaments/tournament-tabs'
 import { TournamentManagementPanel } from '@/components/tournaments/tournament-management-panel'
+import { LiveTournamentIndicator } from '@/components/tournaments/live-tournament-indicator'
 import { useTournamentStore } from '@/stores/tournament-store'
 import { useTab } from '@/stores/ui-store'
 import { usePermissions } from '@/stores/auth-store'
+import { useTournamentRealtime } from '@/hooks/use-tournament-realtime'
+import { useToast } from '@/hooks/use-toast'
 
 // Helper function to get tournament status badge variant
 const getStatusVariant = (status: string) => {
@@ -33,6 +36,7 @@ export default function TournamentDetailsPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useSession()
+  const { toast } = useToast()
   const tournamentId = params.id as string
   const { canManageTournament } = usePermissions()
 
@@ -128,16 +132,38 @@ export default function TournamentDetailsPage() {
     }
   }, [activeTab, setActiveTab])
 
-  // Set up real-time updates (refetch on interval for active tournaments)
-  React.useEffect(() => {
-    if (safeTournament?.status === 'ACTIVE') {
-      const interval = setInterval(() => {
-        tournamentQuery.refetch()
-      }, 30000) // Refetch every 30 seconds for active tournaments
-      
-      return () => clearInterval(interval)
-    }
-  }, [safeTournament?.status, tournamentQuery])
+  // Set up real-time updates with callbacks
+  useTournamentRealtime(tournamentId, {
+    enabled: safeTournament?.status === 'ACTIVE' || safeTournament?.status === 'PAUSED',
+    pollingInterval: 10000, // Poll every 10 seconds for active tournaments
+    onMatchUpdate: () => {
+      toast({
+        title: 'Match Updated',
+        description: 'A match result has been submitted',
+      })
+      tournamentQuery.refetch()
+    },
+    onRoundAdvance: () => {
+      toast({
+        title: 'Round Advanced',
+        description: 'The tournament has advanced to the next round',
+      })
+      tournamentQuery.refetch()
+    },
+    onStatusChange: (newStatus) => {
+      const statusMessages: Record<string, string> = {
+        ACTIVE: 'Tournament has started',
+        PAUSED: 'Tournament has been paused',
+        COMPLETED: 'Tournament has been completed',
+        CANCELLED: 'Tournament has been cancelled',
+      }
+      toast({
+        title: 'Tournament Status Changed',
+        description: statusMessages[newStatus] || `Status changed to ${newStatus}`,
+      })
+      tournamentQuery.refetch()
+    },
+  })
 
   if (isTournamentLoading || isRegistrationLoading) {
     return (
@@ -270,10 +296,13 @@ export default function TournamentDetailsPage() {
             </span>
           </div>
           
-          {/* Tournament Status Indicator */}
-          <Badge variant={getStatusVariant(safeTournament.status) as any} className="text-xs">
-            {safeTournament.status}
-          </Badge>
+          {/* Tournament Status Indicators */}
+          <div className="flex items-center gap-2">
+            <LiveTournamentIndicator tournamentId={tournamentId} />
+            <Badge variant={getStatusVariant(safeTournament.status) as any} className="text-xs">
+              {safeTournament.status}
+            </Badge>
+          </div>
         </div>
 
         {/* Hero Section */}
