@@ -22,6 +22,8 @@ interface TournamentTabsProps {
   userPreferences?: {
     nameDisplayPreference: 'FIRST_NAME' | 'FIRST_LAST_NAME' | 'DISPLAY_NAME' | 'OPT_OUT'
   } | null
+  canManage?: boolean
+  onUpdate?: () => void
 }
 
 export function TournamentTabs({
@@ -29,7 +31,9 @@ export function TournamentTabs({
   isOrganizer,
   isRegistered,
   currentUser,
-  userPreferences
+  userPreferences,
+  canManage = false,
+  onUpdate
 }: TournamentTabsProps) {
   const { activeTab, setActiveTab } = useTab('tournamentDetails')
   const mobileScrollRef = React.useRef<HTMLDivElement | null>(null)
@@ -115,6 +119,8 @@ export function TournamentTabs({
         <TournamentBrackets 
           tournament={tournament}
           isOrganizer={isOrganizer}
+          canManage={canManage}
+          currentUser={currentUser}
         />
       </TabsContent>
 
@@ -123,6 +129,8 @@ export function TournamentTabs({
           tournament={tournament}
           isOrganizer={isOrganizer}
           currentUser={currentUser}
+          canManage={canManage}
+          onUpdate={onUpdate}
         />
       </TabsContent>
 
