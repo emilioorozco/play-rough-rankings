@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
+import { ProjectedRatingsDisplay } from '@/components/tournaments/projected-ratings-display'
 import { getDisplayName, getDisplayInitials } from '@/lib/utils/name-display'
 import type { ApiTournament } from '@/lib/types/api'
 
@@ -75,6 +76,11 @@ export function TournamentOverview({
             </p>
           </CardContent>
         </Card>
+
+        {/* Projected Ratings - Show for active tournaments */}
+        {(tournament.status === 'ACTIVE' || tournament.status === 'COMPLETED') && (
+          <ProjectedRatingsDisplay tournamentId={tournament.id} />
+        )}
 
         {/* Rules & Format */}
         <Card className="dark:bg-muted dark:text-foreground">

@@ -1,17 +1,31 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Maximize2, Edit } from 'lucide-react'
+import { MatchSubmissionForm } from '@/components/tournaments/match-submission-form'
+import { OrganizerMatchControls } from '@/components/tournaments/organizer-match-controls'
+import { Modal } from '@/components/ui/modal'
 import type { ApiTournament } from '@/lib/types/api'
 
 interface TournamentBracketsProps {
   tournament: ApiTournament
   isOrganizer: boolean
+  canManage?: boolean
+  currentUser?: {
+    id: string
+    role: string
+    displayName?: string | null
+  } | null
 }
 
-export function TournamentBrackets({ tournament }: TournamentBracketsProps) {
+export function TournamentBrackets({ tournament, canManage = false, currentUser }: TournamentBracketsProps) {
+  const [selectedMatch, setSelectedMatch] = useState<any | null>(null)
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false)
+  const [showOrganizerModal, setShowOrganizerModal] = useState(false)
+
   // Group matches by round
   const matchesByRound = tournament.matches?.reduce((acc, match) => {
     if (!acc[match.round]) {
@@ -24,6 +38,27 @@ export function TournamentBrackets({ tournament }: TournamentBracketsProps) {
   const rounds = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b)
   const currentRound = rounds[0] // For now, show first round
   const currentRoundMatches = matchesByRound[currentRound] || []
+
+  // Check if current user is in a match
+  const isPlayerInMatch = (match: any) => {
+    return currentUser && (
+      match.player1?.id === currentUser.id || 
+      match.player2?.id === currentUser.id
+    )
+  }
+
+  // Handle match click
+  const handleMatchClick = (match: any) => {
+    if (match.status === 'COMPLETED') return // Don't allow editing completed matches
+    
+    setSelectedMatch(match)
+    
+    if (canManage) {
+      setShowOrganizerModal(true)
+    } else if (isPlayerInMatch(match)) {
+      setShowSubmissionModal(true)
+    }
+  }
 
   const getMatchStatusColor = (status: string) => {
     switch (status) {
@@ -101,36 +136,50 @@ export function TournamentBrackets({ tournament }: TournamentBracketsProps) {
 
         {/* Matches Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
-          {currentRoundMatches.map((match) => (
-            <Card key={match.id} className="relative dark:bg-muted dark:text-foreground border-border">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">Match {match.id}</span>
+          {currentRoundMatches.map((match) => {
+            const canInteract = canManage || isPlayerInMatch(match)
+            const isCompleted = match.status === 'COMPLETED'
+            
+            return (
+              <Card 
+                key={match.id} 
+                className={`relative dark:bg-muted dark:text-foreground border-border ${
+                  canInteract && !isCompleted ? 'cursor-pointer hover:border-primary transition-colors' : ''
+                }`}
+                onClick={() => canInteract && handleMatchClick(match)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">Match {match.id}</span>
+                      {canInteract && !isCompleted && (
+                        <Edit className="h-3 w-3 text-muted-foreground" />
+                      )}
+                    </div>
+                    <Badge 
+                      variant={getMatchStatusColor(match.status) as any}
+                      className="text-xs"
+                    >
+                      {match.status === 'IN_PROGRESS' ? 'Live' : match.status}
+                    </Badge>
                   </div>
-                  <Badge 
-                    variant={getMatchStatusColor(match.status) as any}
-                    className="text-xs"
-                  >
-                    {match.status === 'IN_PROGRESS' ? 'Live' : match.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {renderPlayer(
-                  match.player1, 
-                  match.winner?.id === match.player1.id
-                )}
-                <div className="text-center text-xs text-muted-foreground font-medium">
-                  VS
-                </div>
-                {renderPlayer(
-                  match.player2, 
-                  match.winner?.id === match.player2.id
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {renderPlayer(
+                    match.player1, 
+                    match.winner?.id === match.player1.id
+                  )}
+                  <div className="text-center text-xs text-muted-foreground font-medium">
+                    VS
+                  </div>
+                  {renderPlayer(
+                    match.player2, 
+                    match.winner?.id === match.player2.id
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
 
         {currentRoundMatches.length === 0 && (
@@ -139,6 +188,60 @@ export function TournamentBrackets({ tournament }: TournamentBracketsProps) {
           </div>
         )}
       </CardContent>
+
+      {/* Match Submission Modal for Players */}
+      <Modal
+        isOpen={showSubmissionModal}
+        onClose={() => {
+          setShowSubmissionModal(false)
+          setSelectedMatch(null)
+        }}
+        title="Submit Match Result"
+      >
+        {selectedMatch && (
+          <MatchSubmissionForm
+            match={selectedMatch}
+            currentUserId={currentUser?.id || ''}
+            onSuccess={() => {
+              setShowSubmissionModal(false)
+              setSelectedMatch(null)
+              // Trigger refetch in parent component
+              window.location.reload()
+            }}
+            onCancel={() => {
+              setShowSubmissionModal(false)
+              setSelectedMatch(null)
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* Organizer Match Controls Modal */}
+      <Modal
+        isOpen={showOrganizerModal}
+        onClose={() => {
+          setShowOrganizerModal(false)
+          setSelectedMatch(null)
+        }}
+        title="Manage Match"
+      >
+        {selectedMatch && (
+          <OrganizerMatchControls
+            match={selectedMatch}
+            tournamentId={tournament.id}
+            onSuccess={() => {
+              setShowOrganizerModal(false)
+              setSelectedMatch(null)
+              // Trigger refetch in parent component
+              window.location.reload()
+            }}
+            onCancel={() => {
+              setShowOrganizerModal(false)
+              setSelectedMatch(null)
+            }}
+          />
+        )}
+      </Modal>
     </Card>
   )
 }

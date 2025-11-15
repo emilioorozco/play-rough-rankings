@@ -8,17 +8,33 @@ import { useSession } from '@/components/auth/session-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import { TournamentHeroSection } from '@/components/tournaments/tournament-hero-section'
 import { TournamentQuickInfo } from '@/components/tournaments/tournament-quick-info'
 import { TournamentTabs } from '@/components/tournaments/tournament-tabs'
+import { TournamentManagementPanel } from '@/components/tournaments/tournament-management-panel'
 import { useTournamentStore } from '@/stores/tournament-store'
 import { useTab } from '@/stores/ui-store'
+import { usePermissions } from '@/stores/auth-store'
+
+// Helper function to get tournament status badge variant
+const getStatusVariant = (status: string) => {
+  switch (status) {
+    case 'UPCOMING': return 'default'
+    case 'ACTIVE': return 'success'
+    case 'PAUSED': return 'warning'
+    case 'COMPLETED': return 'secondary'
+    case 'CANCELLED': return 'destructive'
+    default: return 'outline'
+  }
+}
 
 export default function TournamentDetailsPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useSession()
   const tournamentId = params.id as string
+  const { canManageTournament } = usePermissions()
 
   // Fetch tournament data with TRPC
   const tournamentQuery = trpc.tournaments.getById.useQuery({
@@ -96,13 +112,6 @@ export default function TournamentDetailsPage() {
   // Use UI Store for active tab
   const { activeTab, setActiveTab } = useTab('tournamentDetails')
 
-  // Set default tab if none is selected
-  React.useEffect(() => {
-    if (!activeTab) {
-      setActiveTab('overview')
-    }
-  }, [activeTab, setActiveTab])
-
   // Get user preferences from TRPC (simplified for now)
   const userPreferencesQuery = trpc.userPreferences.get.useQuery(
     undefined,
@@ -111,6 +120,24 @@ export default function TournamentDetailsPage() {
 
   // Use user preferences data for rendering
   const userPreferencesData = userPreferencesQuery.data
+
+  // Set default tab if none is selected
+  React.useEffect(() => {
+    if (!activeTab) {
+      setActiveTab('overview')
+    }
+  }, [activeTab, setActiveTab])
+
+  // Set up real-time updates (refetch on interval for active tournaments)
+  React.useEffect(() => {
+    if (safeTournament?.status === 'ACTIVE') {
+      const interval = setInterval(() => {
+        tournamentQuery.refetch()
+      }, 30000) // Refetch every 30 seconds for active tournaments
+      
+      return () => clearInterval(interval)
+    }
+  }, [safeTournament?.status, tournamentQuery])
 
   if (isTournamentLoading || isRegistrationLoading) {
     return (
@@ -221,25 +248,32 @@ export default function TournamentDetailsPage() {
 
   // Check if user is organizer or can manage
   const isOrganizer = user?.id === safeTournament.organizer?.id
-  const canManage = isOrganizer || user?.role === 'ADMIN'
+  const canManage = canManageTournament(safeTournament.organizer?.id)
 
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 pt-2 pb-6">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-4 mb-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.back()}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Tournament Details
-          </span>
+        <div className="flex items-center justify-between gap-4 mb-2">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.back()}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Tournament Details
+            </span>
+          </div>
+          
+          {/* Tournament Status Indicator */}
+          <Badge variant={getStatusVariant(safeTournament.status) as any} className="text-xs">
+            {safeTournament.status}
+          </Badge>
         </div>
 
         {/* Hero Section */}
@@ -256,6 +290,18 @@ export default function TournamentDetailsPage() {
           tournament={safeTournament as any}
         />
 
+        {/* Management Panel - Only visible to organizers and admins */}
+        {canManage && (
+          <div className="mb-6">
+            <TournamentManagementPanel
+              tournament={safeTournament as any}
+              onUpdate={() => {
+                tournamentQuery.refetch()
+              }}
+            />
+          </div>
+        )}
+
         {/* Tabs */}
         <TournamentTabs
           tournament={safeTournament as any}
@@ -263,6 +309,11 @@ export default function TournamentDetailsPage() {
           isRegistered={isRegistered}
           currentUser={user}
           userPreferences={userPreferencesData as any}
+          canManage={canManage}
+          onUpdate={() => {
+            tournamentQuery.refetch()
+            registrationStatusQuery.refetch()
+          }}
         />
       </div>
     </div>
