@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { trpc } from '@/lib/trpc/client'
+import { useMatchRealtime } from '@/hooks/use-tournament-realtime'
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -48,26 +49,32 @@ export function ProjectedRatingsDisplay({
   const [sortBy, setSortBy] = useState<'rating' | 'change' | 'confidence'>('rating')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
-  // Fetch projected ratings with real-time updates
+  // Fetch projected ratings
   const { 
     data, 
     isLoading, 
     error,
     refetch 
   } = trpc.tournamentLifecycle.getProjectedRatings.useQuery(
-    { tournamentId },
-    {
-      // Refetch every 30 seconds for real-time updates
-      refetchInterval: 30000,
-      // Refetch on window focus
-      refetchOnWindowFocus: true
-    }
+    { tournamentId }
   )
 
+  // Set up real-time updates for matches (which affect projected ratings)
+  useMatchRealtime(tournamentId, {
+    enabled: true,
+    pollingInterval: 15000, // Poll every 15 seconds
+    onMatchComplete: () => {
+      // Refresh projected ratings when a match is completed
+      refetch()
+    }
+  })
+
   // Call onRatingsUpdate when data changes
-  if (data?.projectedRatings && onRatingsUpdate) {
-    onRatingsUpdate(data.projectedRatings)
-  }
+  useEffect(() => {
+    if (data?.projectedRatings && onRatingsUpdate) {
+      onRatingsUpdate(data.projectedRatings)
+    }
+  }, [data?.projectedRatings, onRatingsUpdate])
 
   if (isLoading) {
     return (
