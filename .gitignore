@@ -13,6 +13,11 @@ design-drafts/
 # macOS files
 .DS_Store
 
+# Temporary directories
+tmp/
+temp/
+*.tmp
+
 # TypeScript build info
 tsconfig.tsbuildinfo
 
