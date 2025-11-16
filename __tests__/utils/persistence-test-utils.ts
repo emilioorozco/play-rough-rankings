@@ -1,4 +1,5 @@
 import { StateStorage } from 'zustand/middleware'
+import { vi } from 'vitest'
 
 // Mock storage for testing
 export class MockStorage implements StateStorage {

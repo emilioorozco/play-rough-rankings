@@ -1,4 +1,5 @@
 import { act } from '@testing-library/react'
+import { vi } from 'vitest'
 import { useUIStore } from '@/stores/ui-store'
 import { useTournamentStore } from '@/stores/tournament-store'
 import { useUserPreferencesStore } from '@/stores/user-preferences-store'
@@ -95,7 +96,7 @@ export const waitForStoreUpdate = async (callback: () => void, timeout = 1000) =
   })
 }
 
-export const mockStoreActions = (storeName: string, actions: Record<string, jest.Mock>) => {
+export const mockStoreActions = (storeName: string, actions: Record<string, ReturnType<typeof vi.fn>>) => {
   let store: any
   
   switch (storeName) {
@@ -363,7 +364,7 @@ export const createStoreTestSuite = (storeName: string) => {
     expectAction: (actionName: string, ...args: any[]) => expectStoreAction(storeName, actionName, ...args),
     simulateAction: (actionName: string, ...args: any[]) => simulateStoreAction(storeName, actionName, ...args),
     waitForAction: (actionName: string, ...args: any[]) => waitForStoreAction(storeName, actionName, ...args),
-    mockActions: (actions: Record<string, jest.Mock>) => mockStoreActions(storeName, actions),
+    mockActions: (actions: Record<string, ReturnType<typeof vi.fn>>) => mockStoreActions(storeName, actions),
     createSubscriber: () => createMockStoreSubscriber(storeName)
   }
 }
