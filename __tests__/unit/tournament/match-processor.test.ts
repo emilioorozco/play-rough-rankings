@@ -5,28 +5,9 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
-import { PrismaClient } from '@prisma/client'
 import { MatchProcessor } from '@/lib/tournament/match-processor'
 import { MatchResult } from '@/lib/tournament/types'
-
-// Create a properly typed mock Prisma Client
-const createMockPrisma = () => ({
-  match: {
-    findUnique: jest.fn<any>(),
-    update: jest.fn<any>(),
-  },
-  tournament: {
-    findUnique: jest.fn<any>(),
-    update: jest.fn<any>(),
-  },
-  tournamentEntry: {
-    findMany: jest.fn<any>(),
-    update: jest.fn<any>(),
-  },
-  $transaction: jest.fn<any>(),
-})
-
-type MockPrisma = ReturnType<typeof createMockPrisma>
+import { createMockPrisma, type MockPrisma } from '@/__tests__/__mocks__/prisma'
 
 let mockPrisma: MockPrisma
 
@@ -35,7 +16,7 @@ describe('MatchProcessor', () => {
 
   beforeEach(() => {
     mockPrisma = createMockPrisma()
-    matchProcessor = new MatchProcessor(mockPrisma as unknown as PrismaClient)
+    matchProcessor = new MatchProcessor(mockPrisma)
     jest.clearAllMocks()
   })
 
