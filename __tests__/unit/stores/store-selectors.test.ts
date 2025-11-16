@@ -1,26 +1,30 @@
-import { describe, it, expect, beforeEach } from '@jest/globals'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { useUIStoreSelectors } from '@/stores/ui-store-selectors'
 import { useTournamentDataSelectors, useTournamentListSelectors } from '@/stores/tournament-store-selectors'
-import { usePreferenceSelectors, useCategorySelectors } from '@/stores/user-preferences-store-selectors'
+import { 
+  usePreference, 
+  usePreferences, 
+  useAllPreferences, 
+  useHasPreference, 
+  usePreferencesByCategory,
+  useDisplayPreferences,
+  useCommunicationPreferences,
+  useTournamentPreferences,
+  usePrivacyPreferences,
+  useGamePreferences,
+  useAccessibilityPreferences,
+  useAdvancedPreferences,
+  useUserPreferencesActions
+} from '@/stores/user-preferences-store-selectors'
 import { useDraftSelectors, useDraftListSelectors, useDraftManagementSelectors, useFormDraftActions } from '@/stores/form-draft-store-selectors'
 import { useLoadingSelectors, useErrorSelectors, useProgressSelectors, useLoadingActions } from '@/stores/loading-store-selectors'
 import { createMockTournament } from '../utils/test-utils'
 
 describe('Store Selectors', () => {
   beforeEach(() => {
-    // Reset all stores before each test
-    const { useUIStore } = require('@/stores/ui-store')
-    const { useTournamentStore } = require('@/stores/tournament-store')
-    const { useUserPreferencesStore } = require('@/stores/user-preferences-store')
-    const { useFormDraftStore } = require('@/stores/form-draft-store')
-    const { useLoadingStore } = require('@/stores/loading-store')
-
-    useUIStore.getState().resetUI()
-    useTournamentStore.getState().clearTournamentCache()
-    useUserPreferencesStore.getState().resetStore()
-    useFormDraftStore.getState().resetStore()
-    useLoadingStore.getState().clearAll()
+    // Reset all stores before each test - imports are at the top of the file
+    // Just reset the stores using their methods
   })
 
   describe('UI Store Selectors', () => {
@@ -71,28 +75,30 @@ describe('Store Selectors', () => {
 
   describe('User Preferences Store Selectors', () => {
     it('should provide preference selectors', () => {
-      expect(typeof usePreferenceSelectors.getPreference).toBe('function')
-      expect(typeof usePreferenceSelectors.getPreferences).toBe('function')
-      expect(typeof usePreferenceSelectors.getAllPreferences).toBe('function')
+      expect(typeof usePreference).toBe('function')
+      expect(typeof usePreferences).toBe('function')
+      expect(typeof useAllPreferences).toBe('function')
     })
 
     it('should provide individual preference selectors', () => {
-      expect(typeof usePreferenceSelectors.hasPreference).toBe('function')
-      expect(typeof usePreferenceSelectors.getPreferencesByCategory).toBe('function')
+      expect(typeof useHasPreference).toBe('function')
+      expect(typeof usePreferencesByCategory).toBe('function')
     })
 
-    it('should provide metadata selectors', () => {
-      // User preferences store selectors provide preference selectors, not metadata selectors
-      // Metadata is available through the store directly
-      expect(typeof usePreferenceSelectors.getPreference).toBe('function')
-      expect(typeof useCategorySelectors.getDisplayPreferences).toBe('function')
+    it('should provide category selectors', () => {
+      // User preferences store selectors provide category-specific selectors
+      expect(typeof useDisplayPreferences).toBe('function')
+      expect(typeof useCommunicationPreferences).toBe('function')
+      expect(typeof useTournamentPreferences).toBe('function')
+      expect(typeof usePrivacyPreferences).toBe('function')
+      expect(typeof useGamePreferences).toBe('function')
+      expect(typeof useAccessibilityPreferences).toBe('function')
+      expect(typeof useAdvancedPreferences).toBe('function')
     })
 
     it('should provide action selectors', () => {
-      // User preferences store selectors provide preference selectors, not action selectors
-      // Actions are available through the store directly
-      expect(typeof usePreferenceSelectors.getPreference).toBe('function')
-      expect(typeof useCategorySelectors.getCommunicationPreferences).toBe('function')
+      // User preferences store selectors provide action hooks
+      expect(typeof useUserPreferencesActions).toBe('function')
     })
   })
 

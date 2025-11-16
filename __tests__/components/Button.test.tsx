@@ -1,5 +1,5 @@
 // Component tests for UI components
-import { describe, it, expect } from '@jest/globals'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '../utils/test-utils'
 import userEvent from '@testing-library/user-event'
 
@@ -22,7 +22,7 @@ describe('Button Component', () => {
   })
 
   it('should call onClick when clicked', async () => {
-    const handleClick = jest.fn()
+    const handleClick = vi.fn()
     const user = userEvent.setup()
     
     render(<Button onClick={handleClick}>Click me</Button>)
@@ -39,7 +39,7 @@ describe('Button Component', () => {
   })
 
   it('should not call onClick when disabled', async () => {
-    const handleClick = jest.fn()
+    const handleClick = vi.fn()
     const user = userEvent.setup()
     
     render(<Button onClick={handleClick} disabled>Disabled button</Button>)

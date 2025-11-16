@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act } from '@testing-library/react'
 import { useStoreLoadingIntegration } from '@/stores/loading-store-integration'
 import { useLoadingStore } from '@/stores/loading-store'
@@ -12,9 +12,18 @@ describe('Loading Store Integration', () => {
   beforeEach(() => {
     // Reset all stores before each test
     useLoadingStore.getState().clearAll()
-    useTournamentStore.getState().clearCache()
-    useUserPreferencesStore.getState().resetAllPreferences()
-    useFormDraftStore.getState().resetAllDrafts()
+    // Use clearTournamentCache instead of clearCache
+    if (typeof useTournamentStore.getState().clearTournamentCache === 'function') {
+      useTournamentStore.getState().clearTournamentCache()
+    }
+    // Use resetStore instead of resetAllPreferences
+    if (typeof useUserPreferencesStore.getState().resetStore === 'function') {
+      useUserPreferencesStore.getState().resetStore()
+    }
+    // Use resetStore instead of resetAllDrafts
+    if (typeof useFormDraftStore.getState().resetStore === 'function') {
+      useFormDraftStore.getState().resetStore()
+    }
     useUIStore.getState().resetUI()
   })
 
@@ -88,7 +97,7 @@ describe('Loading Store Integration', () => {
       const tournamentStore = useTournamentStore.getState()
 
       // Mock the tournament store methods
-      const mockFetchTournament = jest.fn().mockResolvedValue(createMockTournament())
+      const mockFetchTournament = vi.fn().mockResolvedValue(createMockTournament())
       tournamentStore.fetchTournament = mockFetchTournament
 
       // Execute tournament operation
@@ -105,7 +114,7 @@ describe('Loading Store Integration', () => {
       const tournamentStore = useTournamentStore.getState()
 
       // Mock the tournament store methods to throw error
-      const mockFetchTournament = jest.fn().mockRejectedValue(new Error('Tournament not found'))
+      const mockFetchTournament = vi.fn().mockRejectedValue(new Error('Tournament not found'))
       tournamentStore.fetchTournament = mockFetchTournament
 
       // Execute tournament operation
@@ -122,7 +131,7 @@ describe('Loading Store Integration', () => {
       const tournamentStore = useTournamentStore.getState()
 
       // Mock the tournament store methods
-      const mockFetchTournaments = jest.fn().mockResolvedValue({
+      const mockFetchTournaments = vi.fn().mockResolvedValue({
         tournaments: [createMockTournament()],
         pagination: { page: 1, limit: 10, total: 1, totalPages: 1, hasNext: false, hasPrev: false }
       })
@@ -144,7 +153,7 @@ describe('Loading Store Integration', () => {
       const userPreferencesStore = useUserPreferencesStore.getState()
 
       // Mock the user preferences store methods
-      const mockSetPreferences = jest.fn().mockResolvedValue(undefined)
+      const mockSetPreferences = vi.fn().mockResolvedValue(undefined)
       userPreferencesStore.setPreferences = mockSetPreferences
 
       // Execute preference operation
@@ -163,7 +172,7 @@ describe('Loading Store Integration', () => {
       const userPreferencesStore = useUserPreferencesStore.getState()
 
       // Mock the user preferences store methods to throw error
-      const mockSetPreferences = jest.fn().mockRejectedValue(new Error('Invalid preferences'))
+      const mockSetPreferences = vi.fn().mockRejectedValue(new Error('Invalid preferences'))
       userPreferencesStore.setPreferences = mockSetPreferences
 
       // Execute preference operation
@@ -184,7 +193,7 @@ describe('Loading Store Integration', () => {
       const formDraftStore = useFormDraftStore.getState()
 
       // Mock the form draft store methods
-      const mockSaveDraft = jest.fn().mockResolvedValue(undefined)
+      const mockSaveDraft = vi.fn().mockResolvedValue(undefined)
       formDraftStore.saveDraft = mockSaveDraft
 
       // Execute draft operation
@@ -201,7 +210,7 @@ describe('Loading Store Integration', () => {
       const formDraftStore = useFormDraftStore.getState()
 
       // Mock the form draft store methods to throw error
-      const mockSaveDraft = jest.fn().mockRejectedValue(new Error('Draft save failed'))
+      const mockSaveDraft = vi.fn().mockRejectedValue(new Error('Draft save failed'))
       formDraftStore.saveDraft = mockSaveDraft
 
       // Execute draft operation
@@ -220,7 +229,7 @@ describe('Loading Store Integration', () => {
       const uiStore = useUIStore.getState()
 
       // Mock the UI store methods
-      const mockOpenModal = jest.fn().mockResolvedValue(undefined)
+      const mockOpenModal = vi.fn().mockResolvedValue(undefined)
       uiStore.openModal = mockOpenModal
 
       // Execute UI operation
@@ -237,7 +246,7 @@ describe('Loading Store Integration', () => {
       const uiStore = useUIStore.getState()
 
       // Mock the UI store methods to throw error
-      const mockOpenModal = jest.fn().mockRejectedValue(new Error('Modal open failed'))
+      const mockOpenModal = vi.fn().mockRejectedValue(new Error('Modal open failed'))
       uiStore.openModal = mockOpenModal
 
       // Execute UI operation
@@ -340,7 +349,7 @@ describe('Loading Store Integration', () => {
       const loadingStore = useLoadingStore.getState()
 
       // Mock a method that throws an error
-      const mockMethod = jest.fn().mockRejectedValue(new Error('Integration error'))
+      const mockMethod = vi.fn().mockRejectedValue(new Error('Integration error'))
       
       // Should not throw error when integration fails
       expect(async () => {

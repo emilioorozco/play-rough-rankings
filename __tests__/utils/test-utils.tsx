@@ -1,8 +1,10 @@
 import React, { ReactElement } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { vi } from 'vitest'
 import { TRPCProvider } from '@/lib/trpc/provider'
 import { AppProvider } from '@/components/app-provider'
+import { SessionProvider } from '@/components/auth/session-provider'
 
 // Mock tRPC provider for testing
 const createTestQueryClient = () => new QueryClient({
@@ -25,11 +27,13 @@ const AllTheProviders = ({ children }: AllTheProvidersProps) => {
   
   return (
     <QueryClientProvider client={queryClient}>
-      <TRPCProvider>
-        <AppProvider>
-          {children}
-        </AppProvider>
-      </TRPCProvider>
+      <SessionProvider>
+        <TRPCProvider>
+          <AppProvider>
+            {children}
+          </AppProvider>
+        </TRPCProvider>
+      </SessionProvider>
     </QueryClientProvider>
   )
 }
@@ -102,15 +106,11 @@ export const setupTestEnvironment = () => {
   process.env.BETTER_AUTH_URL = 'http://localhost:3000'
   
   // Mock console methods to reduce noise in tests
-  if (typeof jest !== 'undefined') {
-    jest.spyOn(console, 'log').mockImplementation(() => {})
-    jest.spyOn(console, 'warn').mockImplementation(() => {})
-    jest.spyOn(console, 'error').mockImplementation(() => {})
-  }
+  vi.spyOn(console, 'log').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'error').mockImplementation(() => {})
 }
 
 export const cleanupTestEnvironment = () => {
-  if (typeof jest !== 'undefined') {
-    jest.restoreAllMocks()
-  }
+  vi.restoreAllMocks()
 }

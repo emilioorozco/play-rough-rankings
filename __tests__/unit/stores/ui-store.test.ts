@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act } from '@testing-library/react'
 import { create } from 'zustand'
 import type { ModalConfig, ConfirmationConfig } from '@/lib/types'
@@ -352,8 +352,8 @@ describe('UI Store', () => {
       const config: ConfirmationConfig = {
         title: 'Confirm Action',
         message: 'Are you sure?',
-        onConfirm: jest.fn(),
-        onCancel: jest.fn()
+        onConfirm: vi.fn(),
+        onCancel: vi.fn()
       }
 
       act(() => {
@@ -370,7 +370,7 @@ describe('UI Store', () => {
       const config: ConfirmationConfig = {
         title: 'Confirm Action',
         message: 'Are you sure?',
-        onConfirm: jest.fn()
+        onConfirm: vi.fn()
       }
 
       // First open the confirmation modal
@@ -526,7 +526,7 @@ describe('UI Store', () => {
         store.openConfirmation({
           title: 'Confirm',
           message: 'Test',
-          onConfirm: jest.fn()
+          onConfirm: vi.fn()
         })
         store.setActiveTab('tournamentDetails', 'active')
         store.setFilters('tournaments', { gameId: 'pokemon-tcg', status: 'active', storeId: '', startDate: '', endDate: '', search: '' })
