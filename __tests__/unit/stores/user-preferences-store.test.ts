@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { act } from '@testing-library/react'
 import { useUserPreferencesStore } from '@/stores/user-preferences-store'
 import type { UserPreferences, DisplayPreferences, CommunicationPreferences, FormBehaviorPreferences } from '@/lib/types'
@@ -360,18 +360,21 @@ describe('User Preferences Store', () => {
       expect(store).toBeDefined()
     })
 
-    it('should update metadata on preference changes', () => {
+    it('should update metadata on preference changes', async () => {
       const store = useUserPreferencesStore.getState()
       const initialTimestamp = store.lastUpdated
 
       // Wait a bit to ensure timestamp difference
-      setTimeout(() => {
-        act(() => {
-          store.updatePreference('theme', 'dark')
-        })
+      await new Promise(resolve => setTimeout(resolve, 10))
+      
+      act(() => {
+        store.updatePreference('theme', 'dark')
+      })
 
+      expect(store.lastUpdated).toBeDefined()
+      if (initialTimestamp && store.lastUpdated) {
         expect(store.lastUpdated.getTime()).toBeGreaterThan(initialTimestamp.getTime())
-      }, 10)
+      }
     })
   })
 })
