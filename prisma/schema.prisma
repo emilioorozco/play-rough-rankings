@@ -165,6 +165,7 @@ model Tournament {
   organizer            User              @relation("TournamentOrganizer", fields: [organizerId], references: [id])
   store                Store             @relation(fields: [storeId], references: [id])
 
+  @@index([status, date])
   @@map("tournaments")
 }
 
@@ -204,6 +205,7 @@ model TournamentEntry {
   tournament       Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
   @@unique([tournamentId, playerId])
+  @@index([tournamentId, dropped])
   @@map("tournament_entries")
 }
 
@@ -227,6 +229,7 @@ model Match {
   tournament        Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   winner            Player?    @relation("MatchWinner", fields: [winnerId], references: [id])
 
+  @@index([tournamentId, round, status])
   @@map("matches")
 }
 
