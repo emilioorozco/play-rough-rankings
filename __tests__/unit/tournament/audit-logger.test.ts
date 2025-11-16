@@ -5,22 +5,9 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
-import { PrismaClient } from '@prisma/client'
 import { AuditLogger } from '@/lib/tournament/audit-logger'
 import { TournamentAuditLog } from '@/lib/tournament/types'
-
-// Create a properly typed mock Prisma Client
-const createMockPrisma = () => ({
-  tournament: {
-    findUnique: jest.fn<any>(),
-    update: jest.fn<any>(),
-  },
-  match: {
-    findUnique: jest.fn<any>(),
-  },
-})
-
-type MockPrisma = ReturnType<typeof createMockPrisma>
+import { createMockPrisma, type MockPrisma } from '@/__tests__/__mocks__/prisma'
 
 let mockPrisma: MockPrisma
 
@@ -29,7 +16,7 @@ describe('AuditLogger', () => {
 
   beforeEach(() => {
     mockPrisma = createMockPrisma()
-    auditLogger = new AuditLogger(mockPrisma as unknown as PrismaClient)
+    auditLogger = new AuditLogger(mockPrisma)
     jest.clearAllMocks()
   })
 
