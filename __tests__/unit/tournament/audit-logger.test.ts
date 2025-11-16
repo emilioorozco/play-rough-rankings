@@ -4,7 +4,7 @@
  * Tests audit log creation, storage, retrieval, and filtering functionality.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { AuditLogger } from '@/lib/tournament/audit-logger'
 import { TournamentAuditLog } from '@/lib/tournament/types'
 import { createMockPrisma, type MockPrisma } from '@/__tests__/__mocks__/prisma'
@@ -17,7 +17,7 @@ describe('AuditLogger', () => {
   beforeEach(() => {
     mockPrisma = createMockPrisma()
     auditLogger = new AuditLogger(mockPrisma)
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('logAction', () => {
@@ -35,10 +35,10 @@ describe('AuditLogger', () => {
       }
 
       // Mock tournament with no existing audit logs
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       await auditLogger.logAction(log)
 
@@ -87,12 +87,12 @@ describe('AuditLogger', () => {
       }
 
       // Mock tournament with existing audit logs
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {
           auditLogs: [existingLog],
         },
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       await auditLogger.logAction(newLog)
 
@@ -123,7 +123,7 @@ describe('AuditLogger', () => {
         details: {},
       }
 
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue(null)
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue(null)
 
       await expect(auditLogger.logAction(log)).rejects.toThrow(
         'Tournament not found: nonexistent'
@@ -142,10 +142,10 @@ describe('AuditLogger', () => {
       }
 
       // Mock tournament with null metadata
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: null,
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       await auditLogger.logAction(log)
 
@@ -188,7 +188,7 @@ describe('AuditLogger', () => {
         },
       ]
 
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: { auditLogs: logs },
       })
 
@@ -229,7 +229,7 @@ describe('AuditLogger', () => {
         },
       ]
 
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: { auditLogs: logs },
       })
 
@@ -262,7 +262,7 @@ describe('AuditLogger', () => {
         },
       ]
 
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: { auditLogs: logs },
       })
 
@@ -303,7 +303,7 @@ describe('AuditLogger', () => {
         },
       ]
 
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: { auditLogs: logs },
       })
 
@@ -319,7 +319,7 @@ describe('AuditLogger', () => {
     it('should return empty array if no audit logs exist', async () => {
       const tournamentId = 'tournament-123'
 
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
 
@@ -329,7 +329,7 @@ describe('AuditLogger', () => {
     })
 
     it('should throw error if tournament not found', async () => {
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue(null)
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue(null)
 
       await expect(
         auditLogger.getAuditTrail('nonexistent')
@@ -368,10 +368,10 @@ describe('AuditLogger', () => {
         },
       ]
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue({
         tournamentId,
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: { auditLogs: logs },
       })
 
@@ -396,10 +396,10 @@ describe('AuditLogger', () => {
         },
       ]
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue({
         tournamentId,
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: { auditLogs: logs },
       })
 
@@ -409,7 +409,7 @@ describe('AuditLogger', () => {
     })
 
     it('should throw error if match not found', async () => {
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(null)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(null)
 
       await expect(
         auditLogger.getMatchAuditTrail('nonexistent')

@@ -6,7 +6,7 @@
  * runtime imports that would need database connections.
  */
 
-import { describe, it, expect } from '@jest/globals'
+import { describe, it, expect } from 'vitest'
 
 describe('Router Integration - Type Safety', () => {
   describe('Type Exports', () => {

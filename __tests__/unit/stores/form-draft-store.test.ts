@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act } from '@testing-library/react'
 import { useFormDraftStore } from '@/stores/form-draft-store'
 import type { ExtendedFormDraft, AutoSaveSettings } from '@/lib/types'
