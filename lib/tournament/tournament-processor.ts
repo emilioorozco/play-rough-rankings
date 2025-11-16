@@ -10,6 +10,7 @@ import { PrismaClient, Tournament, Match, TournamentEntry } from '@prisma/client
 import { TRPCError } from '@trpc/server'
 import { PairingGenerator } from './pairing-generator'
 import { AuditLogger } from './audit-logger'
+import { notificationService } from './notification-service'
 import type { TournamentStructure, Pairing } from './types'
 
 /**
@@ -195,6 +196,9 @@ export class TournamentProcessor {
         }
       })
 
+      // Send notification to all participants
+      await notificationService.notifyTournamentStarted(result.tournament)
+
       return result
     } catch (error) {
       // Re-throw TRPCError as-is
@@ -354,6 +358,9 @@ export class TournamentProcessor {
           ratingUpdates
         }
       })
+
+      // Send notification to all participants about tournament completion
+      await notificationService.notifyTournamentCompleted(result.tournament)
 
       return result
     } catch (error) {
@@ -882,6 +889,15 @@ export class TournamentProcessor {
         }
       })
 
+      // Send notification to all participants about round advancement
+      if (!result.tournamentEnded && result.newMatches.length > 0) {
+        await notificationService.notifyRoundAdvanced(
+          result.tournament,
+          result.currentRound,
+          result.newMatches
+        )
+      }
+
       return result
     } catch (error) {
       // Re-throw TRPCError as-is
@@ -966,6 +982,9 @@ export class TournamentProcessor {
 
         return updatedTournament
       })
+
+      // Send notification to all participants about tournament pause
+      await notificationService.notifyTournamentPaused(result, reason)
 
       return result
     } catch (error) {
