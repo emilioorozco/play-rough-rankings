@@ -1,21 +1,21 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act } from '@testing-library/react'
 import { useTournamentStore } from '@/stores/tournament-store'
 import { createMockTournament } from '../../utils/test-utils'
 import type { Tournament, RegistrationStatus, TournamentFilters } from '@/lib/types'
 
 // Mock the API calls
-jest.mock('@/lib/trpc/client', () => ({
+vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     tournament: {
       getById: {
-        useQuery: jest.fn()
+        useQuery: vi.fn()
       },
       getList: {
-        useQuery: jest.fn()
+        useQuery: vi.fn()
       },
       getRegistrationStatus: {
-        useQuery: jest.fn()
+        useQuery: vi.fn()
       }
     }
   }
@@ -63,7 +63,7 @@ describe('Tournament Store', () => {
       const tournamentId = 'test-tournament-id'
 
       // Mock the fetch function to return our mock tournament
-      const mockFetch = jest.fn().mockResolvedValue(mockTournament)
+      const mockFetch = vi.fn().mockResolvedValue(mockTournament)
       store.fetchTournament = mockFetch
 
       const result = await store.fetchTournament(tournamentId)
@@ -222,7 +222,7 @@ describe('Tournament Store', () => {
       }
 
       // Mock the fetch function
-      const mockFetch = jest.fn().mockResolvedValue(mockRegistrationStatus)
+      const mockFetch = vi.fn().mockResolvedValue(mockRegistrationStatus)
       store.fetchRegistrationStatus = mockFetch
 
       const result = await store.fetchRegistrationStatus(tournamentId)
