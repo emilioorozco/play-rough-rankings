@@ -5,29 +5,9 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
-import { PrismaClient } from '@prisma/client'
 import { RatingCalculator } from '@/lib/tournament/rating-calculator'
 import { TRPCError } from '@trpc/server'
-
-// Create a properly typed mock Prisma Client
-const createMockPrisma = () => ({
-  tournament: {
-    findUnique: jest.fn<any>(),
-  },
-  tournamentEntry: {
-    findMany: jest.fn<any>(),
-  },
-  match: {
-    findMany: jest.fn<any>(),
-  },
-  playerGameStats: {
-    findFirst: jest.fn<any>(),
-    updateMany: jest.fn<any>(),
-  },
-  $transaction: jest.fn<any>(),
-})
-
-type MockPrisma = ReturnType<typeof createMockPrisma>
+import { createMockPrisma, type MockPrisma } from '@/__tests__/__mocks__/prisma'
 
 let mockPrisma: MockPrisma
 
@@ -36,7 +16,7 @@ describe('RatingCalculator', () => {
 
   beforeEach(() => {
     mockPrisma = createMockPrisma()
-    ratingCalculator = new RatingCalculator(mockPrisma as unknown as PrismaClient)
+    ratingCalculator = new RatingCalculator(mockPrisma)
     jest.clearAllMocks()
   })
 
