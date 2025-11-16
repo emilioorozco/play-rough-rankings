@@ -4,7 +4,7 @@
  * Tests match result submission, confirmation, disputes, and organizer overrides.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { MatchProcessor } from '@/lib/tournament/match-processor'
 import { MatchResult } from '@/lib/tournament/types'
 import { createMockPrisma, type MockPrisma } from '@/__tests__/__mocks__/prisma'
@@ -17,7 +17,7 @@ describe('MatchProcessor', () => {
   beforeEach(() => {
     mockPrisma = createMockPrisma()
     matchProcessor = new MatchProcessor(mockPrisma)
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('submitMatchResult', () => {
@@ -52,8 +52,8 @@ describe('MatchProcessor', () => {
         player2Score: 1,
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
-      ;(mockPrisma.match.update as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
+      ;(mockPrisma.match.update as any).mockResolvedValue({
         ...mockMatch,
         status: 'IN_PROGRESS',
         playerSubmissions: {
@@ -70,10 +70,10 @@ describe('MatchProcessor', () => {
           },
         },
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       const response = await matchProcessor.submitMatchResult(matchId, player1Id, result)
 
@@ -114,11 +114,11 @@ describe('MatchProcessor', () => {
         },
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(matchWithSubmission)
-      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(matchWithSubmission)
+      ;(mockPrisma.$transaction as any).mockImplementation(async (callback) => {
         const tx = {
           match: {
-            update: jest.fn().mockResolvedValue({
+            update: vi.fn().mockResolvedValue({
               ...mockMatch,
               status: 'COMPLETED',
               winnerId: player1Id,
@@ -127,19 +127,19 @@ describe('MatchProcessor', () => {
             }),
           },
           tournamentEntry: {
-            findMany: jest.fn().mockResolvedValue([
+            findMany: vi.fn().mockResolvedValue([
               { id: 'entry-1', playerId: player1Id, record: { wins: 0, losses: 0, draws: 0 } },
               { id: 'entry-2', playerId: player2Id, record: { wins: 0, losses: 0, draws: 0 } },
             ]),
-            update: jest.fn().mockResolvedValue({}),
+            update: vi.fn().mockResolvedValue({}),
           },
         }
         return await callback(tx)
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       const response = await matchProcessor.submitMatchResult(matchId, player1Id, result)
 
@@ -172,8 +172,8 @@ describe('MatchProcessor', () => {
         },
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(matchWithSubmission)
-      ;(mockPrisma.match.update as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(matchWithSubmission)
+      ;(mockPrisma.match.update as any).mockResolvedValue({
         ...mockMatch,
         status: 'DISPUTED',
         playerSubmissions: {
@@ -181,10 +181,10 @@ describe('MatchProcessor', () => {
           dispute: expect.any(Object),
         },
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       const response = await matchProcessor.submitMatchResult(matchId, player1Id, result)
 
@@ -202,7 +202,7 @@ describe('MatchProcessor', () => {
     })
 
     it('should throw error if player not in match', async () => {
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
 
       const result: MatchResult = {
         winnerId: player1Id,
@@ -216,7 +216,7 @@ describe('MatchProcessor', () => {
     })
 
     it('should throw error if match not found', async () => {
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(null)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(null)
 
       const result: MatchResult = {
         winnerId: player1Id,
@@ -230,7 +230,7 @@ describe('MatchProcessor', () => {
     })
 
     it('should throw error if match already completed', async () => {
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue({
         ...mockMatch,
         status: 'COMPLETED',
       })
@@ -247,7 +247,7 @@ describe('MatchProcessor', () => {
     })
 
     it('should throw error if tournament not active', async () => {
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue({
         ...mockMatch,
         tournament: {
           ...mockMatch.tournament,
@@ -267,7 +267,7 @@ describe('MatchProcessor', () => {
     })
 
     it('should throw error if scores are negative', async () => {
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
 
       const result: MatchResult = {
         winnerId: player1Id,
@@ -281,7 +281,7 @@ describe('MatchProcessor', () => {
     })
 
     it('should throw error if winner is not a match player', async () => {
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
 
       const result: MatchResult = {
         winnerId: 'other-player',
@@ -329,11 +329,11 @@ describe('MatchProcessor', () => {
         },
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
-      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
+      ;(mockPrisma.$transaction as any).mockImplementation(async (callback) => {
         const tx = {
           match: {
-            update: jest.fn().mockResolvedValue({
+            update: vi.fn().mockResolvedValue({
               ...mockMatch,
               status: 'COMPLETED',
               winnerId: player1Id,
@@ -342,19 +342,19 @@ describe('MatchProcessor', () => {
             }),
           },
           tournamentEntry: {
-            findMany: jest.fn().mockResolvedValue([
+            findMany: vi.fn().mockResolvedValue([
               { id: 'entry-1', playerId: player1Id, record: { wins: 0, losses: 0, draws: 0 } },
               { id: 'entry-2', playerId: player2Id, record: { wins: 0, losses: 0, draws: 0 } },
             ]),
-            update: jest.fn().mockResolvedValue({}),
+            update: vi.fn().mockResolvedValue({}),
           },
         }
         return await callback(tx)
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       const result = await matchProcessor.confirmMatchResult(matchId, player2Id)
 
@@ -375,7 +375,7 @@ describe('MatchProcessor', () => {
         },
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
 
       await expect(
         matchProcessor.confirmMatchResult(matchId, player2Id)
@@ -412,11 +412,11 @@ describe('MatchProcessor', () => {
         player2Score: 1,
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
-      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
+      ;(mockPrisma.$transaction as any).mockImplementation(async (callback) => {
         const tx = {
           match: {
-            update: jest.fn().mockResolvedValue({
+            update: vi.fn().mockResolvedValue({
               ...mockMatch,
               status: 'COMPLETED',
               winnerId: player1Id,
@@ -425,19 +425,19 @@ describe('MatchProcessor', () => {
             }),
           },
           tournamentEntry: {
-            findMany: jest.fn().mockResolvedValue([
+            findMany: vi.fn().mockResolvedValue([
               { id: 'entry-1', playerId: player1Id, record: { wins: 0, losses: 0, draws: 0 } },
               { id: 'entry-2', playerId: player2Id, record: { wins: 0, losses: 0, draws: 0 } },
             ]),
-            update: jest.fn().mockResolvedValue({}),
+            update: vi.fn().mockResolvedValue({}),
           },
         }
         return await callback(tx)
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       const updatedMatch = await matchProcessor.organizerSubmitResult(
         matchId,
@@ -463,7 +463,7 @@ describe('MatchProcessor', () => {
         },
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
 
       const result: MatchResult = {
         winnerId: player1Id,
@@ -528,11 +528,11 @@ describe('MatchProcessor', () => {
         player2Score: 1,
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
-      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
+      ;(mockPrisma.$transaction as any).mockImplementation(async (callback) => {
         const tx = {
           match: {
-            update: jest.fn().mockResolvedValue({
+            update: vi.fn().mockResolvedValue({
               ...mockMatch,
               status: 'COMPLETED',
               winnerId: player1Id,
@@ -541,19 +541,19 @@ describe('MatchProcessor', () => {
             }),
           },
           tournamentEntry: {
-            findMany: jest.fn().mockResolvedValue([
+            findMany: vi.fn().mockResolvedValue([
               { id: 'entry-1', playerId: player1Id, record: { wins: 0, losses: 0, draws: 0 } },
               { id: 'entry-2', playerId: player2Id, record: { wins: 0, losses: 0, draws: 0 } },
             ]),
-            update: jest.fn().mockResolvedValue({}),
+            update: vi.fn().mockResolvedValue({}),
           },
         }
         return await callback(tx)
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       const result = await matchProcessor.resolveDispute(matchId, organizerId, resolution)
 
@@ -574,7 +574,7 @@ describe('MatchProcessor', () => {
         },
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
 
       const resolution: MatchResult = {
         winnerId: player1Id,
@@ -611,11 +611,11 @@ describe('MatchProcessor', () => {
         },
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
-      ;(mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
+      ;(mockPrisma.$transaction as any).mockImplementation(async (callback) => {
         const tx = {
           match: {
-            update: jest.fn().mockResolvedValue({
+            update: vi.fn().mockResolvedValue({
               ...mockMatch,
               status: 'COMPLETED',
               winnerId: player1Id,
@@ -624,19 +624,19 @@ describe('MatchProcessor', () => {
             }),
           },
           tournamentEntry: {
-            findMany: jest.fn().mockResolvedValue([
+            findMany: vi.fn().mockResolvedValue([
               { id: 'entry-1', playerId: player1Id, record: { wins: 0, losses: 0, draws: 0 } },
               { id: 'entry-2', playerId: player2Id, record: { wins: 0, losses: 0, draws: 0 } },
             ]),
-            update: jest.fn().mockResolvedValue({}),
+            update: vi.fn().mockResolvedValue({}),
           },
         }
         return await callback(tx)
       })
-      ;(mockPrisma.tournament.findUnique as jest.Mock).mockResolvedValue({
+      ;(mockPrisma.tournament.findUnique as any).mockResolvedValue({
         metadata: {},
       })
-      ;(mockPrisma.tournament.update as jest.Mock).mockResolvedValue({})
+      ;(mockPrisma.tournament.update as any).mockResolvedValue({})
 
       const result = await matchProcessor.awardMatchNoShow(matchId, organizerId, player1Id)
 
@@ -658,7 +658,7 @@ describe('MatchProcessor', () => {
         },
       }
 
-      ;(mockPrisma.match.findUnique as jest.Mock).mockResolvedValue(mockMatch)
+      ;(mockPrisma.match.findUnique as any).mockResolvedValue(mockMatch)
 
       await expect(
         matchProcessor.awardMatchNoShow(matchId, organizerId, 'other-player')

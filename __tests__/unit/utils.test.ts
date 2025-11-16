@@ -1,5 +1,5 @@
 // Unit tests for utility functions
-import { describe, it, expect } from '@jest/globals'
+import { describe, it, expect } from 'vitest'
 
 // Example unit test for utility functions
 // Replace with your actual utility functions

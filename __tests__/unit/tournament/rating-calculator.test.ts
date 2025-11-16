@@ -4,7 +4,7 @@
  * Tests projected rating calculations, rating application, and cache management.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { RatingCalculator } from '@/lib/tournament/rating-calculator'
 import { TRPCError } from '@trpc/server'
 import { createMockPrisma, type MockPrisma } from '@/__tests__/__mocks__/prisma'
@@ -17,7 +17,7 @@ describe('RatingCalculator', () => {
   beforeEach(() => {
     mockPrisma = createMockPrisma()
     ratingCalculator = new RatingCalculator(mockPrisma)
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('calculateProjectedRatings', () => {
@@ -285,7 +285,7 @@ describe('RatingCalculator', () => {
       mockPrisma.$transaction.mockImplementation(async (callback: any) => {
         return callback({
           playerGameStats: {
-            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           },
         })
       })
@@ -378,7 +378,7 @@ describe('RatingCalculator', () => {
       mockPrisma.$transaction.mockImplementation(async (callback: any) => {
         return callback({
           playerGameStats: {
-            updateMany: jest.fn().mockImplementation((args: any) => {
+            updateMany: vi.fn().mockImplementation((args: any) => {
               capturedSeasonalStats = args.data.seasonalStats
               return Promise.resolve({ count: 1 })
             }),
@@ -430,7 +430,7 @@ describe('RatingCalculator', () => {
       mockPrisma.$transaction.mockImplementation(async (callback: any) => {
         return callback({
           playerGameStats: {
-            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           },
         })
       })
