@@ -15,7 +15,6 @@
  * @module authorization (server-side)
  */
 
-import type { UserRole } from './types'
 import { checkTournamentManagementPermission } from './authorization-constants'
 
 /**
@@ -48,7 +47,7 @@ interface TournamentAuthData {
  * - The tournament organizer (can manage their own tournaments)
  * 
  * @param userId - ID of the user attempting to manage the tournament
- * @param userRole - Role of the user (player, organizer, admin)
+ * @param userRole - Role of the user (player, organizer, admin) - accepts string for flexibility
  * @param tournament - Tournament data containing organizer information
  * @returns true if the user can manage the tournament, false otherwise
  * 
@@ -66,7 +65,7 @@ interface TournamentAuthData {
  */
 export function canManageTournament(
   userId: string,
-  userRole: UserRole,
+  userRole: string, // Accept string for flexibility with database/session types
   tournament: TournamentAuthData
 ): boolean {
   // Use shared authorization logic to ensure consistency with client-side
@@ -79,15 +78,15 @@ export function canManageTournament(
  * This is a more permissive check than canManageTournament, allowing
  * organizers to view management interfaces even if they don't own the tournament.
  * 
- * @param userId - ID of the user attempting to view management features
- * @param userRole - Role of the user (player, organizer, admin)
- * @param tournament - Tournament data containing organizer information
+ * @param _userId - ID of the user attempting to view management features (unused but kept for API consistency)
+ * @param userRole - Role of the user (player, organizer, admin) - accepts string for flexibility
+ * @param _tournament - Tournament data containing organizer information (unused but kept for API consistency)
  * @returns true if the user can view management features, false otherwise
  */
 export function canViewTournamentManagement(
-  userId: string,
-  userRole: UserRole,
-  tournament: TournamentAuthData
+  _userId: string, // Prefixed with _ to indicate intentionally unused
+  userRole: string, // Accept string for flexibility with database/session types
+  _tournament: TournamentAuthData // Prefixed with _ to indicate intentionally unused
 ): boolean {
   // Admins can view any tournament management
   if (userRole === 'admin') {
@@ -128,14 +127,14 @@ export function canSubmitMatchResult(
  * - An admin
  * 
  * @param userId - ID of the user attempting to drop a player
- * @param userRole - Role of the user
+ * @param userRole - Role of the user - accepts string for flexibility
  * @param playerId - ID of the player being dropped
  * @param tournament - Tournament data containing organizer information
  * @returns true if the user can drop the player
  */
 export function canDropPlayer(
   userId: string,
-  userRole: UserRole,
+  userRole: string, // Accept string for flexibility with database/session types
   playerId: string,
   tournament: TournamentAuthData
 ): boolean {
@@ -160,19 +159,19 @@ export function canDropPlayer(
 /**
  * Check if a user has organizer or admin privileges
  * 
- * @param userRole - Role of the user
+ * @param userRole - Role of the user - accepts string for flexibility
  * @returns true if the user is an organizer or admin
  */
-export function isOrganizerOrAdmin(userRole: UserRole): boolean {
+export function isOrganizerOrAdmin(userRole: string): boolean {
   return userRole === 'organizer' || userRole === 'admin'
 }
 
 /**
  * Check if a user is an admin
  * 
- * @param userRole - Role of the user
+ * @param userRole - Role of the user - accepts string for flexibility
  * @returns true if the user is an admin
  */
-export function isAdmin(userRole: UserRole): boolean {
+export function isAdmin(userRole: string): boolean {
   return userRole === 'admin'
 }

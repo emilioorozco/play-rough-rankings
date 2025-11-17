@@ -40,7 +40,7 @@ interface TournamentParticipantsProps {
   onUpdate?: () => void
 }
 
-export function TournamentParticipants({ tournament, isOrganizer, currentUser, canManage = false, onUpdate }: TournamentParticipantsProps) {
+export function TournamentParticipants({ tournament, isOrganizer: _isOrganizer, currentUser, canManage = false, onUpdate }: TournamentParticipantsProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'seed' | 'wins' | 'rating'>('seed')
   
@@ -50,7 +50,7 @@ export function TournamentParticipants({ tournament, isOrganizer, currentUser, c
   const setFilterStatus = (status: 'all' | 'active' | 'dropped') => setFilter({ status })
 
   // Confirmation modal for player drop
-  const { openConfirmation } = useConfirmationModal()
+  const { isOpen, config, close, open } = useConfirmationModal()
 
   // Drop player mutation
   const dropPlayerMutation = trpc.tournamentLifecycle.dropPlayer.useMutation({
@@ -102,10 +102,9 @@ export function TournamentParticipants({ tournament, isOrganizer, currentUser, c
 
   // Handle player drop
   const handleDropPlayer = (playerId: string, playerName: string) => {
-    openConfirmation({
+    open({
       title: 'Drop from Tournament',
-      message: `Are you sure you want to drop ${playerName} from this tournament?`,
-      description: 'This action will:\n• Remove the player from future pairings\n• Mark all pending matches as forfeited\n• Update tournament standings\n\nThis action cannot be undone.',
+      message: `Are you sure you want to drop ${playerName} from this tournament?\n\nThis action will:\n• Remove the player from future pairings\n• Mark all pending matches as forfeited\n• Update tournament standings\n\nThis action cannot be undone.`,
       confirmLabel: 'Drop Player',
       cancelLabel: 'Cancel',
       variant: 'destructive',
@@ -339,7 +338,18 @@ export function TournamentParticipants({ tournament, isOrganizer, currentUser, c
         )}
 
         {/* Confirmation Modal */}
-        <ConfirmationModal />
+        {config && (
+          <ConfirmationModal
+            isOpen={isOpen}
+            onClose={close}
+            onConfirm={config.onConfirm || (() => {})}
+            title={config.title}
+            message={config.message}
+            confirmLabel={config.confirmLabel}
+            cancelLabel={config.cancelLabel}
+            variant={config.variant === 'destructive' ? 'destructive' : 'default'}
+          />
+        )}
       </CardContent>
     </Card>
   )

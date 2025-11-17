@@ -5,7 +5,8 @@
  * Supports player submissions with confirmation flow and organizer overrides.
  */
 
-import { PrismaClient, Match, TournamentEntry } from '@prisma/client'
+import { PrismaClient, Match } from '@prisma/client'
+// Note: TournamentEntry type is accessed through Prisma queries (tx.tournamentEntry.findMany)
 import { AuditLogger } from './audit-logger'
 import { MatchSubmission, MatchDispute, MatchResult, TournamentRecord } from './types'
 

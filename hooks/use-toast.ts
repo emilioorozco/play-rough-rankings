@@ -14,15 +14,23 @@ export function useToast() {
   const addNotification = useAppStore(state => state.addNotification)
 
   const toast = useCallback((options: ToastOptions) => {
+    // Map toast variants to notification types
+    // Since notification types are limited, we'll use tournament_status as the default
+    const notificationType: 'tournament_result' | 'leaderboard_update' | 'tournament_status' = 
+      options.variant === 'error' || options.variant === 'warning' 
+        ? 'tournament_status' 
+        : options.variant === 'success' 
+        ? 'leaderboard_update' 
+        : 'tournament_status'
+    
     addNotification({
-      id: `toast-${Date.now()}-${Math.random()}`,
-      type: options.variant === 'error' ? 'error' : 
-            options.variant === 'warning' ? 'warning' : 
-            options.variant === 'success' ? 'success' : 'info',
-      message: options.title,
-      details: options.description,
-      timestamp: new Date(),
-      read: false,
+      type: notificationType,
+      title: options.title,
+      message: options.description || options.title,
+      data: {
+        variant: options.variant,
+        description: options.description,
+      },
     })
   }, [addNotification])
 

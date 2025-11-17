@@ -51,9 +51,20 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
     if (!tournament) return
 
     const previousState = previousStateRef.current
+    // Calculate currentRound from matches if not available, or convert to number
+    const currentRound = (tournament as any).currentRound 
+      ? (typeof (tournament as any).currentRound === 'string' 
+          ? parseInt((tournament as any).currentRound as string, 10) 
+          : (typeof (tournament as any).currentRound === 'number' 
+              ? (tournament as any).currentRound 
+              : 0))
+      : (tournament.matches && tournament.matches.length > 0 
+          ? Math.max(...tournament.matches.map(m => Number(m.round)))
+          : 0)
+    
     const currentState = {
       status: tournament.status,
-      currentRound: tournament.currentRound,
+      currentRound: currentRound,
       completedMatches: tournament.matches?.filter(m => m.status === 'COMPLETED').length || 0,
     }
 
@@ -71,7 +82,7 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
     }
 
     // Detect round advance
-    if (previousState.currentRound && previousState.currentRound !== currentState.currentRound) {
+    if (previousState.currentRound !== undefined && previousState.currentRound !== currentState.currentRound) {
       onRoundAdvance?.()
       
       // Invalidate tournament and match queries

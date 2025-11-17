@@ -124,7 +124,7 @@ export function useRoleAccess() {
  */
 export function usePermissions() {
   const { user } = useSession()
-  const { hasRole, hasAnyRole } = useAuthStore()
+  const { hasRole } = useAuthStore()
   
   return {
     // Tournament permissions

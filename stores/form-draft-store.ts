@@ -525,7 +525,7 @@ export const useFormDraftStore = create<FormDraftState>()(
         }
         
         try {
-          const result = metadata.validationSchema.parse(data)
+          metadata.validationSchema.parse(data)
           return { isValid: true, errors: {} }
         } catch (error) {
           if (error instanceof z.ZodError) {
@@ -873,7 +873,7 @@ export const useFormDraftStore = create<FormDraftState>()(
           }))
           
           return draftId
-        } catch (error) {
+        } catch (_error) {
           throw new Error('Invalid draft data')
         }
       },
