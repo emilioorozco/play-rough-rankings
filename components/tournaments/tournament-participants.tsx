@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useFilter } from '@/hooks/stores'
 import { Search, Filter, MoreVertical, UserCheck, Trophy, Medal, Award, UserX } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
@@ -52,19 +52,23 @@ export function TournamentParticipants({ tournament, isOrganizer: _isOrganizer, 
   // Confirmation modal for player drop
   const { isOpen, config, close, open } = useConfirmationModal()
 
-  // Drop player mutation
+  // Store onUpdate in ref to avoid dependency array type inference issues
+  const onUpdateRef = useRef(onUpdate)
+  onUpdateRef.current = onUpdate
+
+  // Drop player mutation - use type assertion to avoid deep type inference
   const dropPlayerMutation = trpc.tournamentLifecycle.dropPlayer.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: { message: string }) => {
       console.log('Player dropped successfully:', data.message)
       // Refresh tournament data
-      if (onUpdate) {
-        onUpdate()
+      if (onUpdateRef.current) {
+        onUpdateRef.current()
       }
     },
-    onError: (error) => {
+    onError: (error: { message: string }) => {
       console.error('Failed to drop player:', error.message)
     }
-  })
+  } as any)
 
   const participants = tournament.participants || []
 
