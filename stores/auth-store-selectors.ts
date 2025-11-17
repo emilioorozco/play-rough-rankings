@@ -1,5 +1,6 @@
 import { useAuthStore } from './auth-store'
 import { useSession } from '@/components/auth/session-provider'
+import { checkTournamentManagementPermission } from '@/lib/tournament/authorization-constants'
 
 // Selector for role checking
 export const useAuthRoleSelectors = () => {
@@ -18,7 +19,7 @@ export const useAuthRoleSelectors = () => {
   }
 }
 
-// Selector for permission checking
+// Selector for permission checking (CLIENT-SIDE)
 export const useAuthPermissionSelectors = () => {
   const { user } = useSession()
   const { hasRole } = useAuthStore()
@@ -26,8 +27,12 @@ export const useAuthPermissionSelectors = () => {
   return {
     // Tournament permissions
     canCreateTournament: hasRole(user?.role, 'organizer'),
+    /**
+     * Check if current user can manage a tournament (CLIENT-SIDE)
+     * Uses shared authorization logic to match server-side behavior.
+     */
     canManageTournament: (organizerId?: string) => 
-      hasRole(user?.role, 'admin') || (user?.id === organizerId),
+      checkTournamentManagementPermission(user?.id, user?.role, organizerId),
     canViewTournament: true,
     
     // User management permissions

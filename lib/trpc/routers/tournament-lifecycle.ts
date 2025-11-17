@@ -15,32 +15,7 @@ import { router, organizerProcedure, protectedProcedure } from '../router-factor
 import { TournamentProcessor } from '@/lib/tournament/tournament-processor'
 import { RatingCalculator } from '@/lib/tournament/rating-calculator'
 import { AuditLogger } from '@/lib/tournament/audit-logger'
-
-/**
- * Authorization helper to check if user can manage tournament
- * 
- * @param userId - ID of the user attempting the action
- * @param userRole - Role of the user (player, organizer, admin)
- * @param tournament - Tournament data with organizerId
- * @returns true if user is authorized, false otherwise
- */
-function canManageTournament(
-  userId: string,
-  userRole: string,
-  tournament: { organizerId: string }
-): boolean {
-  // Admins can manage any tournament
-  if (userRole === 'admin') {
-    return true
-  }
-  
-  // Organizers can only manage their own tournaments
-  if (userRole === 'organizer' && tournament.organizerId === userId) {
-    return true
-  }
-  
-  return false
-}
+import { canManageTournament } from '@/lib/tournament/authorization'
 
 /**
  * Tournament Lifecycle Router
