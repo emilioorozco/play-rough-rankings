@@ -116,13 +116,14 @@ const Select: React.FC<SelectProps> = ({ value, onValueChange, children }) => {
 };
 
 const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
-  ({ className, children, ...props }, ref) => {
+  ({ className, children, id, ...props }, ref) => {
     const { isOpen, setIsOpen, selectId } = React.useContext(SelectContext);
 
     return (
       <button
         ref={ref}
         type="button"
+        id={id}
         className={cn(
           "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
           "placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",

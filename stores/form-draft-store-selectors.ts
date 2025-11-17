@@ -275,6 +275,24 @@ export const useFormDraftActions = () => {
     markFieldTouched: (draftId: string, field: string) => void
     markSubmitAttempted: (draftId: string) => void
     resetTouchedState: (draftId: string) => void
+    // Blur tracking actions
+    markFieldBlurred: (draftId: string, field: string) => void
+    isFieldBlurred: (draftId: string, field: string) => boolean
+    resetBlurredState: (draftId: string) => void
+    // Validation timing actions
+    setValidationTiming: (draftId: string, timing: 'blur' | 'submit' | 'change') => void
+    getValidationTiming: (draftId: string) => 'blur' | 'submit' | 'change'
+    // Server error management actions
+    setServerError: (draftId: string, field: string, error: string) => void
+    setServerErrors: (draftId: string, errors: Record<string, string>) => void
+    clearServerError: (draftId: string, field: string) => void
+    clearAllServerErrors: (draftId: string) => void
+    setClientError: (draftId: string, field: string, error: string) => void
+    clearClientError: (draftId: string, field: string) => void
+    // Debounce timer management actions
+    setDebounceTimer: (draftId: string, field: string, timer: NodeJS.Timeout) => void
+    clearDebounceTimer: (draftId: string, field: string) => void
+    clearAllDebounceTimers: (draftId: string) => void
   } | null>(null)
   
   if (!actionsRef.current) {
@@ -296,6 +314,24 @@ export const useFormDraftActions = () => {
       markFieldTouched: state.markFieldTouched,
       markSubmitAttempted: state.markSubmitAttempted,
       resetTouchedState: state.resetTouchedState,
+      // Blur tracking actions
+      markFieldBlurred: state.markFieldBlurred,
+      isFieldBlurred: state.isFieldBlurred,
+      resetBlurredState: state.resetBlurredState,
+      // Validation timing actions
+      setValidationTiming: state.setValidationTiming,
+      getValidationTiming: state.getValidationTiming,
+      // Server error management actions
+      setServerError: state.setServerError,
+      setServerErrors: state.setServerErrors,
+      clearServerError: state.clearServerError,
+      clearAllServerErrors: state.clearAllServerErrors,
+      setClientError: state.setClientError,
+      clearClientError: state.clearClientError,
+      // Debounce timer management actions
+      setDebounceTimer: state.setDebounceTimer,
+      clearDebounceTimer: state.clearDebounceTimer,
+      clearAllDebounceTimers: state.clearAllDebounceTimers,
     }
   }
   
