@@ -16,14 +16,16 @@ export type {
   TournamentStatus,
   MatchStatus,
   TournamentStructure,
-  UserRole,
   Pairing,
   MatchResult,
   TournamentRecord,
   RatingChange,
 } from './types'
 
-// Export authorization utilities
+// Export UserRole from authorization-constants (single source of truth)
+export type { UserRole } from './authorization-constants'
+
+// Export authorization utilities (server-side)
 export {
   canManageTournament,
   canViewTournamentManagement,
@@ -32,6 +34,14 @@ export {
   isOrganizerOrAdmin,
   isAdmin,
 } from './authorization'
+
+// Export shared authorization constants and logic
+export {
+  checkTournamentManagementPermission,
+  isAdminRole,
+  isOrganizerRole,
+  TOURNAMENT_MANAGEMENT_RULES,
+} from './authorization-constants'
 
 // Export business logic classes
 export { AuditLogger } from './audit-logger'
