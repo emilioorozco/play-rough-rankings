@@ -35,7 +35,7 @@ export function TournamentUploadInterface({ tournament }: TournamentUploadInterf
   // Use Zustand-based form state with auto-save
   const formState = useSimpleZustandForm<{ fileType: FileType }>({
     initialData: { fileType: 'CSV' },
-    onSubmit: async (data) => {
+    onSubmit: async (_data) => {
       // Form submission is handled by handleUpload
     },
     onSuccess: () => {

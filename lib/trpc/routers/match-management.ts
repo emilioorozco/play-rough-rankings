@@ -161,7 +161,6 @@ export const matchManagementRouter = router({
           }
         } else if (result.requiresConfirmation) {
           // First submission - waiting for opponent
-          const opponentId = match.player1Id === player.id ? match.player2Id : match.player1Id
           const opponent = match.player1Id === player.id ? match.player2 : match.player1
           const opponentName = opponent.user.firstName
             ? `${opponent.user.firstName} ${opponent.user.lastName || ''}`.trim()

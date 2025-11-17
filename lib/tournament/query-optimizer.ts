@@ -5,7 +5,7 @@
  * with proper indexing hints and selective field loading.
  */
 
-import { PrismaClient, Prisma } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 
 /**
  * Optimized query builder for tournament data

@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from '@trpc/server'
-import type { PrismaClient, Tournament, Match, TournamentEntry } from '@prisma/client'
+import type { PrismaClient, Tournament, Match } from '@prisma/client'
 
 /**
  * Error codes for tournament operations

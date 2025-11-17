@@ -4,6 +4,7 @@
 import { expect, afterEach, beforeAll, afterAll, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import * as matchers from '@testing-library/jest-dom/matchers'
+import React from 'react'
 
 // Extend Vitest's expect with Testing Library matchers
 expect.extend(matchers)
@@ -31,8 +32,6 @@ vi.mock('next/navigation', () => ({
 // Mock Next.js image component
 vi.mock('next/image', () => ({
   default: (props: any) => {
-    const { default: React } = require('react')
-    // eslint-disable-next-line @next/next/no-img-element
     return React.createElement('img', props)
   },
 }))
@@ -40,7 +39,7 @@ vi.mock('next/image', () => ({
 // Mock environment variables
 // Note: In Vitest, environment variables should be set in vitest.config.ts or .env.test
 // These are fallback values if not already set
-if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
+// NODE_ENV is read-only, so we skip it (it's typically set by the test runner)
 if (!process.env.BETTER_AUTH_SECRET) process.env.BETTER_AUTH_SECRET = 'test-secret-32-characters-long'
 if (!process.env.BETTER_AUTH_URL) process.env.BETTER_AUTH_URL = 'http://localhost:3000'
 if (!process.env.NEXT_PUBLIC_APP_URL) process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000'

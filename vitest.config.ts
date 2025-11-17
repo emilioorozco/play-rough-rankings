@@ -129,11 +129,6 @@ export default defineConfig({
     
     // Parallel execution
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: false,
-      },
-    },
     
     // Retry flaky tests in CI
     retry: process.env.CI ? 2 : 0,

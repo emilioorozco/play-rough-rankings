@@ -40,7 +40,7 @@ export class EnhancedStorage implements StateStorage {
       let parsedValue
       try {
         parsedValue = JSON.parse(value)
-      } catch (parseError) {
+      } catch (_parseError) {
         // If parsing fails, treat as a plain string
         parsedValue = { data: value }
       }

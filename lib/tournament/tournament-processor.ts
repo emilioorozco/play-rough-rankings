@@ -506,11 +506,8 @@ export class TournamentProcessor {
   ): Array<TournamentEntry & { placement: number }> {
     const maxRound = Math.max(...matches.map(m => m.round))
     
-    // Find the winner (player who won in the final round)
-    const finalMatch = matches.find(m => m.round === maxRound)
-    const winnerId = finalMatch?.winnerId
-
     // Track elimination round for each player
+    // Note: Winner is determined by the player who never lost (tracked below)
     const playerEliminationRound = new Map<string, number>()
 
     // Players who never lost are still in (winner)

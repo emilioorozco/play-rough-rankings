@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
-import type { Tournament, TournamentEntry, Match, User } from '@prisma/client'
+import type { Tournament, Match } from '@prisma/client'
+// TournamentEntry and User types are used indirectly through Prisma queries
 
 /**
  * Notification types for tournament events

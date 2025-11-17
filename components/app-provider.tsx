@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useAppStore, useTheme, useActivity, useRealtime } from '@/stores/app-store'
+import { useTheme, useActivity, useRealtime } from '@/stores/app-store'
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { theme, mounted, setTheme, setMounted } = useTheme()

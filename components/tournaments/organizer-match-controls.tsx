@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FormField, FormSelect, FormTextarea, FormStatus } from '@/components/ui/form-components'
+import { FormField, FormSelect, FormTextarea } from '@/components/ui/form-components'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Modal } from '@/components/ui/modal'
@@ -12,8 +12,6 @@ import {
   AlertCircle, 
   CheckCircle, 
   Shield, 
-  Loader2, 
-  Trophy,
   XCircle,
   Clock,
   FileText,

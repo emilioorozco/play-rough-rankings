@@ -14,8 +14,6 @@ export const useFormDraftIntegration = (formId: string, formType: string, valida
     clearDraft,
     hasDraft,
     createDraft,
-    getDraft,
-    getDraftLastSaved,
     setSubmitting,
     setValidationErrors,
     clearValidationErrors,
@@ -36,7 +34,6 @@ export const useFormDraftIntegration = (formId: string, formType: string, valida
   const {
     setLoading,
     setError,
-    clearLoading,
     clearError,
     loading,
     errors,
@@ -46,14 +43,7 @@ export const useFormDraftIntegration = (formId: string, formType: string, valida
   const {
     openModal,
     closeModal,
-    modals,
   } = useUIStore()
-
-  // Auth store for user context
-  const {
-    hasRole,
-    getUserRoleLevel,
-  } = useAuthStore()
 
   // Get current draft data with defaults
   const draft = resolvedDraft || null
@@ -150,8 +140,7 @@ export const useFormDraftIntegration = (formId: string, formType: string, valida
   }, [formId, formType, validationSchema, validateDraftData, setValidationErrors, clearValidationErrors, setError, clearError])
 
   // Check if user has permission to access this form
-  const hasFormPermission = useCallback((requiredRole?: string) => {
-    if (!requiredRole) return true
+  const hasFormPermission = useCallback((_requiredRole?: string) => {
     // This would need to be enhanced with actual user context
     return true // Placeholder
   }, [])
@@ -241,7 +230,7 @@ export const useFormDraftIntegration = (formId: string, formType: string, valida
 // Hook for form components that need modal integration
 export const useFormModalIntegration = (modalName: string) => {
   const { openModal, closeModal, modals } = useUIStore()
-  const { setLoading, setError, clearLoading, clearError, loading, errors } = useLoadingStore()
+  const { setLoading, setError, clearError, loading, errors } = useLoadingStore()
 
   const modalState = modals[modalName as keyof typeof modals]
   const isOpen = modalState?.isOpen || false

@@ -41,7 +41,7 @@ export class OptimizedTournamentService {
    */
   async getTournamentState(tournamentId: string) {
     // Check cache first
-    let cached = cacheManager.getTournamentState(tournamentId)
+    const cached = cacheManager.getTournamentState(tournamentId)
     
     if (cached) {
       return cached
@@ -141,7 +141,7 @@ export class OptimizedTournamentService {
    */
   async getStandings(tournamentId: string) {
     // Check cache first
-    let cached = cacheManager.getStandings(tournamentId)
+    const cached = cacheManager.getStandings(tournamentId)
     
     if (cached) {
       return cached
