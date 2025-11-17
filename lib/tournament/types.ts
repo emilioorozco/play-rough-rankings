@@ -138,8 +138,11 @@ export type TournamentStructure = 'SWISS' | 'ELIMINATION'
 
 /**
  * User role types for authorization
+ * 
+ * NOTE: This type is now defined in authorization-constants.ts as the single source of truth.
+ * Import from there or from the main tournament index.
  */
-export type UserRole = 'player' | 'organizer' | 'admin'
+export type { UserRole } from './authorization-constants'
 
 /**
  * Pairing data structure for match creation

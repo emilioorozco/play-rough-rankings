@@ -1,11 +1,22 @@
 /**
- * Tournament Lifecycle Management - Authorization Utilities
+ * Tournament Lifecycle Management - Authorization Utilities (Server-Side)
  * 
  * This file contains authorization helper functions for tournament management
- * operations, ensuring proper access control based on user roles and ownership.
+ * operations in tRPC procedures, ensuring proper access control based on user
+ * roles and ownership.
+ * 
+ * **IMPORTANT**: This is the SERVER-SIDE implementation used in tRPC procedures.
+ * For client-side authorization (React components), use the hooks from
+ * `stores/auth-store.ts` instead.
+ * 
+ * Both implementations use the same core logic from `authorization-constants.ts`
+ * to ensure consistency across client and server.
+ * 
+ * @module authorization (server-side)
  */
 
 import type { UserRole } from './types'
+import { checkTournamentManagementPermission } from './authorization-constants'
 
 /**
  * Tournament data structure for authorization checks
@@ -18,7 +29,19 @@ interface TournamentAuthData {
 }
 
 /**
- * Check if a user can manage a tournament
+ * Check if a user can manage a tournament (SERVER-SIDE)
+ * 
+ * This is the server-side implementation used in tRPC procedures.
+ * It wraps the shared authorization logic from `authorization-constants.ts`.
+ * 
+ * **When to use this:**
+ * - In tRPC procedures (mutations and queries)
+ * - In server-side API routes
+ * - In server-side business logic
+ * 
+ * **When NOT to use this:**
+ * - In React components (use `usePermissions().canManageTournament()` instead)
+ * - In client-side code (use hooks from `stores/auth-store.ts`)
  * 
  * A user can manage a tournament if they are:
  * - An admin (can manage any tournament)
@@ -31,12 +54,12 @@ interface TournamentAuthData {
  * 
  * @example
  * ```typescript
- * const canManage = canManageTournament(
- *   userId,
- *   'organizer',
- *   { organizerId: 'org-123', status: 'ACTIVE' }
- * )
- * if (!canManage) {
+ * // In a tRPC procedure
+ * const tournament = await ctx.prisma.tournament.findUnique({
+ *   where: { id: input.tournamentId }
+ * })
+ * 
+ * if (!canManageTournament(ctx.user.id, ctx.user.role, tournament)) {
  *   throw new TRPCError({ code: 'FORBIDDEN' })
  * }
  * ```
@@ -46,18 +69,8 @@ export function canManageTournament(
   userRole: UserRole,
   tournament: TournamentAuthData
 ): boolean {
-  // Admins can manage any tournament
-  if (userRole === 'admin') {
-    return true
-  }
-
-  // Tournament organizer can manage their own tournament
-  if (tournament.organizerId === userId) {
-    return true
-  }
-
-  // All other cases: no permission
-  return false
+  // Use shared authorization logic to ensure consistency with client-side
+  return checkTournamentManagementPermission(userId, userRole, tournament.organizerId)
 }
 
 /**
