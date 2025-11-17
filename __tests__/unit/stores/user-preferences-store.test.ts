@@ -1,380 +1,703 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { act } from '@testing-library/react'
-import { useUserPreferencesStore } from '@/stores/user-preferences-store'
-import type { UserPreferences, DisplayPreferences, CommunicationPreferences, FormBehaviorPreferences } from '@/lib/types'
+import { act, renderHook } from '@testing-library/react'
+import { 
+  useUserPreferencesStore,
+  useUserPreferences,
+  useUserPreference,
+  useUserPreferencesByCategory,
+  useUserPreferencesLoading,
+  useUserPreferencesErrors,
+  useUserPreferencesCache,
+  useUserPreferencesMetadata,
+  useUserPreferencesOperations
+} from '@/stores/user-preferences-store'
 
 describe('User Preferences Store', () => {
-  const mockDisplayPreferences = {
-    theme: 'dark' as const,
-    language: 'es',
-    timezone: 'UTC'
-  }
-
-  const mockCommunicationPreferences = {
-    emailNotifications: false,
-    pushNotifications: false
-  }
-
-  // Note: autoSave and autoSaveInterval don't exist in the user preferences store
-  // These would be handled by the form draft store instead
-  const mockFormBehaviorPreferences = {
-    // No form behavior preferences in user preferences store
-  }
-
-  const mockUserPreferences = {
-    ...mockDisplayPreferences,
-    ...mockCommunicationPreferences,
-    ...mockFormBehaviorPreferences
-  }
-
   beforeEach(() => {
     // Reset store state before each test
     useUserPreferencesStore.getState().resetStore()
+    // Clear localStorage to ensure clean state
+    localStorage.clear()
   })
 
   describe('Preference Management', () => {
     it('should set a single preference', () => {
-      const store = useUserPreferencesStore.getState()
+      const { result } = renderHook(() => useUserPreferencesStore())
 
       act(() => {
-        store.updatePreference('theme', 'dark')
+        result.current.updatePreference('theme', 'dark')
       })
 
-      const updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('dark')
+      expect(result.current.preferences.theme).toBe('dark')
+      expect(result.current.isDirty).toBe(true)
+      expect(result.current.hasUnsavedChanges).toBe(true)
     })
 
-    it('should set multiple preferences', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should set multiple preferences at once', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
       act(() => {
-        store.setPreferences(mockUserPreferences)
+        result.current.setPreferences({
+          theme: 'dark',
+          language: 'es',
+          emailNotifications: false
+        })
       })
 
-      const updatedStore = useUserPreferencesStore.getState()
-      // Check that the preferences were set correctly
-      expect(updatedStore.preferences.theme).toBe(mockUserPreferences.theme)
-      expect(updatedStore.preferences.language).toBe(mockUserPreferences.language)
-      expect(updatedStore.preferences.emailNotifications).toBe(mockUserPreferences.emailNotifications)
+      expect(result.current.preferences.theme).toBe('dark')
+      expect(result.current.preferences.language).toBe('es')
+      expect(result.current.preferences.emailNotifications).toBe(false)
+      expect(result.current.isDirty).toBe(true)
     })
 
     it('should update existing preferences', () => {
-      const store = useUserPreferencesStore.getState()
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // First set initial preferences
       act(() => {
-        store.setPreferences(mockUserPreferences)
+        result.current.setPreferences({
+          theme: 'dark',
+          language: 'es'
+        })
       })
 
-      // Then update specific preferences
       act(() => {
-        store.updatePreferences({
+        result.current.updatePreferences({
           theme: 'light',
           emailNotifications: false
         })
       })
 
-      // Get updated store state
-      const updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('light')
-      expect(updatedStore.preferences.emailNotifications).toBe(false)
-      // Other preferences should remain unchanged
-      expect(updatedStore.preferences.language).toBe('es') // from initial mockUserPreferences
-      expect(updatedStore.preferences.pushNotifications).toBe(false) // from initial mockUserPreferences
+      expect(result.current.preferences.theme).toBe('light')
+      expect(result.current.preferences.emailNotifications).toBe(false)
+      expect(result.current.preferences.language).toBe('es')
+    })
+
+    it('should update preference and mark as dirty', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.updatePreference('profileVisibility', 'PRIVATE')
+      })
+
+      expect(result.current.preferences.profileVisibility).toBe('PRIVATE')
+      expect(result.current.isDirty).toBe(true)
+      expect(result.current.hasUnsavedChanges).toBe(true)
+      expect(result.current.lastUpdated).toBeInstanceOf(Date)
+    })
+
+    it('should update multiple preferences with updatePreferences', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.updatePreferences({
+          optInCommunications: true,
+          optInTournamentUpdates: false,
+          optInLeaderboardUpdates: false
+        })
+      })
+
+      expect(result.current.preferences.optInCommunications).toBe(true)
+      expect(result.current.preferences.optInTournamentUpdates).toBe(false)
+      expect(result.current.preferences.optInLeaderboardUpdates).toBe(false)
     })
   })
 
   describe('Category-Specific Preferences', () => {
-    it('should set display preferences', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should get preferences by category - display', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
       act(() => {
-        store.updatePreferences(mockDisplayPreferences)
+        result.current.updatePreferences({
+          theme: 'dark',
+          language: 'es',
+          timezone: 'America/New_York'
+        })
       })
 
-      // Get updated store state
-      const updatedStore = useUserPreferencesStore.getState()
-      // Check individual properties since the store uses flat structure
-      expect(updatedStore.preferences.theme).toBe(mockDisplayPreferences.theme)
-      expect(updatedStore.preferences.language).toBe(mockDisplayPreferences.language)
+      const displayPrefs = result.current.getPreferencesByCategory('display')
+      expect(displayPrefs.theme).toBe('dark')
+      expect(displayPrefs.language).toBe('es')
+      expect(displayPrefs.timezone).toBe('America/New_York')
     })
 
-    it('should set communication preferences', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should get preferences by category - communications', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
       act(() => {
-        store.updatePreferences(mockCommunicationPreferences)
+        result.current.updatePreferences({
+          optInCommunications: true,
+          optInTournamentUpdates: false,
+          emailNotifications: false
+        })
       })
 
-      // Get updated store state
-      const updatedStore = useUserPreferencesStore.getState()
-      // Check individual properties since the store uses flat structure
-      expect(updatedStore.preferences.emailNotifications).toBe(mockCommunicationPreferences.emailNotifications)
-      expect(updatedStore.preferences.pushNotifications).toBe(mockCommunicationPreferences.pushNotifications)
+      const commPrefs = result.current.getPreferencesByCategory('communications')
+      expect(commPrefs.optInCommunications).toBe(true)
+      expect(commPrefs.optInTournamentUpdates).toBe(false)
+      expect(commPrefs.emailNotifications).toBe(false)
     })
 
-    it('should set form behavior preferences', () => {
-      const store = useUserPreferencesStore.getState()
-
-      // Note: Form behavior preferences like autoSave are handled by the form draft store
-      // This test verifies that the user preferences store doesn't have these properties
-      expect(store.preferences.autoSave).toBeUndefined()
-      expect(store.preferences.autoSaveInterval).toBeUndefined()
-    })
-
-    it('should set category preferences', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should get preferences by category - tournaments', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
       act(() => {
-        store.updatePreferences(mockDisplayPreferences)
+        result.current.updatePreferences({
+          defaultTournamentView: 'grid',
+          autoRegisterForTournaments: true,
+          tournamentReminderTime: 60
+        })
       })
 
-      // Get updated store state
-      const updatedStore = useUserPreferencesStore.getState()
-      // Check individual properties since the store uses flat structure
-      expect(updatedStore.preferences.theme).toBe(mockDisplayPreferences.theme)
-      expect(updatedStore.preferences.language).toBe(mockDisplayPreferences.language)
+      const tournamentPrefs = result.current.getPreferencesByCategory('tournaments')
+      expect(tournamentPrefs.defaultTournamentView).toBe('grid')
+      expect(tournamentPrefs.autoRegisterForTournaments).toBe(true)
+      expect(tournamentPrefs.tournamentReminderTime).toBe(60)
+    })
+
+    it('should get preferences by category - privacy', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.updatePreferences({
+          showEmail: true,
+          showPhone: false,
+          allowDirectMessages: false
+        })
+      })
+
+      const privacyPrefs = result.current.getPreferencesByCategory('privacy')
+      expect(privacyPrefs.showEmail).toBe(true)
+      expect(privacyPrefs.showPhone).toBe(false)
+      expect(privacyPrefs.allowDirectMessages).toBe(false)
+    })
+
+    it('should get preferences by category - games', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.updatePreferences({
+          favoriteGames: ['pokemon', 'mtg'],
+          defaultGame: 'pokemon'
+        })
+      })
+
+      const gamePrefs = result.current.getPreferencesByCategory('games')
+      expect(gamePrefs.favoriteGames).toEqual(['pokemon', 'mtg'])
+      expect(gamePrefs.defaultGame).toBe('pokemon')
+    })
+
+    it('should get preferences by category - accessibility', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.updatePreferences({
+          fontSize: 'large',
+          highContrast: true,
+          reducedMotion: true
+        })
+      })
+
+      const accessibilityPrefs = result.current.getPreferencesByCategory('accessibility')
+      expect(accessibilityPrefs.fontSize).toBe('large')
+      expect(accessibilityPrefs.highContrast).toBe(true)
+      expect(accessibilityPrefs.reducedMotion).toBe(true)
+    })
+
+    it('should get preferences by category - advanced', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.updatePreferences({
+          experimentalFeatures: true,
+          analyticsOptIn: false,
+          crashReporting: false
+        })
+      })
+
+      const advancedPrefs = result.current.getPreferencesByCategory('advanced')
+      expect(advancedPrefs.experimentalFeatures).toBe(true)
+      expect(advancedPrefs.analyticsOptIn).toBe(false)
+      expect(advancedPrefs.crashReporting).toBe(false)
     })
   })
 
   describe('Preference Reset', () => {
-    it('should reset a single preference', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should reset preferences to defaults', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // First set a preference
       act(() => {
-        store.updatePreference('theme', 'dark')
+        result.current.updatePreferences({
+          theme: 'dark',
+          language: 'es',
+          emailNotifications: false
+        })
       })
 
-      // Get updated store state
-      let updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('dark')
+      expect(result.current.preferences.theme).toBe('dark')
+      expect(result.current.isDirty).toBe(true)
 
-      // Then reset all preferences
       act(() => {
-        store.resetToDefaults()
+        result.current.resetToDefaults()
       })
 
-      // Should reset to default value
-      updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('system')
+      expect(result.current.preferences.theme).toBe('system')
+      expect(result.current.preferences.language).toBe('en')
+      expect(result.current.preferences.emailNotifications).toBe(true)
+      expect(result.current.isDirty).toBe(false)
+      expect(result.current.hasUnsavedChanges).toBe(false)
     })
 
-    it('should reset all preferences', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should reset preferences using resetPreferences', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // First set some preferences
       act(() => {
-        store.setPreferences(mockUserPreferences)
+        result.current.setPreferences({
+          theme: 'dark',
+          optInMarketing: true
+        })
       })
 
-      // Get updated store state
-      let updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('dark')
-      expect(updatedStore.preferences.emailNotifications).toBe(false)
-
-      // Then reset all
       act(() => {
-        store.resetToDefaults()
+        result.current.resetPreferences()
       })
 
-      // Should reset to default values
-      updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('system')
-      expect(updatedStore.preferences.emailNotifications).toBe(true) // Default value
+      expect(result.current.preferences.theme).toBe('system')
+      expect(result.current.preferences.optInMarketing).toBe(false)
+      expect(result.current.isDirty).toBe(false)
     })
 
-    it('should reset category preferences', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should update lastUpdated when resetting', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // First set display preferences
       act(() => {
-        store.setPreferences(mockDisplayPreferences)
+        result.current.updatePreference('theme', 'dark')
       })
 
-      // Get updated store state
-      let updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('dark')
+      const beforeReset = result.current.lastUpdated
 
-      // Then reset all preferences
       act(() => {
-        store.resetToDefaults()
+        result.current.resetToDefaults()
       })
 
-      // Should reset to default values
-      updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('system')
-    })
-
-    it('should reset specific category preferences', () => {
-      const store = useUserPreferencesStore.getState()
-
-      // First set some preferences
-      act(() => {
-        store.setPreferences(mockUserPreferences)
-      })
-
-      // Get updated store state
-      let updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('dark')
-      expect(updatedStore.preferences.emailNotifications).toBe(false)
-
-      // Then reset all preferences
-      act(() => {
-        store.resetToDefaults()
-      })
-
-      // All preferences should be reset to defaults
-      updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('system')
-      expect(updatedStore.preferences.emailNotifications).toBe(true) // default value
+      expect(result.current.lastUpdated).toBeInstanceOf(Date)
+      if (beforeReset) {
+        expect(result.current.lastUpdated!.getTime()).toBeGreaterThanOrEqual(beforeReset.getTime())
+      }
     })
   })
 
-  describe('Metadata Management', () => {
-    it('should track last updated timestamp', () => {
-      const store = useUserPreferencesStore.getState()
-      const initialTimestamp = store.lastUpdated
+  describe('Loading State Management', () => {
+    it('should set loading state', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
       act(() => {
-        store.updatePreference('theme', 'dark')
+        result.current.setLoading('saving', true)
       })
 
-      // Get updated store state
-      const updatedStore = useUserPreferencesStore.getState()
-      // lastUpdated should be set after the update
-      expect(updatedStore.lastUpdated).toBeInstanceOf(Date)
-      if (initialTimestamp) {
-        expect(updatedStore.lastUpdated!.getTime()).toBeGreaterThan(initialTimestamp.getTime())
-      }
+      expect(result.current.loading.saving).toBe(true)
+
+      act(() => {
+        result.current.setLoading('saving', false)
+      })
+
+      expect(result.current.loading.saving).toBe(false)
     })
 
-    it('should maintain version information', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should handle multiple loading states', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // Version is not directly accessible on the store
-      expect(store).toBeDefined()
+      act(() => {
+        result.current.setLoading('loading', true)
+        result.current.setLoading('saving', true)
+      })
+
+      expect(result.current.loading.loading).toBe(true)
+      expect(result.current.loading.saving).toBe(true)
+
+      act(() => {
+        result.current.setLoading('loading', false)
+      })
+
+      expect(result.current.loading.loading).toBe(false)
+      expect(result.current.loading.saving).toBe(true)
     })
 
-    it('should maintain preference metadata', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should set resetting loading state', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // Metadata is not directly accessible on the store
-      expect(store).toBeDefined()
+      act(() => {
+        result.current.setLoading('resetting', true)
+      })
+
+      expect(result.current.loading.resetting).toBe(true)
+    })
+  })
+
+  describe('Error State Management', () => {
+    it('should set error state', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.setError('save', 'Failed to save preferences')
+      })
+
+      expect(result.current.errors.save).toBe('Failed to save preferences')
+    })
+
+    it('should clear specific error', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.setError('save', 'Error message')
+        result.current.setError('load', 'Another error')
+      })
+
+      expect(result.current.errors.save).toBe('Error message')
+      expect(result.current.errors.load).toBe('Another error')
+
+      act(() => {
+        result.current.clearError('save')
+      })
+
+      expect(result.current.errors.save).toBeNull()
+      expect(result.current.errors.load).toBe('Another error')
+    })
+
+    it('should clear all errors', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.setError('save', 'Save error')
+        result.current.setError('load', 'Load error')
+        result.current.setError('reset', 'Reset error')
+      })
+
+      expect(result.current.errors.save).toBe('Save error')
+      expect(result.current.errors.load).toBe('Load error')
+      expect(result.current.errors.reset).toBe('Reset error')
+
+      act(() => {
+        result.current.clearAllErrors()
+      })
+
+      expect(result.current.errors.save).toBeNull()
+      expect(result.current.errors.load).toBeNull()
+      expect(result.current.errors.reset).toBeNull()
+    })
+  })
+
+  describe('Cache State Management', () => {
+    it('should mark as dirty', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      expect(result.current.isDirty).toBe(false)
+
+      act(() => {
+        result.current.markAsDirty()
+      })
+
+      expect(result.current.isDirty).toBe(true)
+      expect(result.current.hasUnsavedChanges).toBe(true)
+    })
+
+    it('should mark as clean', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      act(() => {
+        result.current.markAsDirty()
+      })
+
+      expect(result.current.isDirty).toBe(true)
+
+      act(() => {
+        result.current.markAsClean()
+      })
+
+      expect(result.current.isDirty).toBe(false)
+      expect(result.current.hasUnsavedChanges).toBe(false)
+    })
+
+    it('should set last updated timestamp', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      const testDate = new Date('2024-01-01')
+
+      act(() => {
+        result.current.setLastUpdated(testDate)
+      })
+
+      expect(result.current.lastUpdated).toEqual(testDate)
+    })
+
+    it('should track last updated on preference changes', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      expect(result.current.lastUpdated).toBeNull()
+
+      act(() => {
+        result.current.updatePreference('theme', 'dark')
+      })
+
+      expect(result.current.lastUpdated).toBeInstanceOf(Date)
     })
   })
 
   describe('Preference Validation', () => {
-    it('should handle invalid preference keys gracefully', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should validate required preferences', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // Should not throw error for invalid key
-      expect(() => {
-        act(() => {
-          store.updatePreference('invalidKey' as any, 'value')
-        })
-      }).not.toThrow()
-    })
-
-    it('should handle nested preference updates', () => {
-      const store = useUserPreferencesStore.getState()
-
-      act(() => {
-        // quietHours is not a flat property, so we'll use a different test
-        store.updatePreference('pushNotifications', true)
+      const validation = result.current.validatePreferences({
+        nameDisplayPreference: '' as any
       })
 
-      expect(store.preferences.pushNotifications).toBe(true)
+      expect(validation.isValid).toBe(false)
+      expect(validation.errors.nameDisplayPreference).toBeDefined()
+    })
+
+    it('should validate enum values', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      const validation = result.current.validatePreferences({
+        theme: 'invalid' as any
+      })
+
+      expect(validation.isValid).toBe(false)
+      expect(validation.errors.theme).toBeDefined()
+    })
+
+    it('should validate number ranges', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      const validation = result.current.validatePreferences({
+        tournamentReminderTime: 2000 // max is 1440
+      })
+
+      expect(validation.isValid).toBe(false)
+      expect(validation.errors.tournamentReminderTime).toBeDefined()
+    })
+
+    it('should validate minimum number values', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      const validation = result.current.validatePreferences({
+        tournamentReminderTime: 2 // min is 5
+      })
+
+      expect(validation.isValid).toBe(false)
+      expect(validation.errors.tournamentReminderTime).toBeDefined()
+    })
+
+    it('should pass validation for valid preferences', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      const validation = result.current.validatePreferences({
+        theme: 'dark',
+        tournamentReminderTime: 30,
+        nameDisplayPreference: 'FIRST_NAME'
+      })
+
+      expect(validation.isValid).toBe(true)
+      expect(Object.keys(validation.errors)).toHaveLength(0)
     })
   })
 
-  describe('Store State Consistency', () => {
-    it('should maintain consistent state across operations', () => {
-      const store = useUserPreferencesStore.getState()
+  describe('Utility Actions', () => {
+    it('should get specific preference value', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // Set initial preferences
       act(() => {
-        store.setPreferences(mockDisplayPreferences)
+        result.current.updatePreference('theme', 'dark')
       })
 
-      const initialTheme = store.preferences.theme
-
-      // Perform other operations
-      act(() => {
-        store.setPreferences(mockCommunicationPreferences)
-        store.setPreferences(mockFormBehaviorPreferences)
-      })
-
-      // Display preferences should remain unchanged
-      expect(store.preferences.theme).toBe(initialTheme)
+      const theme = result.current.getPreference('theme')
+      expect(theme).toBe('dark')
     })
 
-    it('should handle concurrent preference updates', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should check if preference exists', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // Simulate concurrent updates
+      expect(result.current.hasPreference('theme')).toBe(true)
+      expect(result.current.hasPreference('invalidKey' as any)).toBe(false)
+    })
+
+    it('should get preference metadata', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
+      const themeMetadata = result.current.metadata.theme
+      expect(themeMetadata).toBeDefined()
+      expect(themeMetadata.type).toBe('enum')
+      expect(themeMetadata.category).toBe('display')
+      expect(themeMetadata.enumValues).toContain('light')
+      expect(themeMetadata.enumValues).toContain('dark')
+    })
+  })
+
+  describe('Store Reset', () => {
+    it('should reset entire store state', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
+
       act(() => {
-        store.updatePreference('theme', 'dark')
-        store.updatePreference('language', 'es')
-        store.updatePreference('emailNotifications', false)
+        result.current.updatePreferences({
+          theme: 'dark',
+          language: 'es'
+        })
+        result.current.setError('save', 'Error')
+        result.current.setLoading('saving', true)
       })
 
-      // Get updated store state
-      const updatedStore = useUserPreferencesStore.getState()
-      expect(updatedStore.preferences.theme).toBe('dark')
-      expect(updatedStore.preferences.language).toBe('es')
-      expect(updatedStore.preferences.emailNotifications).toBe(false)
+      expect(result.current.preferences.theme).toBe('dark')
+      expect(result.current.errors.save).toBe('Error')
+      expect(result.current.loading.saving).toBe(true)
+
+      act(() => {
+        result.current.resetStore()
+      })
+
+      expect(result.current.preferences.theme).toBe('system')
+      expect(result.current.errors.save).toBeNull()
+      expect(result.current.loading.saving).toBe(false)
+      expect(result.current.isDirty).toBe(false)
+      expect(result.current.lastUpdated).toBeNull()
+    })
+  })
+
+  describe('Custom Hooks', () => {
+    it('should use useUserPreferences hook', () => {
+      const { result } = renderHook(() => useUserPreferences())
+
+      expect(result.current.preferences).toBeDefined()
+      expect(result.current.setPreferences).toBeDefined()
+      expect(result.current.updatePreference).toBeDefined()
+      expect(result.current.updatePreferences).toBeDefined()
+      expect(result.current.resetPreferences).toBeDefined()
+      expect(result.current.resetToDefaults).toBeDefined()
+    })
+
+    it('should use useUserPreference hook for single preference', () => {
+      const { result } = renderHook(() => useUserPreference('theme'))
+
+      expect(result.current.value).toBe('system')
+      expect(result.current.update).toBeDefined()
+      expect(result.current.metadata).toBeDefined()
+
+      act(() => {
+        result.current.update('dark')
+      })
+
+      expect(result.current.value).toBe('dark')
+    })
+
+    it('should use useUserPreferencesByCategory hook', () => {
+      const { result } = renderHook(() => useUserPreferencesByCategory('display'))
+
+      expect(result.current.preferences).toBeDefined()
+      expect(result.current.metadata).toBeDefined()
+      expect(result.current.updatePreferences).toBeDefined()
+      expect(result.current.preferences.theme).toBe('system')
+    })
+
+    it('should use useUserPreferencesLoading hook', () => {
+      const { result } = renderHook(() => useUserPreferencesLoading())
+
+      expect(result.current.loading).toBe(false)
+      expect(result.current.saving).toBe(false)
+      expect(result.current.resetting).toBe(false)
+      expect(result.current.setLoading).toBeDefined()
+      expect(result.current.isAnyLoading).toBe(false)
+
+      act(() => {
+        result.current.setLoading('saving', true)
+      })
+
+      expect(result.current.saving).toBe(true)
+      expect(result.current.isAnyLoading).toBe(true)
+    })
+
+    it('should use useUserPreferencesErrors hook', () => {
+      const { result } = renderHook(() => useUserPreferencesErrors())
+
+      expect(result.current.load).toBeNull()
+      expect(result.current.save).toBeNull()
+      expect(result.current.reset).toBeNull()
+      expect(result.current.setError).toBeDefined()
+      expect(result.current.clearError).toBeDefined()
+      expect(result.current.clearAllErrors).toBeDefined()
+      expect(result.current.hasAnyError).toBe(false)
+
+      act(() => {
+        result.current.setError('save', 'Test error')
+      })
+
+      expect(result.current.save).toBe('Test error')
+      expect(result.current.hasAnyError).toBe(true)
+    })
+
+    it('should use useUserPreferencesCache hook', () => {
+      const { result } = renderHook(() => useUserPreferencesCache())
+
+      expect(result.current.lastUpdated).toBeNull()
+      expect(result.current.isDirty).toBe(false)
+      expect(result.current.hasUnsavedChanges).toBe(false)
+      expect(result.current.markAsDirty).toBeDefined()
+      expect(result.current.markAsClean).toBeDefined()
+      expect(result.current.setLastUpdated).toBeDefined()
+    })
+
+    it('should use useUserPreferencesMetadata hook', () => {
+      const { result } = renderHook(() => useUserPreferencesMetadata())
+
+      expect(result.current.metadata).toBeDefined()
+      expect(result.current.getPreference).toBeDefined()
+      expect(result.current.hasPreference).toBeDefined()
+      expect(result.current.validatePreferences).toBeDefined()
+    })
+
+    it('should use useUserPreferencesOperations hook', () => {
+      const { result } = renderHook(() => useUserPreferencesOperations())
+
+      expect(result.current.resetStore).toBeDefined()
+      expect(result.current.getPreferencesByCategory).toBeDefined()
     })
   })
 
   describe('Default Values', () => {
-    it('should have correct default values', () => {
-      const store = useUserPreferencesStore.getState()
+    it('should have correct default values for all categories', () => {
+      const { result } = renderHook(() => useUserPreferencesStore())
 
-      // Check default display preferences
-      expect(store.preferences.theme).toBe('system')
-      expect(store.preferences.language).toBe('en')
-      expect(store.preferences.timezone).toBe('UTC')
+      // Display
+      expect(result.current.preferences.theme).toBe('system')
+      expect(result.current.preferences.language).toBe('en')
+      expect(result.current.preferences.timezone).toBe('UTC')
 
-      // Check default communication preferences
-      expect(store.preferences.emailNotifications).toBe(true)
-      expect(store.preferences.pushNotifications).toBe(true)
-      expect(store.preferences.optInMarketing).toBe(false)
+      // Communications
+      expect(result.current.preferences.emailNotifications).toBe(true)
+      expect(result.current.preferences.pushNotifications).toBe(true)
+      expect(result.current.preferences.smsNotifications).toBe(false)
+      expect(result.current.preferences.optInMarketing).toBe(false)
 
-      // Check that form behavior preferences don't exist in user preferences store
-      // These are handled by the form draft store instead
-      expect(store.preferences.autoSave).toBeUndefined()
-      expect(store.preferences.autoSaveInterval).toBeUndefined()
-    })
-  })
+      // Tournaments
+      expect(result.current.preferences.defaultTournamentView).toBe('list')
+      expect(result.current.preferences.autoRegisterForTournaments).toBe(false)
+      expect(result.current.preferences.tournamentReminderTime).toBe(30)
 
-  describe('Persistence Integration', () => {
-    it('should handle persistence metadata', () => {
-      const store = useUserPreferencesStore.getState()
+      // Privacy
+      expect(result.current.preferences.showEmail).toBe(false)
+      expect(result.current.preferences.showPhone).toBe(false)
+      expect(result.current.preferences.allowDirectMessages).toBe(true)
 
-      // The store should have persistence metadata
-      expect(store.metadata).toBeDefined()
-      // lastUpdated is not directly accessible on the store
-      expect(store).toBeDefined()
-      // Version is not directly accessible on the store
-      expect(store).toBeDefined()
-    })
+      // Games
+      expect(result.current.preferences.favoriteGames).toEqual([])
+      expect(result.current.preferences.defaultGame).toBe('')
 
-    it('should update metadata on preference changes', async () => {
-      const store = useUserPreferencesStore.getState()
-      const initialTimestamp = store.lastUpdated
+      // Accessibility
+      expect(result.current.preferences.fontSize).toBe('medium')
+      expect(result.current.preferences.highContrast).toBe(false)
+      expect(result.current.preferences.reducedMotion).toBe(false)
 
-      // Wait a bit to ensure timestamp difference
-      await new Promise(resolve => setTimeout(resolve, 10))
-      
-      act(() => {
-        store.updatePreference('theme', 'dark')
-      })
-
-      expect(store.lastUpdated).toBeDefined()
-      if (initialTimestamp && store.lastUpdated) {
-        expect(store.lastUpdated.getTime()).toBeGreaterThan(initialTimestamp.getTime())
-      }
+      // Advanced
+      expect(result.current.preferences.experimentalFeatures).toBe(false)
+      expect(result.current.preferences.analyticsOptIn).toBe(true)
+      expect(result.current.preferences.crashReporting).toBe(true)
     })
   })
 })
