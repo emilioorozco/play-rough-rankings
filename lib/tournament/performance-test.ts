@@ -76,7 +76,6 @@ export class PerformanceTestRunner {
     console.log(`Starting performance test with ${config.playerCount} players...`)
     
     const startTime = Date.now()
-    const timings: number[] = []
 
     try {
       // Clear cache before test

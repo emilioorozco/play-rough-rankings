@@ -71,8 +71,6 @@ export function MatchSubmissionForm({
   const isPlayer1 = currentUser?.id === match.player1.user.id
   const isPlayer2 = currentUser?.id === match.player2.user.id
   const isInMatch = isPlayer1 || isPlayer2
-  const currentPlayerId = isPlayer1 ? match.player1Id : isPlayer2 ? match.player2Id : null
-  const opponentId = isPlayer1 ? match.player2Id : match.player1Id
 
   // Check if either player is dropped by querying tournament entries
   const tournamentQuery = trpc.tournaments.getById.useQuery({

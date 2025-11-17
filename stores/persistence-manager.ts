@@ -173,7 +173,7 @@ export class PersistenceManager {
       if (data.formDrafts) {
         const formDraftStore = useFormDraftStore.getState()
         // Import drafts one by one to maintain integrity
-        Object.entries(data.formDrafts.drafts || {}).forEach(([draftId, draft]: [string, any]) => {
+        Object.entries(data.formDrafts.drafts || {}).forEach(([_draftId, draft]: [string, any]) => {
           formDraftStore.createDraft(
             draft.formType,
             draft.data,

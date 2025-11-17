@@ -11,7 +11,6 @@ export const useTournamentLoadingIntegration = () => {
   const setLoading = useLoadingStore((state) => state.setLoading)
   const setError = useLoadingStore((state) => state.setError)
   const setProgress = useLoadingStore((state) => state.setProgress)
-  const clearLoading = useLoadingStore((state) => state.clearLoading)
   const clearError = useLoadingStore((state) => state.clearError)
   const clearProgress = useLoadingStore((state) => state.clearProgress)
 
@@ -87,7 +86,6 @@ export const useTournamentLoadingIntegration = () => {
 export const useUserPreferencesLoadingIntegration = () => {
   const setLoading = useLoadingStore((state) => state.setLoading)
   const setError = useLoadingStore((state) => state.setError)
-  const clearLoading = useLoadingStore((state) => state.clearLoading)
   const clearError = useLoadingStore((state) => state.clearError)
 
   const setPreferences = useUserPreferencesStore((state) => state.setPreferences)
@@ -151,7 +149,6 @@ export const useFormDraftLoadingIntegration = () => {
   const setLoading = useLoadingStore((state) => state.setLoading)
   const setError = useLoadingStore((state) => state.setError)
   const setProgress = useLoadingStore((state) => state.setProgress)
-  const clearLoading = useLoadingStore((state) => state.clearLoading)
   const clearError = useLoadingStore((state) => state.clearError)
   const clearProgress = useLoadingStore((state) => state.clearProgress)
 
@@ -237,7 +234,6 @@ export const useFormDraftLoadingIntegration = () => {
 export const useUILoadingIntegration = () => {
   const setLoading = useLoadingStore((state) => state.setLoading)
   const setError = useLoadingStore((state) => state.setError)
-  const clearLoading = useLoadingStore((state) => state.clearLoading)
   const clearError = useLoadingStore((state) => state.clearError)
 
   const openModal = useUIStore((state) => state.openModal)

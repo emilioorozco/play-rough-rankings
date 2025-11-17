@@ -9,7 +9,7 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 })
 
-export default [
+const eslintConfig = [
   {
     ignores: [
       '.next/**',
@@ -20,6 +20,7 @@ export default [
       'scripts/**',
       'docs/**',
       'generated/**',
+      'coverage/**',
       '__tests__/**',
       '*.config.js',
       '*.setup.js',
@@ -33,7 +34,17 @@ export default [
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off'
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ]
     }
   }
 ]
+
+export default eslintConfig

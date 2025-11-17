@@ -496,7 +496,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   },
   
   invalidateTournamentList: () => {
-    set((state) => ({
+    set((_state) => ({
       tournamentList: { ...initialTournamentList },
     }))
   },
@@ -535,7 +535,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     }))
   },
   
-  handleQuerySuccess: (queryType, data) => {
+  handleQuerySuccess: (queryType, _data) => {
     set((state) => ({
       loading: {
         ...state.loading,
