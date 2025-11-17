@@ -201,16 +201,12 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
         {selectedMatch && (
           <MatchSubmissionForm
             match={selectedMatch}
-            currentUserId={currentUser?.id || ''}
+            currentUser={currentUser ? { id: currentUser.id, role: currentUser.role } : null}
             onSuccess={() => {
               setShowSubmissionModal(false)
               setSelectedMatch(null)
               // Trigger refetch in parent component
               window.location.reload()
-            }}
-            onCancel={() => {
-              setShowSubmissionModal(false)
-              setSelectedMatch(null)
             }}
           />
         )}
@@ -228,16 +224,12 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
         {selectedMatch && (
           <OrganizerMatchControls
             match={selectedMatch}
-            tournamentId={tournament.id}
+            currentUser={currentUser ? { id: currentUser.id, role: currentUser.role } : null}
             onSuccess={() => {
               setShowOrganizerModal(false)
               setSelectedMatch(null)
               // Trigger refetch in parent component
               window.location.reload()
-            }}
-            onCancel={() => {
-              setShowOrganizerModal(false)
-              setSelectedMatch(null)
             }}
           />
         )}

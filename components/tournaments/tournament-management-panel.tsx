@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ConfirmationModal } from '@/components/ui/confirmation-modal'
 import { Modal } from '@/components/ui/modal'
-import { FormInput, FormTextarea } from '@/components/ui/form-components'
+import { FormTextarea } from '@/components/ui/form-components'
 import { 
   Play, 
   SkipForward, 
