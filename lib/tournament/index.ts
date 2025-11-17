@@ -46,3 +46,13 @@ export { MatchProcessor } from './match-processor'
 export type { SubmitMatchResultResponse } from './match-processor'
 
 export { RatingCalculator } from './rating-calculator'
+
+// Export performance optimization utilities
+export { CacheManager, cacheManager } from './cache-manager'
+export { BatchAuditLogger } from './batch-audit-logger'
+export { QueryOptimizer, createQueryOptimizer } from './query-optimizer'
+export { PerformanceTestRunner, runPerformanceBenchmark } from './performance-test'
+export type { PerformanceTestConfig, PerformanceTestResults } from './performance-test'
+
+// Export optimized service
+export { OptimizedTournamentService, createOptimizedTournamentService } from './optimized-tournament-service'
