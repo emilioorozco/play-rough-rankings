@@ -9,6 +9,7 @@ import { ModalForm, FormInput, FormCheckbox, FormActions, FormStatus } from "../
 import { Modal } from "../ui/modal";
 import { Button } from "../ui/button";
 import { Mail, Lock } from "lucide-react";
+import { transformError } from "@/lib/utils/error-transformer";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -25,7 +26,7 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
   // Don't show sign up link if we're on the sign-up page
   const showSignUpLink = pathname !== '/sign-up';
 
-  // Initialize form state using Zustand-based form system
+  // Initialize form state using Zustand-based form system with blur validation
   const formState = useSimpleZustandForm<LoginFormData>({
     initialData: {
       email: '',
@@ -33,6 +34,16 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       rememberMe: false,
     },
     validationSchema: loginSchema,
+    validationTiming: 'blur', // Use blur validation timing
+    validationDebounce: 300, // Add debouncing for responsive validation
+    errorTransformer: (error) => {
+      // Transform errors using the error transformation utility
+      const transformed = transformError(error);
+      return {
+        field: transformed.field,
+        message: transformed.message,
+      };
+    },
     onSubmit: async (data) => {
       const result = await signIn.email({
         email: data.email,
@@ -41,19 +52,8 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
 
       if (result.error) {
         console.error("Login error details:", result.error);
-        // Provide more specific error messages
-        let errorMessage = result.error.message || "Authentication failed";
-        
-        // Handle common Better Auth error cases
-        if (errorMessage.toLowerCase().includes("invalid email") || errorMessage.toLowerCase().includes("invalid password")) {
-          errorMessage = "Invalid email or password. Please check your credentials and try again.";
-        } else if (errorMessage.toLowerCase().includes("user not found")) {
-          errorMessage = "No account found with this email address. Please check your email or sign up for a new account.";
-        } else if (errorMessage.toLowerCase().includes("password")) {
-          errorMessage = "Incorrect password. Please try again.";
-        }
-        
-        throw new Error(errorMessage);
+        // Throw error to be handled by error transformer
+        throw result.error;
       } else {
         // Call onSuccess callback if provided
         if (onSuccess) {
@@ -64,9 +64,8 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
     },
     onSuccess: () => {},
     onError: (error) => {
+      // Error is already transformed and set as server error by the hook
       console.error("Login error:", error);
-      // Set a general error that can be displayed in the form
-      formState.setFieldError('email' as any, error.message);
     },
     showLoadingBar: true,
   });
@@ -80,8 +79,16 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       });
       onClose(); // Close modal on successful social login
     } catch (error: unknown) {
-      // Set form error for social login failures
-      formState.setFieldError('email', (error as Error).message || "Social login failed");
+      // Transform error using the error transformation utility
+      const transformed = transformError(error);
+      
+      // Set as server error for proper display
+      if (transformed.isFieldSpecific && transformed.field) {
+        formState.setServerError(transformed.field as keyof LoginFormData, transformed.message);
+      } else {
+        // Set general error on email field for form-level errors
+        formState.setServerError('email', transformed.message);
+      }
     } finally {
       setSocialLoginLoading(null);
     }
@@ -101,7 +108,8 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       >
         <FormStatus 
           success={undefined}
-          error={formState.errors.email || formState.errors.password || (formState.errors as any).general}
+          error={formState.displayErrors.email || formState.displayErrors.password || (formState.displayErrors as any).general}
+          errorType={formState.serverErrors.email || formState.serverErrors.password ? 'server' : 'client'}
         />
 
         <FormInput
@@ -109,7 +117,9 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
           type="email"
           value={formState.data.email}
           onChange={(e) => formState.setField('email', e.target.value)}
-          error={formState.errors.email}
+          onBlur={() => formState.handleBlur('email')}
+          error={formState.displayErrors.email}
+          errorType={formState.serverErrors.email ? 'server' : 'client'}
           required
           placeholder="Enter your email"
           icon={Mail}
@@ -120,7 +130,9 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
           type="password"
           value={formState.data.password}
           onChange={(e) => formState.setField('password', e.target.value)}
-          error={formState.errors.password}
+          onBlur={() => formState.handleBlur('password')}
+          error={formState.displayErrors.password}
+          errorType={formState.serverErrors.password ? 'server' : 'client'}
           required
           placeholder="Enter your password"
           icon={Lock}

@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { transformError } from '@/lib/utils/error-transformer'
 
 interface UserPreferencesProps {
   className?: string
@@ -50,7 +51,7 @@ export function UserPreferencesWithStore({ className }: UserPreferencesProps) {
     }
   )
 
-  // Enhanced form state using Zustand-based form system
+  // Enhanced form state using Zustand-based form system with blur validation
   const formState = useZustandForm<UserPreferencesFormData>({
     formId,
     formType: 'user-preferences',
@@ -63,8 +64,26 @@ export function UserPreferencesWithStore({ className }: UserPreferencesProps) {
       optInMarketing: false,
     },
     validationSchema: userPreferencesSchema,
+    validationTiming: 'blur',
+    validationDebounce: 300,
+    errorTransformer: (error: any) => {
+      const transformed = transformError(error)
+      return {
+        field: transformed.field,
+        message: transformed.message
+      }
+    },
     onSubmit: async (data) => {
-      await updatePreferences.mutateAsync(data)
+      try {
+        await updatePreferences.mutateAsync(data)
+      } catch (error) {
+        // Error transformation is handled by errorTransformer
+        const transformed = transformError(error)
+        if (transformed.isFieldSpecific && transformed.field) {
+          formState.setServerError(transformed.field as keyof UserPreferencesFormData, transformed.message)
+        }
+        throw error
+      }
     },
     onSuccess: () => {},
     onError: () => {},
@@ -143,13 +162,16 @@ export function UserPreferencesWithStore({ className }: UserPreferencesProps) {
             
             <EnhancedFormField
               label="Name Display Preference"
-              error={formState.errors.nameDisplayPreference}
+              error={formState.displayErrors.nameDisplayPreference}
             >
               <Select
                 value={formState.data.nameDisplayPreference}
-                onValueChange={(value) => formState.setField('nameDisplayPreference', value)}
+                onValueChange={(value) => {
+                  formState.setField('nameDisplayPreference', value)
+                  formState.handleBlur('nameDisplayPreference')
+                }}
               >
-                <SelectTrigger className={formState.errors.nameDisplayPreference ? 'border-destructive' : ''}>
+                <SelectTrigger className={formState.displayErrors.nameDisplayPreference ? 'border-destructive' : ''}>
                   <SelectValue placeholder="Select how your name should be displayed" />
                 </SelectTrigger>
                 <SelectContent>
@@ -163,13 +185,16 @@ export function UserPreferencesWithStore({ className }: UserPreferencesProps) {
 
             <EnhancedFormField
               label="Profile Visibility"
-              error={formState.errors.profileVisibility}
+              error={formState.displayErrors.profileVisibility}
             >
               <Select
                 value={formState.data.profileVisibility}
-                onValueChange={(value) => formState.setField('profileVisibility', value)}
+                onValueChange={(value) => {
+                  formState.setField('profileVisibility', value)
+                  formState.handleBlur('profileVisibility')
+                }}
               >
-                <SelectTrigger className={formState.errors.profileVisibility ? 'border-destructive' : ''}>
+                <SelectTrigger className={formState.displayErrors.profileVisibility ? 'border-destructive' : ''}>
                   <SelectValue placeholder="Select profile visibility" />
                 </SelectTrigger>
                 <SelectContent>

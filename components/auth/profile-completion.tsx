@@ -8,6 +8,7 @@ import { trpc } from '@/lib/trpc/client'
 import { useSimpleZustandForm } from '@/hooks/use-form-zustand'
 import { profileCompletionSchema } from '@/lib/validation/schemas'
 import { FormInput, FormSelect, FormActions, FormStatus, StandaloneForm } from '@/components/ui/form-components'
+import { transformError } from '@/lib/utils/error-transformer'
 
 interface ProfileCompletionProps {
   className?: string
@@ -34,7 +35,7 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
     }
   )
 
-  // Form state using Zustand-based form system
+  // Form state using Zustand-based form system with blur validation
   const formState = useSimpleZustandForm({
     initialData: {
       firstName: (user as any)?.firstName || '',
@@ -43,8 +44,26 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
       favoriteGame: (user as any)?.favoriteGame || '',
     },
     validationSchema: profileCompletionSchema,
+    validationTiming: 'blur',
+    validationDebounce: 300,
+    errorTransformer: (error: any) => {
+      const transformed = transformError(error)
+      return {
+        field: transformed.field,
+        message: transformed.message
+      }
+    },
     onSubmit: async (data) => {
-      await updateProfile.mutateAsync(data)
+      try {
+        await updateProfile.mutateAsync(data)
+      } catch (error) {
+        // Error transformation is handled by errorTransformer
+        const transformed = transformError(error)
+        if (transformed.isFieldSpecific && transformed.field) {
+          formState.setServerError(transformed.field as keyof typeof data, transformed.message)
+        }
+        throw error
+      }
     },
     onSuccess: () => {},
     onError: () => {},
@@ -76,27 +95,30 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
             <FormInput
               label="First Name"
               required
-              error={formState.errors.firstName}
+              error={formState.displayErrors.firstName}
               value={formState.data.firstName}
               onChange={(e) => formState.setField('firstName', e.target.value)}
+              onBlur={() => formState.handleBlur('firstName')}
               placeholder="Enter your first name"
             />
 
             <FormInput
               label="Last Name"
               required
-              error={formState.errors.lastName}
+              error={formState.displayErrors.lastName}
               value={formState.data.lastName}
               onChange={(e) => formState.setField('lastName', e.target.value)}
+              onBlur={() => formState.handleBlur('lastName')}
               placeholder="Enter your last name"
             />
           </div>
 
           <FormInput
             label="Location"
-            error={formState.errors.location}
+            error={formState.displayErrors.location}
             value={formState.data.location}
             onChange={(e) => formState.setField('location', e.target.value)}
+            onBlur={() => formState.handleBlur('location')}
             placeholder="City, State/Country"
             description="Help other players find tournaments in your area"
           />
@@ -104,9 +126,10 @@ export function ProfileCompletion({ className }: ProfileCompletionProps) {
           <FormSelect
             label="Favorite Game"
             required
-            error={formState.errors.favoriteGame}
+            error={formState.displayErrors.favoriteGame}
             value={formState.data.favoriteGame}
             onValueChange={(value) => formState.setField('favoriteGame', value)}
+            onBlur={() => formState.handleBlur('favoriteGame')}
             placeholder="Select your favorite game"
             options={games?.map(game => ({ value: game.id, label: game.name })) || []}
             description="This helps us recommend relevant tournaments and content"
