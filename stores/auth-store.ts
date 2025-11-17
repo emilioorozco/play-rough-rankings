@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { useSession } from '@/components/auth/session-provider'
+import { checkTournamentManagementPermission } from '@/lib/tournament/authorization-constants'
 
 // Types for role hierarchy
 type UserRole = 'player' | 'organizer' | 'admin'
@@ -89,7 +90,38 @@ export function useRoleAccess() {
   }
 }
 
-// Hook for permission-based rendering
+/**
+ * Hook for permission-based rendering (CLIENT-SIDE)
+ * 
+ * This hook provides permission checks for React components.
+ * It uses the shared authorization logic from `authorization-constants.ts`
+ * to ensure consistency with server-side authorization.
+ * 
+ * **When to use this:**
+ * - In React components for conditional rendering
+ * - In client-side navigation guards
+ * - In UI state management
+ * 
+ * **When NOT to use this:**
+ * - In tRPC procedures (use `canManageTournament()` from `lib/tournament/authorization.ts`)
+ * - In server-side API routes
+ * - For actual authorization enforcement (always validate on server)
+ * 
+ * @example
+ * ```typescript
+ * function TournamentPage({ tournament }) {
+ *   const { canManageTournament } = usePermissions()
+ *   
+ *   const canManage = canManageTournament(tournament.organizer?.id)
+ *   
+ *   return (
+ *     <div>
+ *       {canManage && <ManagementPanel />}
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
 export function usePermissions() {
   const { user } = useSession()
   const { hasRole, hasAnyRole } = useAuthStore()
@@ -97,8 +129,17 @@ export function usePermissions() {
   return {
     // Tournament permissions
     canCreateTournament: hasRole(user?.role, 'organizer'),
+    /**
+     * Check if current user can manage a tournament (CLIENT-SIDE)
+     * 
+     * Uses shared authorization logic to match server-side behavior.
+     * This is for UI rendering only - server always validates permissions.
+     * 
+     * @param organizerId - ID of the tournament organizer
+     * @returns true if user can manage the tournament
+     */
     canManageTournament: (organizerId?: string) => 
-      hasRole(user?.role, 'admin') || (user?.id === organizerId),
+      checkTournamentManagementPermission(user?.id, user?.role, organizerId),
     canViewTournament: true, // Everyone can view tournaments
     
     // User management permissions
