@@ -16,6 +16,10 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
   onStatusChange?: (newStatus: string) => void
 }) {
   const queryClient = useQueryClient()
+  // Store queryClient in ref to avoid dependency array issues
+  const queryClientRef = useRef(queryClient)
+  queryClientRef.current = queryClient
+  
   const {
     enabled = true,
     pollingInterval = 10000, // 10 seconds default
@@ -23,6 +27,10 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
     onRoundAdvance,
     onStatusChange,
   } = options || {}
+
+  // Store callbacks in refs to avoid dependency array type inference issues
+  const callbacksRef = useRef({ onMatchUpdate, onRoundAdvance, onStatusChange })
+  callbacksRef.current = { onMatchUpdate, onRoundAdvance, onStatusChange }
 
   // Track previous state for change detection
   const previousStateRef = useRef<{
@@ -70,26 +78,26 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
 
     // Detect status change
     if (previousState.status && previousState.status !== currentState.status) {
-      onStatusChange?.(currentState.status)
+      callbacksRef.current.onStatusChange?.(currentState.status)
       
       // Invalidate related queries
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['tournaments', 'getById']],
       })
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['tournamentLifecycle', 'getProjectedRatings']],
       })
     }
 
     // Detect round advance
     if (previousState.currentRound !== undefined && previousState.currentRound !== currentState.currentRound) {
-      onRoundAdvance?.()
+      callbacksRef.current.onRoundAdvance?.()
       
       // Invalidate tournament and match queries
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['tournaments', 'getById']],
       })
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['matches', 'getByTournament']],
       })
     }
@@ -97,17 +105,17 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
     // Detect match completion
     if (previousState.completedMatches !== undefined && 
         previousState.completedMatches < currentState.completedMatches) {
-      onMatchUpdate?.()
+      callbacksRef.current.onMatchUpdate?.()
       
       // Invalidate projected ratings
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['tournamentLifecycle', 'getProjectedRatings']],
       })
     }
 
     // Update previous state
     previousStateRef.current = currentState
-  }, [tournament, onMatchUpdate, onRoundAdvance, onStatusChange, queryClient])
+  }, [tournament])
 
   // Manual refresh function
   const refresh = useCallback(async () => {
@@ -115,17 +123,17 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
     
     // Also invalidate related queries
     if (tournamentId) {
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['tournaments', 'getById'], { input: { id: tournamentId } }],
       })
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['matches', 'getByTournament'], { input: { tournamentId } }],
       })
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['tournamentLifecycle', 'getProjectedRatings'], { input: { tournamentId } }],
       })
     }
-  }, [refetch, tournamentId, queryClient])
+  }, [refetch, tournamentId])
 
   return {
     tournament,
@@ -145,12 +153,20 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
   onMatchComplete?: (matchId: string) => void
 }) {
   const queryClient = useQueryClient()
+  // Store queryClient in ref to avoid dependency array issues
+  const queryClientRef = useRef(queryClient)
+  queryClientRef.current = queryClient
+  
   const {
     enabled = true,
     pollingInterval = 10000,
     round,
     onMatchComplete,
   } = options || {}
+
+  // Store callback in ref to avoid dependency array type inference issues
+  const onMatchCompleteRef = useRef(onMatchComplete)
+  onMatchCompleteRef.current = onMatchComplete
 
   // Track previous completed matches
   const previousCompletedRef = useRef<Set<string>>(new Set())
@@ -173,9 +189,14 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
   useEffect(() => {
     if (!matches) return
 
-    const currentCompleted = new Set(
-      matches.filter(m => m.status === 'COMPLETED').map(m => m.id)
-    )
+    // Extract match IDs with explicit typing to avoid deep type inference
+    // Use type assertion to help TypeScript with complex tRPC types
+    const matchesArray = matches as Array<{ id: string; status: string }>
+    const completedMatchIds = matchesArray
+      .filter(m => m.status === 'COMPLETED')
+      .map(m => m.id)
+    
+    const currentCompleted = new Set<string>(completedMatchIds)
 
     // Find newly completed matches
     const newlyCompleted = Array.from(currentCompleted).filter(
@@ -184,12 +205,12 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
 
     // Trigger callbacks for newly completed matches
     newlyCompleted.forEach(matchId => {
-      onMatchComplete?.(matchId)
+      onMatchCompleteRef.current?.(matchId)
     })
 
     // Update previous state
     previousCompletedRef.current = currentCompleted
-  }, [matches, onMatchComplete])
+  }, [matches])
 
   // Manual refresh function
   const refresh = useCallback(async () => {
@@ -197,14 +218,14 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
     
     // Invalidate related queries
     if (tournamentId) {
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['matches', 'getByTournament'], { input: { tournamentId } }],
       })
-      queryClient.invalidateQueries({
+      queryClientRef.current.invalidateQueries({
         queryKey: [['tournamentLifecycle', 'getProjectedRatings'], { input: { tournamentId } }],
       })
     }
-  }, [refetch, tournamentId, queryClient])
+  }, [refetch, tournamentId])
 
   return {
     matches,
