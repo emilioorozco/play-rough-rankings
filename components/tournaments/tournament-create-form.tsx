@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc/client";
 import { useLoading, useError } from "@/stores/loading-store";
 import { useSession } from "@/components/auth/session-provider";
 import { useTournamentOperations } from "@/stores/tournament-store";
+import { transformError } from "@/lib/utils/error-transformer";
 
 interface TournamentCreateFormProps {
   isOpen: boolean;
@@ -111,21 +112,39 @@ export function TournamentCreateForm({
         tournamentLevel: true,
       }),
     },
+    validationTiming: 'blur',
+    validationDebounce: 300,
+    errorTransformer: (error: any) => {
+      const transformed = transformError(error)
+      return {
+        field: transformed.field,
+        message: transformed.message
+      }
+    },
     onSubmit: async (data) => {
-      const transformed = {
-        name: data.name,
-        description: data.description,
-        gameId: data.gameId,
-        storeId: data.storeId,
-        organizerId: user?.id || '',
-        date: new Date(data.date).toISOString(),
-        format: data.format,
-        maxPlayers: parseInt(data.maxPlayers),
-        entryFee: parseFloat(data.entryFee),
-        prizePool: data.prizePool,
-        tournamentLevel: data.tournamentLevel,
-      };
-      await createTournament.mutateAsync(transformed as any);
+      try {
+        const transformed = {
+          name: data.name,
+          description: data.description,
+          gameId: data.gameId,
+          storeId: data.storeId,
+          organizerId: user?.id || '',
+          date: new Date(data.date).toISOString(),
+          format: data.format,
+          maxPlayers: parseInt(data.maxPlayers),
+          entryFee: parseFloat(data.entryFee),
+          prizePool: data.prizePool,
+          tournamentLevel: data.tournamentLevel,
+        };
+        await createTournament.mutateAsync(transformed as any);
+      } catch (error) {
+        // Error transformation is handled by errorTransformer
+        const transformed = transformError(error)
+        if (transformed.isFieldSpecific && transformed.field) {
+          formState.setServerError(transformed.field as keyof TournamentCreateFormData, transformed.message)
+        }
+        throw error
+      }
     },
     onSuccess: () => {},
     onError: () => {},
@@ -148,7 +167,8 @@ export function TournamentCreateForm({
         label="Tournament Name"
         value={formState.data.name}
         onChange={(e) => formState.setField('name', e.target.value)}
-        error={formState.errors.name}
+        onBlur={() => formState.handleBlur('name')}
+        error={formState.displayErrors.name}
         required
         placeholder="Enter tournament name"
         description="Choose a clear, descriptive name for your tournament"
@@ -158,7 +178,8 @@ export function TournamentCreateForm({
         label="Description"
         value={formState.data.description}
         onChange={(e) => formState.setField('description', e.target.value)}
-        error={formState.errors.description}
+        onBlur={() => formState.handleBlur('description')}
+        error={formState.displayErrors.description}
         required
         placeholder="Describe your tournament..."
         rows={4}
@@ -170,7 +191,8 @@ export function TournamentCreateForm({
           label="Game"
           value={formState.data.gameId}
           onValueChange={(value) => formState.setField('gameId', value)}
-          error={formState.errors.gameId}
+          onBlur={() => formState.handleBlur('gameId')}
+          error={formState.displayErrors.gameId}
           required
           placeholder="Select a game"
           options={games?.map((game) => ({
@@ -183,7 +205,8 @@ export function TournamentCreateForm({
           label="Store"
           value={formState.data.storeId}
           onValueChange={(value) => formState.setField('storeId', value)}
-          error={formState.errors.storeId}
+          onBlur={() => formState.handleBlur('storeId')}
+          error={formState.displayErrors.storeId}
           required
           placeholder="Select a store"
           options={stores?.stores?.map((store) => ({
@@ -209,7 +232,8 @@ export function TournamentCreateForm({
         type="datetime-local"
         value={formState.data.date}
         onChange={(e) => formState.setField('date', e.target.value)}
-        error={formState.errors.date}
+        onBlur={() => formState.handleBlur('date')}
+        error={formState.displayErrors.date}
         required
       />
 
@@ -219,7 +243,8 @@ export function TournamentCreateForm({
           type="text"
           value={formState.data.maxPlayers}
           onChange={(e) => formState.setField('maxPlayers', e.target.value)}
-          error={formState.errors.maxPlayers}
+          onBlur={() => formState.handleBlur('maxPlayers')}
+          error={formState.displayErrors.maxPlayers}
           required
           placeholder="32"
         />
@@ -229,7 +254,8 @@ export function TournamentCreateForm({
           type="text"
           value={formState.data.entryFee}
           onChange={(e) => formState.setField('entryFee', e.target.value)}
-          error={formState.errors.entryFee}
+          onBlur={() => formState.handleBlur('entryFee')}
+          error={formState.displayErrors.entryFee}
           placeholder="0"
         />
 
@@ -238,7 +264,8 @@ export function TournamentCreateForm({
           type="text"
           value={formState.data.prizePool}
           onChange={(e) => formState.setField('prizePool', e.target.value)}
-          error={formState.errors.prizePool}
+          onBlur={() => formState.handleBlur('prizePool')}
+          error={formState.displayErrors.prizePool}
           placeholder="0"
         />
       </div>
@@ -248,7 +275,8 @@ export function TournamentCreateForm({
           label="Tournament Format"
           value={formState.data.format}
           onValueChange={(value) => formState.setField('format', value)}
-          error={formState.errors.format}
+          onBlur={() => formState.handleBlur('format')}
+          error={formState.displayErrors.format}
           required
           options={[
             { value: 'swiss', label: 'Swiss' },
@@ -262,7 +290,8 @@ export function TournamentCreateForm({
           label="Tournament Level"
           value={formState.data.tournamentLevel}
           onValueChange={(value) => formState.setField('tournamentLevel', value)}
-          error={formState.errors.tournamentLevel}
+          onBlur={() => formState.handleBlur('tournamentLevel')}
+          error={formState.displayErrors.tournamentLevel}
           required
           options={[
             { value: 'LOCAL', label: 'Local' },

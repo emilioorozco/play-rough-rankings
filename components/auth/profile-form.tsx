@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { trpc } from '@/lib/trpc/client'
 import { useLoading, useError } from '@/stores/loading-store'
+import { transformError } from '@/lib/utils/error-transformer'
 
 interface ProfileFormProps {
   isOpen: boolean
@@ -50,7 +51,7 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
     },
   })
 
-  // Enhanced form state using Zustand-based form system
+  // Enhanced form state using Zustand-based form system with blur validation
   const formState = useZustandForm<ProfileUpdateFormData>({
     formId,
     formType: 'profile-update',
@@ -64,8 +65,26 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
       bio: (user as any)?.bio || '',
     },
     validationSchema: profileUpdateSchema,
+    validationTiming: 'blur',
+    validationDebounce: 300,
+    errorTransformer: (error: any) => {
+      const transformed = transformError(error)
+      return {
+        field: transformed.field,
+        message: transformed.message
+      }
+    },
     onSubmit: async (data) => {
-      await updateProfile.mutateAsync(data as any)
+      try {
+        await updateProfile.mutateAsync(data as any)
+      } catch (error) {
+        // Error transformation is handled by errorTransformer
+        const transformed = transformError(error)
+        if (transformed.isFieldSpecific && transformed.field) {
+          formState.setServerError(transformed.field as keyof ProfileUpdateFormData, transformed.message)
+        }
+        throw error
+      }
     },
     onSuccess: () => {},
     onError: () => {},
@@ -113,27 +132,29 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
             <EnhancedFormField
               label="Full Name"
               required
-              error={formState.errors.name}
+              error={formState.displayErrors.name}
             >
               <Input
                 value={formState.data.name}
                 onChange={(e) => formState.setField('name', e.target.value)}
+                onBlur={() => formState.handleBlur('name')}
                 placeholder="Enter your full name"
-                className={formState.errors.name ? 'border-destructive' : ''}
+                className={formState.displayErrors.name ? 'border-destructive' : ''}
               />
             </EnhancedFormField>
 
             <EnhancedFormField
               label="Email"
               required
-              error={formState.errors.email}
+              error={formState.displayErrors.email}
             >
               <Input
                 type="email"
                 value={formState.data.email}
                 onChange={(e) => formState.setField('email', e.target.value)}
+                onBlur={() => formState.handleBlur('email')}
                 placeholder="Enter your email"
-                className={formState.errors.email ? 'border-destructive' : ''}
+                className={formState.displayErrors.email ? 'border-destructive' : ''}
               />
             </EnhancedFormField>
 
@@ -141,26 +162,28 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
               <EnhancedFormField
                 label="First Name"
                 required
-                error={formState.errors.firstName}
+                error={formState.displayErrors.firstName}
               >
                 <Input
                   value={formState.data.firstName}
                   onChange={(e) => formState.setField('firstName', e.target.value)}
+                  onBlur={() => formState.handleBlur('firstName')}
                   placeholder="First name"
-                  className={formState.errors.firstName ? 'border-destructive' : ''}
+                  className={formState.displayErrors.firstName ? 'border-destructive' : ''}
                 />
               </EnhancedFormField>
 
               <EnhancedFormField
                 label="Last Name"
                 required
-                error={formState.errors.lastName}
+                error={formState.displayErrors.lastName}
               >
                 <Input
                   value={formState.data.lastName}
                   onChange={(e) => formState.setField('lastName', e.target.value)}
+                  onBlur={() => formState.handleBlur('lastName')}
                   placeholder="Last name"
-                  className={formState.errors.lastName ? 'border-destructive' : ''}
+                  className={formState.displayErrors.lastName ? 'border-destructive' : ''}
                 />
               </EnhancedFormField>
             </div>
@@ -172,26 +195,28 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
             
             <EnhancedFormField
               label="Location"
-              error={formState.errors.location}
+              error={formState.displayErrors.location}
             >
               <Input
                 value={formState.data.location}
                 onChange={(e) => formState.setField('location', e.target.value)}
+                onBlur={() => formState.handleBlur('location')}
                 placeholder="City, State/Country"
-                className={formState.errors.location ? 'border-destructive' : ''}
+                className={formState.displayErrors.location ? 'border-destructive' : ''}
               />
             </EnhancedFormField>
 
             <EnhancedFormField
               label="Phone"
-              error={formState.errors.phone}
+              error={formState.displayErrors.phone}
             >
               <Input
                 type="tel"
                 value={formState.data.phone}
                 onChange={(e) => formState.setField('phone', e.target.value)}
+                onBlur={() => formState.handleBlur('phone')}
                 placeholder="Phone number"
-                className={formState.errors.phone ? 'border-destructive' : ''}
+                className={formState.displayErrors.phone ? 'border-destructive' : ''}
               />
             </EnhancedFormField>
           </div>
@@ -202,14 +227,15 @@ export function ProfileForm({ isOpen, onClose, onSave }: ProfileFormProps) {
             
             <EnhancedFormField
               label="Bio"
-              error={formState.errors.bio}
+              error={formState.displayErrors.bio}
             >
               <Textarea
                 value={formState.data.bio}
                 onChange={(e) => formState.setField('bio', e.target.value)}
+                onBlur={() => formState.handleBlur('bio')}
                 placeholder="Tell us about yourself..."
                 rows={4}
-                className={formState.errors.bio ? 'border-destructive' : ''}
+                className={formState.displayErrors.bio ? 'border-destructive' : ''}
               />
             </EnhancedFormField>
           </div>

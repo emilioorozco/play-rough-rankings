@@ -42,6 +42,19 @@ interface ExtendedFormDraft extends BaseFormDraft {
   touchedFields?: Record<string, boolean>
   submitAttempted?: boolean
   
+  // Blur tracking for validation timing
+  blurredFields?: Record<string, boolean>
+  
+  // Validation timing configuration
+  validationTiming?: 'blur' | 'submit' | 'change'
+  
+  // Server error tracking (separate from validation errors)
+  serverErrors?: Record<string, string>
+  clientErrors?: Record<string, string>
+  
+  // Debounce tracking (runtime only, not persisted)
+  validationDebounceTimers?: Record<string, NodeJS.Timeout>
+  
   // Form lifecycle
   createdAt?: Date
   expiresAt?: Date
@@ -137,6 +150,28 @@ interface FormDraftState {
   markFieldTouched: (draftId: string, field: string) => void
   markSubmitAttempted: (draftId: string) => void
   resetTouchedState: (draftId: string) => void
+  
+  // Actions for blur tracking
+  markFieldBlurred: (draftId: string, field: string) => void
+  isFieldBlurred: (draftId: string, field: string) => boolean
+  resetBlurredState: (draftId: string) => void
+  
+  // Actions for validation timing
+  setValidationTiming: (draftId: string, timing: 'blur' | 'submit' | 'change') => void
+  getValidationTiming: (draftId: string) => 'blur' | 'submit' | 'change'
+  
+  // Actions for server error management
+  setServerError: (draftId: string, field: string, error: string) => void
+  setServerErrors: (draftId: string, errors: Record<string, string>) => void
+  clearServerError: (draftId: string, field: string) => void
+  clearAllServerErrors: (draftId: string) => void
+  setClientError: (draftId: string, field: string, error: string) => void
+  clearClientError: (draftId: string, field: string) => void
+  
+  // Actions for debounce timer management
+  setDebounceTimer: (draftId: string, field: string, timer: NodeJS.Timeout) => void
+  clearDebounceTimer: (draftId: string, field: string) => void
+  clearAllDebounceTimers: (draftId: string) => void
   
   // Actions for enhanced form management
   saveDraft: (formId: string, data: any) => void
@@ -343,6 +378,11 @@ export const useFormDraftStore = create<FormDraftState>()(
           isExpired: false,
           touchedFields: {},
           submitAttempted: false,
+          // Initialize validation timing fields with defaults
+          blurredFields: {},
+          validationTiming: 'change', // Default to 'change' for backward compatibility
+          serverErrors: {},
+          clientErrors: {},
         }
         
         set((state: FormDraftState) => ({
@@ -424,6 +464,15 @@ export const useFormDraftStore = create<FormDraftState>()(
       },
       
       deleteDraft: (draftId: string) => {
+        // Clear all debounce timers before deleting
+        const draft = get().drafts[draftId]
+        if (draft?.validationDebounceTimers) {
+          const timers = Object.values(draft.validationDebounceTimers) as NodeJS.Timeout[]
+          timers.forEach(timer => {
+            clearTimeout(timer)
+          })
+        }
+        
         set((state: FormDraftState) => {
           const newDrafts = { ...state.drafts }
           delete newDrafts[draftId]
@@ -594,6 +643,305 @@ export const useFormDraftStore = create<FormDraftState>()(
                 ...draft,
                 touchedFields: {},
                 submitAttempted: false,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      // Blur tracking actions
+      markFieldBlurred: (draftId: string, field: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                blurredFields: {
+                  ...(draft.blurredFields || {}),
+                  [field]: true,
+                },
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      isFieldBlurred: (draftId: string, field: string): boolean => {
+        const state = get()
+        const draft = state.drafts[draftId]
+        if (!draft || !draft.blurredFields) return false
+        return draft.blurredFields[field] || false
+      },
+      
+      resetBlurredState: (draftId: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                blurredFields: {},
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      // Validation timing actions
+      setValidationTiming: (draftId: string, timing: 'blur' | 'submit' | 'change') => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                validationTiming: timing,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      getValidationTiming: (draftId: string): 'blur' | 'submit' | 'change' => {
+        const state = get()
+        const draft = state.drafts[draftId]
+        // Default to 'change' for backward compatibility
+        return draft?.validationTiming || 'change'
+      },
+      
+      // Server error management actions
+      setServerError: (draftId: string, field: string, error: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          const serverErrors = { ...(draft.serverErrors || {}), [field]: error }
+          const clientErrors = draft.clientErrors || {}
+          
+          // Merge server and client errors with server priority
+          const mergedErrors = { ...clientErrors, ...serverErrors }
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                serverErrors,
+                errors: mergedErrors,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      setServerErrors: (draftId: string, errors: Record<string, string>) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          const clientErrors = draft.clientErrors || {}
+          
+          // Merge server and client errors with server priority
+          const mergedErrors = { ...clientErrors, ...errors }
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                serverErrors: errors,
+                errors: mergedErrors,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      clearServerError: (draftId: string, field: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          const serverErrors = { ...(draft.serverErrors || {}) }
+          delete serverErrors[field]
+          
+          const clientErrors = draft.clientErrors || {}
+          
+          // Merge server and client errors with server priority
+          const mergedErrors = { ...clientErrors, ...serverErrors }
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                serverErrors,
+                errors: mergedErrors,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      clearAllServerErrors: (draftId: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          const clientErrors = draft.clientErrors || {}
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                serverErrors: {},
+                errors: clientErrors, // Only client errors remain
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      setClientError: (draftId: string, field: string, error: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          const clientErrors = { ...(draft.clientErrors || {}), [field]: error }
+          const serverErrors = draft.serverErrors || {}
+          
+          // Merge server and client errors with server priority
+          const mergedErrors = { ...clientErrors, ...serverErrors }
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                clientErrors,
+                errors: mergedErrors,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      clearClientError: (draftId: string, field: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          const clientErrors = { ...(draft.clientErrors || {}) }
+          delete clientErrors[field]
+          
+          const serverErrors = draft.serverErrors || {}
+          
+          // Merge server and client errors with server priority
+          const mergedErrors = { ...clientErrors, ...serverErrors }
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                clientErrors,
+                errors: mergedErrors,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      // Debounce timer management actions
+      setDebounceTimer: (draftId: string, field: string, timer: NodeJS.Timeout) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft) return state
+          
+          // Clear existing timer for this field if it exists
+          const existingTimers = draft.validationDebounceTimers || {}
+          if (existingTimers[field]) {
+            clearTimeout(existingTimers[field])
+          }
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                validationDebounceTimers: {
+                  ...existingTimers,
+                  [field]: timer,
+                },
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      clearDebounceTimer: (draftId: string, field: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft || !draft.validationDebounceTimers) return state
+          
+          const timers = { ...draft.validationDebounceTimers }
+          if (timers[field]) {
+            clearTimeout(timers[field])
+            delete timers[field]
+          }
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                validationDebounceTimers: timers,
+                lastUpdated: new Date(),
+              },
+            },
+          }
+        })
+      },
+      
+      clearAllDebounceTimers: (draftId: string) => {
+        set((state: FormDraftState) => {
+          const draft = state.drafts[draftId]
+          if (!draft || !draft.validationDebounceTimers) return state
+          
+          // Clear all timers
+          const timers = Object.values(draft.validationDebounceTimers) as NodeJS.Timeout[]
+          timers.forEach(timer => {
+            clearTimeout(timer)
+          })
+          
+          return {
+            drafts: {
+              ...state.drafts,
+              [draftId]: {
+                ...draft,
+                validationDebounceTimers: {},
                 lastUpdated: new Date(),
               },
             },
