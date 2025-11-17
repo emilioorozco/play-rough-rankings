@@ -1,6 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { act } from '@testing-library/react'
-import { useLoadingStore } from '@/stores/loading-store'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { 
+  useLoadingStore, 
+  useLoading, 
+  useError, 
+  useProgress,
+  useGlobalLoading,
+  useGlobalError,
+  useLoadingBar,
+  useAsyncOperation
+} from '@/stores/loading-store'
 
 describe('Loading Store', () => {
   beforeEach(() => {
@@ -507,6 +516,494 @@ describe('Loading Store', () => {
 
       expect(store.getError(key)).toBeNull()
       expect(store.hasError(key)).toBe(false)
+    })
+
+    it('should handle loading bar progress clamping', () => {
+      const store = useLoadingStore.getState()
+
+      act(() => {
+        store.showLoadingBar(50)
+      })
+
+      // Test negative progress
+      act(() => {
+        store.setLoadingBarProgress(-10)
+      })
+
+      let updatedStore = useLoadingStore.getState()
+      expect(updatedStore.loadingBar.progress).toBe(0)
+
+      // Test progress over 100
+      act(() => {
+        store.setLoadingBarProgress(150)
+      })
+
+      updatedStore = useLoadingStore.getState()
+      expect(updatedStore.loadingBar.progress).toBe(100)
+    })
+
+    it('should detect global loading in isAnyLoading', () => {
+      const store = useLoadingStore.getState()
+
+      act(() => {
+        store.setGlobalLoading(true)
+      })
+
+      expect(store.isAnyLoading()).toBe(true)
+
+      act(() => {
+        store.setGlobalLoading(false)
+      })
+
+      expect(store.isAnyLoading()).toBe(false)
+    })
+
+    it('should detect global error in hasAnyError', () => {
+      const store = useLoadingStore.getState()
+
+      act(() => {
+        store.setGlobalError('Global error')
+      })
+
+      expect(store.hasAnyError()).toBe(true)
+
+      act(() => {
+        store.clearGlobalError()
+      })
+
+      expect(store.hasAnyError()).toBe(false)
+    })
+  })
+
+  describe('Selector Hooks', () => {
+    describe('useLoading hook', () => {
+      it('should provide loading state and actions', () => {
+        const key = 'test-loading'
+        const { result } = renderHook(() => useLoading(key))
+
+        expect(result.current.isLoading).toBe(false)
+
+        act(() => {
+          result.current.setLoading(true)
+        })
+
+        expect(result.current.isLoading).toBe(true)
+
+        act(() => {
+          result.current.clearLoading()
+        })
+
+        expect(result.current.isLoading).toBe(false)
+      })
+
+      it('should memoize return value', () => {
+        const key = 'test-loading'
+        const { result, rerender } = renderHook(() => useLoading(key))
+
+        const firstResult = result.current
+
+        rerender()
+
+        // Should return same reference when state hasn't changed
+        expect(result.current).toBe(firstResult)
+      })
+    })
+
+    describe('useError hook', () => {
+      it('should provide error state and actions', () => {
+        const key = 'test-error'
+        const { result } = renderHook(() => useError(key))
+
+        expect(result.current.error).toBeNull()
+        expect(result.current.hasError).toBe(false)
+
+        const testError = new Error('Test error')
+
+        act(() => {
+          result.current.setError(testError)
+        })
+
+        expect(result.current.error).toBe(testError)
+        expect(result.current.hasError).toBe(true)
+
+        act(() => {
+          result.current.clearError()
+        })
+
+        expect(result.current.error).toBeNull()
+        expect(result.current.hasError).toBe(false)
+      })
+
+      it('should handle string errors', () => {
+        const key = 'test-error'
+        const { result } = renderHook(() => useError(key))
+
+        act(() => {
+          result.current.setError('String error')
+        })
+
+        expect(result.current.error).toBe('String error')
+        expect(result.current.hasError).toBe(true)
+      })
+    })
+
+    describe('useProgress hook', () => {
+      it('should provide progress state and actions', () => {
+        const key = 'test-progress'
+        const { result } = renderHook(() => useProgress(key))
+
+        expect(result.current.progress).toBe(0)
+
+        act(() => {
+          result.current.setProgress(50)
+        })
+
+        expect(result.current.progress).toBe(50)
+
+        act(() => {
+          result.current.clearProgress()
+        })
+
+        expect(result.current.progress).toBe(0)
+      })
+    })
+
+    describe('useGlobalLoading hook', () => {
+      it('should provide global loading state and actions', () => {
+        const { result } = renderHook(() => useGlobalLoading())
+
+        expect(result.current.isGlobalLoading).toBe(false)
+
+        act(() => {
+          result.current.setGlobalLoading(true)
+        })
+
+        expect(result.current.isGlobalLoading).toBe(true)
+
+        act(() => {
+          result.current.setGlobalLoading(false)
+        })
+
+        expect(result.current.isGlobalLoading).toBe(false)
+      })
+    })
+
+    describe('useGlobalError hook', () => {
+      it('should provide global error state and actions', () => {
+        const { result } = renderHook(() => useGlobalError())
+
+        expect(result.current.globalError).toBeNull()
+        expect(result.current.hasGlobalError).toBe(false)
+
+        const testError = new Error('Global error')
+
+        act(() => {
+          result.current.setGlobalError(testError)
+        })
+
+        expect(result.current.globalError).toBe(testError)
+        expect(result.current.hasGlobalError).toBe(true)
+
+        act(() => {
+          result.current.clearGlobalError()
+        })
+
+        expect(result.current.globalError).toBeNull()
+        expect(result.current.hasGlobalError).toBe(false)
+      })
+
+      it('should handle string global errors', () => {
+        const { result } = renderHook(() => useGlobalError())
+
+        act(() => {
+          result.current.setGlobalError('String global error')
+        })
+
+        expect(result.current.globalError).toBe('String global error')
+        expect(result.current.hasGlobalError).toBe(true)
+      })
+    })
+
+    describe('useLoadingBar hook', () => {
+      it('should provide loading bar state and actions', () => {
+        const { result } = renderHook(() => useLoadingBar())
+
+        expect(result.current.isVisible).toBe(false)
+        expect(result.current.progress).toBe(0)
+        expect(result.current.message).toBeUndefined()
+
+        act(() => {
+          result.current.showLoadingBar(25, 'Loading...')
+        })
+
+        expect(result.current.isVisible).toBe(true)
+        expect(result.current.progress).toBe(25)
+        expect(result.current.message).toBe('Loading...')
+
+        act(() => {
+          result.current.setLoadingBarProgress(75, 'Almost done...')
+        })
+
+        expect(result.current.progress).toBe(75)
+        expect(result.current.message).toBe('Almost done...')
+
+        act(() => {
+          result.current.hideLoadingBar()
+        })
+
+        expect(result.current.isVisible).toBe(false)
+        expect(result.current.progress).toBe(0)
+        expect(result.current.message).toBeUndefined()
+      })
+    })
+  })
+
+  describe('useAsyncOperation hook', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+      vi.useRealTimers()
+    })
+
+    it('should handle successful async operations', async () => {
+      const key = 'test-async'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      
+      const { result } = renderHook(() => useAsyncOperation(mockOperation, key))
+
+      expect(result.current.isLoading).toBe(false)
+      expect(result.current.error).toBeNull()
+
+      let executeResult: string | null = null
+      await act(async () => {
+        executeResult = await result.current.execute()
+      })
+
+      expect(executeResult).toBe('success')
+      expect(mockOperation).toHaveBeenCalled()
+      expect(result.current.isLoading).toBe(false)
+      expect(result.current.error).toBeNull()
+    })
+
+    it('should handle failed async operations', async () => {
+      const key = 'test-async-error'
+      const testError = new Error('Operation failed')
+      const mockOperation = vi.fn().mockRejectedValue(testError)
+      
+      const { result } = renderHook(() => useAsyncOperation(mockOperation, key))
+
+      await act(async () => {
+        const executeResult = await result.current.execute()
+        expect(executeResult).toBeNull()
+      })
+
+      expect(result.current.error).toBe(testError)
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    it('should handle non-Error exceptions', async () => {
+      const key = 'test-async-string-error'
+      const mockOperation = vi.fn().mockRejectedValue('String error')
+      
+      const { result } = renderHook(() => useAsyncOperation(mockOperation, key))
+
+      await act(async () => {
+        await result.current.execute()
+      })
+
+      expect(result.current.error).toBeInstanceOf(Error)
+      expect((result.current.error as Error).message).toBe('String error')
+    })
+
+    it('should track progress when enabled', async () => {
+      const key = 'test-async-progress'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key, { trackProgress: true })
+      )
+
+      expect(result.current.progress).toBe(0)
+
+      await act(async () => {
+        await result.current.execute()
+      })
+
+      expect(result.current.progress).toBe(100)
+
+      // Fast-forward timers to clear progress
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+
+      expect(result.current.progress).toBe(0)
+    })
+
+    it('should call onSuccess callback', async () => {
+      const key = 'test-async-success'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      const onSuccess = vi.fn()
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key, { onSuccess })
+      )
+
+      await act(async () => {
+        await result.current.execute()
+      })
+
+      expect(onSuccess).toHaveBeenCalledWith('success')
+    })
+
+    it('should call onError callback', async () => {
+      const key = 'test-async-error-callback'
+      const testError = new Error('Operation failed')
+      const mockOperation = vi.fn().mockRejectedValue(testError)
+      const onError = vi.fn()
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key, { onError })
+      )
+
+      await act(async () => {
+        await result.current.execute()
+      })
+
+      expect(onError).toHaveBeenCalledWith(testError)
+    })
+
+    it('should call onFinally callback', async () => {
+      const key = 'test-async-finally'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      const onFinally = vi.fn()
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key, { onFinally })
+      )
+
+      await act(async () => {
+        await result.current.execute()
+      })
+
+      expect(onFinally).toHaveBeenCalled()
+    })
+
+    it('should call onFinally even on error', async () => {
+      const key = 'test-async-finally-error'
+      const mockOperation = vi.fn().mockRejectedValue(new Error('Failed'))
+      const onFinally = vi.fn()
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key, { onFinally })
+      )
+
+      await act(async () => {
+        await result.current.execute()
+      })
+
+      expect(onFinally).toHaveBeenCalled()
+    })
+
+    it('should update progress manually', async () => {
+      const key = 'test-async-manual-progress'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      const onProgress = vi.fn()
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key, { trackProgress: true, onProgress })
+      )
+
+      act(() => {
+        result.current.updateProgress(50)
+      })
+
+      expect(result.current.progress).toBe(50)
+      expect(onProgress).toHaveBeenCalledWith(50)
+    })
+
+    it('should not update progress when trackProgress is false', () => {
+      const key = 'test-async-no-progress'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      const onProgress = vi.fn()
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key, { trackProgress: false, onProgress })
+      )
+
+      act(() => {
+        result.current.updateProgress(50)
+      })
+
+      expect(result.current.progress).toBe(0)
+      expect(onProgress).not.toHaveBeenCalled()
+    })
+
+    it('should clear all states', () => {
+      const key = 'test-async-clear'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key, { trackProgress: true })
+      )
+
+      // Set some states
+      act(() => {
+        useLoadingStore.getState().setLoading(key, true)
+        useLoadingStore.getState().setError(key, 'Error')
+        useLoadingStore.getState().setProgress(key, 50)
+      })
+
+      expect(result.current.isLoading).toBe(true)
+      expect(result.current.error).toBe('Error')
+      expect(result.current.progress).toBe(50)
+
+      act(() => {
+        result.current.clear()
+      })
+
+      expect(result.current.isLoading).toBe(false)
+      expect(result.current.error).toBeNull()
+      expect(result.current.progress).toBe(0)
+    })
+
+    it('should clear error independently', () => {
+      const key = 'test-async-clear-error'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key)
+      )
+
+      // Set error
+      act(() => {
+        useLoadingStore.getState().setError(key, 'Error')
+      })
+
+      expect(result.current.error).toBe('Error')
+
+      act(() => {
+        result.current.clearError()
+      })
+
+      expect(result.current.error).toBeNull()
+    })
+
+    it('should pass arguments to operation', async () => {
+      const key = 'test-async-args'
+      const mockOperation = vi.fn().mockResolvedValue('success')
+      
+      const { result } = renderHook(() => 
+        useAsyncOperation(mockOperation, key)
+      )
+
+      await act(async () => {
+        await result.current.execute('arg1', 'arg2', 123)
+      })
+
+      expect(mockOperation).toHaveBeenCalledWith('arg1', 'arg2', 123)
     })
   })
 })
