@@ -1,606 +1,726 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { act } from '@testing-library/react'
-import { create } from 'zustand'
-import type { ModalConfig, ConfirmationConfig } from '@/lib/types'
+import { renderHook, act } from '@testing-library/react'
+import { useUIStore, useModal, useConfirmationModal, useTab, useFilters, useInteractions, useDropdown, useModals } from '@/stores/ui-store'
+import type { ConfirmationConfig } from '@/stores/ui-store'
 
-// Create a test store without persistence
-const createTestUIStore = () => {
-  // Types for modal configurations
-  interface ModalConfig {
-    isOpen: boolean
-    data?: Record<string, any>
-  }
-
-  interface ConfirmationConfig {
-    title: string
-    message: string
-    confirmLabel?: string
-    cancelLabel?: string
-    variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
-    onConfirm?: () => void | Promise<void>
-    onCancel?: () => void
-    isLoading?: boolean
-  }
-
-  interface TabState {
-    activeTab: string
-    availableTabs: string[]
-  }
-
-  interface FilterState {
-    gameId: string
-    storeId: string
-    status: string
-    startDate: string
-    endDate: string
-    search: string
-  }
-
-  interface InteractionState {
-    isWithdrawing: boolean
-    withdrawSuccess: boolean
-  }
-
-  interface UIState {
-    // Modal states
-    modals: {
-      tournamentRegistration: ModalConfig
-      tournamentManagement: ModalConfig
-      tournamentCreate: ModalConfig
-      userPreferences: ModalConfig
-      login: ModalConfig
-      confirmation: ModalConfig & { config?: ConfirmationConfig }
-    }
-    
-    // Tab states
-    tabs: {
-      tournamentDetails: TabState
-      tournamentManage: TabState
-    }
-    
-    // Filter states
-    filters: {
-      tournaments: FilterState
-    }
-    
-    // Interaction states
-    interactions: InteractionState
-    
-    // Modal actions
-    openModal: (modalName: keyof UIState['modals'], data?: Record<string, any>) => void
-    closeModal: (modalName: keyof UIState['modals']) => void
-    closeAllModals: () => void
-    toggleModal: (modalName: keyof UIState['modals'], data?: Record<string, any>) => void
-    openConfirmation: (config: ConfirmationConfig) => void
-    closeConfirmation: () => void
-    
-    // Tab actions
-    setActiveTab: (tabGroup: keyof UIState['tabs'], tab: string) => void
-    setAvailableTabs: (tabGroup: keyof UIState['tabs'], tabs: string[]) => void
-    
-    // Filter actions
-    setFilters: (filterGroup: keyof UIState['filters'], filters: Partial<FilterState>) => void
-    resetFilters: (filterGroup: keyof UIState['filters']) => void
-    
-    // Interaction actions
-    setInteraction: (interactionName: keyof InteractionState, isActive: boolean) => void
-    resetInteractions: () => void
-    
-    // Reset action
-    resetUI: () => void
-  }
-
-  const initialModalState: ModalConfig = {
-    isOpen: false,
-    data: undefined
-  }
-
-  const initialTabState: TabState = {
-    activeTab: '',
-    availableTabs: []
-  }
-
-  const initialFilterState: FilterState = {
-    gameId: '',
-    storeId: '',
-    status: '',
-    startDate: '',
-    endDate: '',
-    search: ''
-  }
-
-  const initialInteractionState: InteractionState = {
-    isWithdrawing: false,
-    withdrawSuccess: false
-  }
-
-  return create<UIState>()((set, get) => ({
-    // Initial state
-    modals: {
-      tournamentRegistration: { ...initialModalState },
-      tournamentManagement: { ...initialModalState },
-      tournamentCreate: { ...initialModalState },
-      userPreferences: { ...initialModalState },
-      login: { ...initialModalState },
-      confirmation: { ...initialModalState, config: undefined },
-    },
-    
-    tabs: {
-      tournamentDetails: { ...initialTabState },
-      tournamentManage: { ...initialTabState },
-    },
-    
-    filters: {
-      tournaments: { ...initialFilterState },
-    },
-    
-    interactions: { ...initialInteractionState },
-    
-    // Modal actions
-    openModal: (modalName, data) => set((state) => ({
-      modals: {
-        ...state.modals,
-        [modalName]: {
-          isOpen: true,
-          data: data || undefined
-        }
-      }
-    })),
-    
-    closeModal: (modalName) => set((state) => ({
-      modals: {
-        ...state.modals,
-        [modalName]: {
-          ...state.modals[modalName],
-          isOpen: false,
-          data: undefined
-        }
-      }
-    })),
-    
-    closeAllModals: () => set((state) => ({
-      modals: Object.keys(state.modals).reduce((acc, key) => {
-        acc[key as keyof UIState['modals']] = {
-          ...state.modals[key as keyof UIState['modals']],
-          isOpen: false,
-          data: undefined
-        }
-        return acc
-      }, {} as UIState['modals'])
-    })),
-    
-    toggleModal: (modalName, data) => set((state) => ({
-      modals: {
-        ...state.modals,
-        [modalName]: {
-          isOpen: !state.modals[modalName].isOpen,
-          data: state.modals[modalName].isOpen ? undefined : (data || undefined)
-        }
-      }
-    })),
-    
-    openConfirmation: (config) => set((state) => ({
-      modals: {
-        ...state.modals,
-        confirmation: {
-          isOpen: true,
-          config
-        }
-      }
-    })),
-    
-    closeConfirmation: () => set((state) => ({
-      modals: {
-        ...state.modals,
-        confirmation: {
-          ...state.modals.confirmation,
-          isOpen: false,
-          config: undefined
-        }
-      }
-    })),
-    
-    // Tab actions
-    setActiveTab: (tabGroup, tab) => set((state) => ({
-      tabs: {
-        ...state.tabs,
-        [tabGroup]: {
-          ...state.tabs[tabGroup],
-          activeTab: tab
-        }
-      }
-    })),
-    
-    setAvailableTabs: (tabGroup, tabs) => set((state) => ({
-      tabs: {
-        ...state.tabs,
-        [tabGroup]: {
-          ...state.tabs[tabGroup],
-          availableTabs: tabs
-        }
-      }
-    })),
-    
-    // Filter actions
-    setFilters: (filterGroup, filters) => set((state) => ({
-      filters: {
-        ...state.filters,
-        [filterGroup]: {
-          ...state.filters[filterGroup],
-          ...filters
-        }
-      }
-    })),
-    
-    resetFilters: (filterGroup) => set((state) => ({
-      filters: {
-        ...state.filters,
-        [filterGroup]: { ...initialFilterState }
-      }
-    })),
-    
-    // Interaction actions
-    setInteraction: (interactionName, isActive) => set((state) => ({
-      interactions: {
-        ...state.interactions,
-        [interactionName]: isActive
-      }
-    })),
-    
-    resetInteractions: () => set(() => ({
-      interactions: { ...initialInteractionState }
-    })),
-    
-    // Reset action
-    resetUI: () => set(() => ({
-      modals: {
-        tournamentRegistration: { ...initialModalState },
-        tournamentManagement: { ...initialModalState },
-        tournamentCreate: { ...initialModalState },
-        userPreferences: { ...initialModalState },
-        login: { ...initialModalState },
-        confirmation: { ...initialModalState, config: undefined },
-      },
-      tabs: {
-        tournamentDetails: { ...initialTabState },
-        tournamentManage: { ...initialTabState },
-      },
-      filters: {
-        tournaments: { ...initialFilterState },
-      },
-      interactions: { ...initialInteractionState },
-    }))
-  }))
+// Mock sessionStorage for testing
+const mockStorage = new Map<string, string>()
+const sessionStorageMock = {
+  getItem: (key: string) => mockStorage.get(key) || null,
+  setItem: (key: string, value: string) => mockStorage.set(key, value),
+  removeItem: (key: string) => mockStorage.delete(key),
+  clear: () => mockStorage.clear(),
 }
 
-// Create test store instance
-const useTestUIStore = createTestUIStore()
+Object.defineProperty(window, 'sessionStorage', {
+  value: sessionStorageMock,
+  writable: true,
+})
 
 describe('UI Store', () => {
   beforeEach(() => {
-    // Reset store state before each test
-    useTestUIStore.getState().resetUI()
+    // Reset store state and storage before each test
+    mockStorage.clear()
+    act(() => {
+      useUIStore.getState().resetUI()
+    })
   })
 
   describe('Modal Management', () => {
-    it('should open a modal with configuration', () => {
-      const store = useTestUIStore.getState()
-      const modalName = 'tournamentRegistration'
-      const data = { tournamentId: 'test-tournament' }
-
+    it('should open a modal without data', () => {
       act(() => {
-        store.openModal(modalName, data)
+        useUIStore.getState().openModal('tournamentRegistration')
       })
 
-      const updatedStore = useTestUIStore.getState()
-      const modalState = updatedStore.modals[modalName]
-      expect(modalState.isOpen).toBe(true)
-      expect(modalState.data).toEqual(data)
+      const state = useUIStore.getState()
+      expect(state.modals.tournamentRegistration.isOpen).toBe(true)
+      expect(state.modals.tournamentRegistration.data).toBeUndefined()
     })
 
-    it('should close a modal', () => {
-      const store = useTestUIStore.getState()
-      const modalName = 'tournamentRegistration'
+    it('should open a modal with data', () => {
+      const data = { tournamentId: 'test-123', playerId: 'player-456' }
 
-      // First open the modal
       act(() => {
-        store.openModal(modalName, { tournamentId: 'test' })
+        useUIStore.getState().openModal('tournamentRegistration', data)
       })
 
-      let updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals[modalName].isOpen).toBe(true)
-
-      // Then close it
-      act(() => {
-        store.closeModal(modalName)
-      })
-
-      updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals[modalName].isOpen).toBe(false)
+      const state = useUIStore.getState()
+      expect(state.modals.tournamentRegistration.isOpen).toBe(true)
+      expect(state.modals.tournamentRegistration.data).toEqual(data)
     })
 
-    it('should close all modals', () => {
-      const store = useTestUIStore.getState()
+    it('should open all modal types', () => {
+      const modalTypes = [
+        'tournamentRegistration',
+        'tournamentManagement',
+        'tournamentCreate',
+        'userPreferences',
+        'login',
+        'storeCreate',
+      ] as const
 
-      // Open multiple modals
+      modalTypes.forEach((modalType) => {
+        act(() => {
+          useUIStore.getState().openModal(modalType, { test: modalType })
+        })
+
+        const state = useUIStore.getState()
+        expect(state.modals[modalType].isOpen).toBe(true)
+        expect(state.modals[modalType].data).toEqual({ test: modalType })
+      })
+    })
+
+    it('should close a modal and clear its data', () => {
       act(() => {
-        store.openModal('tournamentRegistration', {})
-        store.openModal('tournamentManagement', {})
-        store.openModal('userPreferences', {})
+        useUIStore.getState().openModal('tournamentManagement', { id: '123' })
       })
 
-      let updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals['tournamentRegistration'].isOpen).toBe(true)
-      expect(updatedStore.modals['tournamentManagement'].isOpen).toBe(true)
-      expect(updatedStore.modals['userPreferences'].isOpen).toBe(true)
+      let state = useUIStore.getState()
+      expect(state.modals.tournamentManagement.isOpen).toBe(true)
+      expect(state.modals.tournamentManagement.data).toEqual({ id: '123' })
 
-      // Close all modals
       act(() => {
-        store.closeAllModals()
+        useUIStore.getState().closeModal('tournamentManagement')
       })
 
-      updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals['tournamentRegistration'].isOpen).toBe(false)
-      expect(updatedStore.modals['tournamentManagement'].isOpen).toBe(false)
-      expect(updatedStore.modals['userPreferences'].isOpen).toBe(false)
+      state = useUIStore.getState()
+      expect(state.modals.tournamentManagement.isOpen).toBe(false)
+      expect(state.modals.tournamentManagement.data).toBeUndefined()
+    })
+
+    it('should toggle modal open and closed', () => {
+      act(() => {
+        useUIStore.getState().toggleModal('tournamentCreate')
+      })
+
+      let state = useUIStore.getState()
+      expect(state.modals.tournamentCreate.isOpen).toBe(true)
+
+      act(() => {
+        useUIStore.getState().toggleModal('tournamentCreate')
+      })
+
+      state = useUIStore.getState()
+      expect(state.modals.tournamentCreate.isOpen).toBe(false)
+    })
+
+    it('should close all modals at once', () => {
+      act(() => {
+        useUIStore.getState().openModal('tournamentRegistration', { id: '1' })
+        useUIStore.getState().openModal('tournamentManagement', { id: '2' })
+        useUIStore.getState().openModal('userPreferences', { id: '3' })
+      })
+
+      let state = useUIStore.getState()
+      expect(state.modals.tournamentRegistration.isOpen).toBe(true)
+      expect(state.modals.tournamentManagement.isOpen).toBe(true)
+      expect(state.modals.userPreferences.isOpen).toBe(true)
+
+      act(() => {
+        useUIStore.getState().closeAllModals()
+      })
+
+      state = useUIStore.getState()
+      expect(state.modals.tournamentRegistration.isOpen).toBe(false)
+      expect(state.modals.tournamentManagement.isOpen).toBe(false)
+      expect(state.modals.userPreferences.isOpen).toBe(false)
+      expect(state.modals.tournamentRegistration.data).toBeUndefined()
+      expect(state.modals.tournamentManagement.data).toBeUndefined()
+      expect(state.modals.userPreferences.data).toBeUndefined()
     })
   })
 
   describe('Confirmation Modal', () => {
-    it('should open confirmation modal with configuration', () => {
-      const store = useTestUIStore.getState()
+    it('should open confirmation modal with basic config', () => {
       const config: ConfirmationConfig = {
         title: 'Confirm Action',
-        message: 'Are you sure?',
-        onConfirm: vi.fn(),
-        onCancel: vi.fn()
+        message: 'Are you sure you want to proceed?',
       }
 
       act(() => {
-        store.openConfirmation(config)
+        useUIStore.getState().openConfirmation(config)
       })
 
-      const updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals.confirmation.isOpen).toBe(true)
-      expect(updatedStore.modals.confirmation.config).toEqual(config)
+      const state = useUIStore.getState()
+      expect(state.modals.confirmation.isOpen).toBe(true)
+      expect(state.modals.confirmation.config).toEqual(config)
     })
 
-    it('should close confirmation modal', () => {
-      const store = useTestUIStore.getState()
+    it('should open confirmation modal with full config', () => {
+      const onConfirm = vi.fn()
+      const onCancel = vi.fn()
       const config: ConfirmationConfig = {
-        title: 'Confirm Action',
-        message: 'Are you sure?',
-        onConfirm: vi.fn()
+        title: 'Delete Tournament',
+        message: 'This action cannot be undone',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Cancel',
+        variant: 'destructive',
+        onConfirm,
+        onCancel,
+        isLoading: false,
+        error: undefined,
+        success: undefined,
       }
 
-      // First open the confirmation modal
       act(() => {
-        store.openConfirmation(config)
+        useUIStore.getState().openConfirmation(config)
       })
 
-      let updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals.confirmation.isOpen).toBe(true)
+      const state = useUIStore.getState()
+      expect(state.modals.confirmation.isOpen).toBe(true)
+      expect(state.modals.confirmation.config).toEqual(config)
+    })
 
-      // Then close it
+    it('should close confirmation modal and clear config', () => {
+      const config: ConfirmationConfig = {
+        title: 'Test',
+        message: 'Test message',
+        onConfirm: vi.fn(),
+      }
+
       act(() => {
-        store.closeConfirmation()
+        useUIStore.getState().openConfirmation(config)
       })
 
-      updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals.confirmation.isOpen).toBe(false)
+      let state = useUIStore.getState()
+      expect(state.modals.confirmation.isOpen).toBe(true)
+
+      act(() => {
+        useUIStore.getState().closeConfirmation()
+      })
+
+      state = useUIStore.getState()
+      expect(state.modals.confirmation.isOpen).toBe(false)
+      expect(state.modals.confirmation.config).toBeUndefined()
+    })
+
+    it('should reset withdraw success when closing confirmation', () => {
+      act(() => {
+        useUIStore.getState().setInteraction('withdrawSuccess', true)
+        useUIStore.getState().openConfirmation({
+          title: 'Test',
+          message: 'Test',
+        })
+      })
+
+      let state = useUIStore.getState()
+      expect(state.interactions.withdrawSuccess).toBe(true)
+
+      act(() => {
+        useUIStore.getState().closeConfirmation()
+      })
+
+      state = useUIStore.getState()
+      expect(state.interactions.withdrawSuccess).toBe(false)
+    })
+
+    it('should open withdraw confirmation and reset withdraw success', () => {
+      act(() => {
+        useUIStore.getState().setInteraction('withdrawSuccess', true)
+      })
+
+      let state = useUIStore.getState()
+      expect(state.interactions.withdrawSuccess).toBe(true)
+
+      act(() => {
+        useUIStore.getState().openWithdrawConfirmation({
+          title: 'Withdraw from Tournament',
+          message: 'Are you sure?',
+        })
+      })
+
+      state = useUIStore.getState()
+      expect(state.modals.confirmation.isOpen).toBe(true)
+      expect(state.interactions.withdrawSuccess).toBe(false)
     })
   })
 
   describe('Tab Management', () => {
-    it('should set active tab for a tab group', () => {
-      const store = useTestUIStore.getState()
-      const tabGroup = 'tournamentDetails'
-      const tab = 'details'
-
+    it('should set active tab for tournament details', () => {
       act(() => {
-        store.setActiveTab(tabGroup, tab)
+        useUIStore.getState().setActiveTab('tournamentDetails', 'overview')
       })
 
-      const updatedStore = useTestUIStore.getState()
-      expect(updatedStore.tabs[tabGroup].activeTab).toBe(tab)
+      const state = useUIStore.getState()
+      expect(state.tabs.tournamentDetails.activeTab).toBe('overview')
     })
 
-    it('should update active tab for existing tab group', () => {
-      const store = useTestUIStore.getState()
-      const tabGroup = 'tournamentDetails'
-
-      // Set initial tab
+    it('should initialize available tabs for tournamentDetails', () => {
       act(() => {
-        store.setActiveTab(tabGroup, 'details')
+        useUIStore.getState().setActiveTab('tournamentDetails', 'brackets')
       })
 
-      let updatedStore = useTestUIStore.getState()
-      expect(updatedStore.tabs[tabGroup].activeTab).toBe('details')
+      const state = useUIStore.getState()
+      expect(state.tabs.tournamentDetails.activeTab).toBe('brackets')
+      expect(state.tabs.tournamentDetails.availableTabs).toEqual([
+        'overview',
+        'brackets',
+        'participants',
+        'results',
+        'discussion',
+      ])
+    })
 
-      // Update to different tab
+    it('should not reinitialize available tabs if already set', () => {
       act(() => {
-        store.setActiveTab(tabGroup, 'players')
+        useUIStore.getState().setAvailableTabs('tournamentDetails', ['custom1', 'custom2'])
+        useUIStore.getState().setActiveTab('tournamentDetails', 'custom1')
       })
 
-      updatedStore = useTestUIStore.getState()
-      expect(updatedStore.tabs[tabGroup].activeTab).toBe('players')
+      const state = useUIStore.getState()
+      expect(state.tabs.tournamentDetails.availableTabs).toEqual(['custom1', 'custom2'])
+    })
+
+    it('should set active tab for all tab groups', () => {
+      const tabGroups = [
+        { group: 'tournamentDetails' as const, tab: 'overview' },
+        { group: 'tournamentManage' as const, tab: 'settings' },
+        { group: 'leaderboard-view' as const, tab: 'rankings' },
+      ]
+
+      tabGroups.forEach(({ group, tab }) => {
+        act(() => {
+          useUIStore.getState().setActiveTab(group, tab)
+        })
+
+        const state = useUIStore.getState()
+        expect(state.tabs[group].activeTab).toBe(tab)
+      })
+    })
+
+    it('should set available tabs for a tab group', () => {
+      const tabs = ['tab1', 'tab2', 'tab3']
+
+      act(() => {
+        useUIStore.getState().setAvailableTabs('tournamentManage', tabs)
+      })
+
+      const state = useUIStore.getState()
+      expect(state.tabs.tournamentManage.availableTabs).toEqual(tabs)
+    })
+
+    it('should update active tab multiple times', () => {
+      act(() => {
+        useUIStore.getState().setActiveTab('tournamentDetails', 'overview')
+      })
+
+      let state = useUIStore.getState()
+      expect(state.tabs.tournamentDetails.activeTab).toBe('overview')
+
+      act(() => {
+        useUIStore.getState().setActiveTab('tournamentDetails', 'brackets')
+      })
+
+      state = useUIStore.getState()
+      expect(state.tabs.tournamentDetails.activeTab).toBe('brackets')
+
+      act(() => {
+        useUIStore.getState().setActiveTab('tournamentDetails', 'results')
+      })
+
+      state = useUIStore.getState()
+      expect(state.tabs.tournamentDetails.activeTab).toBe('results')
     })
   })
 
   describe('Filter Management', () => {
-    it('should set filters for a filter group', () => {
-      const store = useTestUIStore.getState()
-      const filterGroup = 'tournaments'
-      const filters = {
-        gameId: 'pokemon-tcg',
-        storeId: 'store-1',
-        status: 'active',
-        startDate: '2024-01-01',
-        endDate: '2024-12-31',
-        search: 'test'
-      }
-
+    it('should set partial filters', () => {
       act(() => {
-        store.setFilters(filterGroup, filters)
+        useUIStore.getState().setFilters('tournaments', { gameId: 'pokemon-tcg' })
       })
 
-      const updatedStore = useTestUIStore.getState()
-      expect(updatedStore.filters[filterGroup]).toEqual(filters)
+      const state = useUIStore.getState()
+      expect(state.filters.tournaments.gameId).toBe('pokemon-tcg')
+      expect(state.filters.tournaments.status).toBe('')
     })
 
-    it('should clear filters for a filter group', () => {
-      const store = useTestUIStore.getState()
-      const filterGroup = 'tournaments'
-      const filters = {
-        gameId: 'pokemon-tcg',
-        storeId: 'store-1',
-        status: 'active',
-        startDate: '',
-        endDate: '',
-        search: ''
-      }
-
-      // First set filters
+    it('should set multiple filters at once', () => {
       act(() => {
-        store.setFilters(filterGroup, filters)
+        useUIStore.getState().setFilters('tournaments', {
+          gameId: 'pokemon-tcg',
+          storeId: 'store-123',
+          status: 'ACTIVE',
+          search: 'championship',
+        })
       })
 
-      const updatedStore = useTestUIStore.getState()
-      expect(updatedStore.filters[filterGroup]).toEqual(filters)
+      const state = useUIStore.getState()
+      expect(state.filters.tournaments.gameId).toBe('pokemon-tcg')
+      expect(state.filters.tournaments.storeId).toBe('store-123')
+      expect(state.filters.tournaments.status).toBe('ACTIVE')
+      expect(state.filters.tournaments.search).toBe('championship')
+    })
 
-      // Then clear them
+    it('should set filters for all filter groups', () => {
       act(() => {
-        store.resetFilters(filterGroup)
+        useUIStore.getState().setFilters('tournaments', { gameId: 'game1' })
+        useUIStore.getState().setFilters('tournament-list', { status: 'UPCOMING' })
+        useUIStore.getState().setFilters('tournament-participants', { status: 'active' })
       })
 
-      // Should reset to default filter state
-      expect(store.filters[filterGroup].gameId).toBe('')
-      expect(store.filters[filterGroup].status).toBe('')
-      expect(store.filters[filterGroup].search).toBe('')
+      const state = useUIStore.getState()
+      expect(state.filters.tournaments.gameId).toBe('game1')
+      expect(state.filters['tournament-list'].status).toBe('UPCOMING')
+      expect(state.filters['tournament-participants'].status).toBe('active')
+    })
+
+    it('should reset filters to initial state', () => {
+      act(() => {
+        useUIStore.getState().setFilters('tournaments', {
+          gameId: 'pokemon-tcg',
+          storeId: 'store-123',
+          status: 'ACTIVE',
+          search: 'test',
+        })
+      })
+
+      let state = useUIStore.getState()
+      expect(state.filters.tournaments.gameId).toBe('pokemon-tcg')
+
+      act(() => {
+        useUIStore.getState().resetFilters('tournaments')
+      })
+
+      state = useUIStore.getState()
+      expect(state.filters.tournaments.gameId).toBe('')
+      expect(state.filters.tournaments.storeId).toBe('')
+      expect(state.filters.tournaments.status).toBe('')
+      expect(state.filters.tournaments.search).toBe('')
+    })
+
+    it('should update filters incrementally', () => {
+      act(() => {
+        useUIStore.getState().setFilters('tournaments', { gameId: 'game1' })
+      })
+
+      let state = useUIStore.getState()
+      expect(state.filters.tournaments.gameId).toBe('game1')
+
+      act(() => {
+        useUIStore.getState().setFilters('tournaments', { status: 'ACTIVE' })
+      })
+
+      state = useUIStore.getState()
+      expect(state.filters.tournaments.gameId).toBe('game1')
+      expect(state.filters.tournaments.status).toBe('ACTIVE')
     })
   })
 
   describe('Interaction Management', () => {
     it('should set interaction state', () => {
-      const store = useTestUIStore.getState()
-      const interactionName = 'isWithdrawing'
-      const isActive = true
-
       act(() => {
-        store.setInteraction(interactionName, isActive)
+        useUIStore.getState().setInteraction('isWithdrawing', true)
       })
 
-      const updatedStore = useTestUIStore.getState()
-      expect(updatedStore.interactions[interactionName]).toBe(isActive)
+      const state = useUIStore.getState()
+      expect(state.interactions.isWithdrawing).toBe(true)
+    })
+
+    it('should set all interaction types', () => {
+      act(() => {
+        useUIStore.getState().setInteraction('isWithdrawing', true)
+        useUIStore.getState().setInteraction('withdrawSuccess', true)
+        useUIStore.getState().setInteraction('userMenu', true)
+      })
+
+      const state = useUIStore.getState()
+      expect(state.interactions.isWithdrawing).toBe(true)
+      expect(state.interactions.withdrawSuccess).toBe(true)
+      expect(state.interactions.userMenu).toBe(true)
     })
 
     it('should toggle interaction state', () => {
-      const store = useTestUIStore.getState()
-      const interactionName = 'isWithdrawing'
-
-      // Set to true
       act(() => {
-        store.setInteraction(interactionName, true)
+        useUIStore.getState().setInteraction('isWithdrawing', true)
       })
 
-      let updatedStore = useTestUIStore.getState()
-      expect(updatedStore.interactions[interactionName]).toBe(true)
+      let state = useUIStore.getState()
+      expect(state.interactions.isWithdrawing).toBe(true)
 
-      // Set to false
       act(() => {
-        store.setInteraction(interactionName, false)
+        useUIStore.getState().setInteraction('isWithdrawing', false)
       })
 
-      updatedStore = useTestUIStore.getState()
-      expect(updatedStore.interactions[interactionName]).toBe(false)
+      state = useUIStore.getState()
+      expect(state.interactions.isWithdrawing).toBe(false)
+    })
+
+    it('should reset all interactions', () => {
+      act(() => {
+        useUIStore.getState().setInteraction('isWithdrawing', true)
+        useUIStore.getState().setInteraction('withdrawSuccess', true)
+        useUIStore.getState().setInteraction('userMenu', true)
+      })
+
+      let state = useUIStore.getState()
+      expect(state.interactions.isWithdrawing).toBe(true)
+      expect(state.interactions.withdrawSuccess).toBe(true)
+      expect(state.interactions.userMenu).toBe(true)
+
+      act(() => {
+        useUIStore.getState().resetInteractions()
+      })
+
+      state = useUIStore.getState()
+      expect(state.interactions.isWithdrawing).toBe(false)
+      expect(state.interactions.withdrawSuccess).toBe(false)
+      expect(state.interactions.userMenu).toBe(false)
+    })
+  })
+
+  describe('Dropdown Management', () => {
+    it('should open a dropdown', () => {
+      act(() => {
+        useUIStore.getState().setDropdownOpen('user-menu', true)
+      })
+
+      const state = useUIStore.getState()
+      expect(state.dropdowns['user-menu']?.isOpen).toBe(true)
+    })
+
+    it('should close a dropdown', () => {
+      act(() => {
+        useUIStore.getState().setDropdownOpen('user-menu', true)
+      })
+
+      let state = useUIStore.getState()
+      expect(state.dropdowns['user-menu']?.isOpen).toBe(true)
+
+      act(() => {
+        useUIStore.getState().setDropdownOpen('user-menu', false)
+      })
+
+      state = useUIStore.getState()
+      expect(state.dropdowns['user-menu']?.isOpen).toBe(false)
+    })
+
+    it('should close all other dropdowns when opening one', () => {
+      act(() => {
+        useUIStore.getState().setDropdownOpen('dropdown1', true)
+        useUIStore.getState().setDropdownOpen('dropdown2', true)
+      })
+
+      const state = useUIStore.getState()
+      expect(state.dropdowns['dropdown1']?.isOpen).toBe(false)
+      expect(state.dropdowns['dropdown2']?.isOpen).toBe(true)
+    })
+
+    it('should toggle dropdown state', () => {
+      act(() => {
+        useUIStore.getState().toggleDropdown('settings-menu')
+      })
+
+      let state = useUIStore.getState()
+      expect(state.dropdowns['settings-menu']?.isOpen).toBe(true)
+
+      act(() => {
+        useUIStore.getState().toggleDropdown('settings-menu')
+      })
+
+      state = useUIStore.getState()
+      expect(state.dropdowns['settings-menu']?.isOpen).toBe(false)
+    })
+
+    it('should close all other dropdowns when toggling one open', () => {
+      act(() => {
+        useUIStore.getState().setDropdownOpen('dropdown1', true)
+        useUIStore.getState().toggleDropdown('dropdown2')
+      })
+
+      const state = useUIStore.getState()
+      expect(state.dropdowns['dropdown1']?.isOpen).toBe(false)
+      expect(state.dropdowns['dropdown2']?.isOpen).toBe(true)
+    })
+
+    it('should close all dropdowns', () => {
+      act(() => {
+        useUIStore.getState().setDropdownOpen('dropdown1', true)
+        useUIStore.getState().setDropdownOpen('dropdown2', true)
+        useUIStore.getState().setDropdownOpen('dropdown3', true)
+      })
+
+      act(() => {
+        useUIStore.getState().closeAllDropdowns()
+      })
+
+      const state = useUIStore.getState()
+      expect(state.dropdowns['dropdown1']?.isOpen).toBe(false)
+      expect(state.dropdowns['dropdown2']?.isOpen).toBe(false)
+      expect(state.dropdowns['dropdown3']?.isOpen).toBe(false)
     })
   })
 
   describe('Store Reset', () => {
     it('should reset all UI state to initial values', () => {
-      const store = useTestUIStore.getState()
-
-      // Set some state
       act(() => {
-        store.openModal('tournamentRegistration', {})
-        store.openConfirmation({
-          title: 'Confirm',
-          message: 'Test',
-          onConfirm: vi.fn()
-        })
-        store.setActiveTab('tournamentDetails', 'active')
-        store.setFilters('tournaments', { gameId: 'pokemon-tcg', status: 'active', storeId: '', startDate: '', endDate: '', search: '' })
-        store.setInteraction('isWithdrawing', true)
+        useUIStore.getState().openModal('tournamentRegistration', { id: '123' })
+        useUIStore.getState().openConfirmation({ title: 'Test', message: 'Test' })
+        useUIStore.getState().setActiveTab('tournamentDetails', 'brackets')
+        useUIStore.getState().setFilters('tournaments', { gameId: 'pokemon-tcg' })
+        useUIStore.getState().setInteraction('isWithdrawing', true)
+        useUIStore.getState().setDropdownOpen('user-menu', true)
       })
 
-      // Verify state is set
-      let updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals['tournamentRegistration'].isOpen).toBe(true)
-      expect(updatedStore.modals.confirmation.isOpen).toBe(true)
-      expect(updatedStore.tabs['tournamentDetails'].activeTab).toBe('active')
-      expect(updatedStore.filters['tournaments'].gameId).toBe('pokemon-tcg')
-      expect(updatedStore.interactions['isWithdrawing']).toBe(true)
+      let state = useUIStore.getState()
+      expect(state.modals.tournamentRegistration.isOpen).toBe(true)
+      expect(state.modals.confirmation.isOpen).toBe(true)
+      expect(state.tabs.tournamentDetails.activeTab).toBe('brackets')
+      expect(state.filters.tournaments.gameId).toBe('pokemon-tcg')
+      expect(state.interactions.isWithdrawing).toBe(true)
+      expect(state.dropdowns['user-menu']?.isOpen).toBe(true)
 
-      // Reset
       act(() => {
-        store.resetUI()
+        useUIStore.getState().resetUI()
       })
 
-      // Verify state is reset
-      updatedStore = useTestUIStore.getState()
-      expect(updatedStore.modals['tournamentRegistration'].isOpen).toBe(false)
-      expect(updatedStore.modals.confirmation.isOpen).toBe(false)
-      expect(updatedStore.tabs['tournamentDetails'].activeTab).toBe('')
-      expect(updatedStore.filters['tournaments'].gameId).toBe('')
-      expect(updatedStore.interactions['isWithdrawing']).toBe(false)
+      state = useUIStore.getState()
+      expect(state.modals.tournamentRegistration.isOpen).toBe(false)
+      expect(state.modals.confirmation.isOpen).toBe(false)
+      expect(state.tabs.tournamentDetails.activeTab).toBe('')
+      expect(state.filters.tournaments.gameId).toBe('')
+      expect(state.interactions.isWithdrawing).toBe(false)
+      expect(Object.keys(state.dropdowns)).toHaveLength(0)
     })
   })
 
-  describe('State Persistence', () => {
-    it('should maintain tab state across operations', () => {
-      const store = useTestUIStore.getState()
-      const tabGroup = 'tournamentDetails'
-      const tab = 'details'
+  describe('Custom Hooks', () => {
+    it('useModal should provide modal state and actions', () => {
+      const { result } = renderHook(() => useModal('tournamentCreate'))
+
+      expect(result.current.isOpen).toBe(false)
+      expect(result.current.data).toBeUndefined()
 
       act(() => {
-        store.setActiveTab(tabGroup, tab)
+        result.current.open({ tournamentId: '123' })
       })
 
-      let updatedStore = useTestUIStore.getState()
-      expect(updatedStore.tabs[tabGroup].activeTab).toBe(tab)
+      expect(result.current.isOpen).toBe(true)
+      expect(result.current.data).toEqual({ tournamentId: '123' })
 
-      // Perform other operations
       act(() => {
-        store.openModal('tournamentRegistration', {})
-        store.setFilters('tournaments', { gameId: 'pokemon-tcg', status: 'active', storeId: '', startDate: '', endDate: '', search: '' })
+        result.current.close()
       })
 
-      // Tab state should still be maintained
-      updatedStore = useTestUIStore.getState()
-      expect(updatedStore.tabs[tabGroup].activeTab).toBe(tab)
+      expect(result.current.isOpen).toBe(false)
     })
 
-    it('should maintain filter state across operations', () => {
-      const store = useTestUIStore.getState()
-      const filterGroup = 'tournaments'
-      const filters = { gameId: 'pokemon-tcg', status: 'active', storeId: '', startDate: '', endDate: '', search: '' }
+    it('useConfirmationModal should provide confirmation state and actions', () => {
+      const { result } = renderHook(() => useConfirmationModal())
+
+      expect(result.current.isOpen).toBe(false)
+
+      const config: ConfirmationConfig = {
+        title: 'Confirm',
+        message: 'Are you sure?',
+      }
 
       act(() => {
-        store.setFilters(filterGroup, filters)
+        result.current.open(config)
       })
 
-      let updatedStore = useTestUIStore.getState()
-      expect(updatedStore.filters[filterGroup]).toEqual(filters)
+      expect(result.current.isOpen).toBe(true)
+      expect(result.current.config).toEqual(config)
 
-      // Perform other operations
       act(() => {
-        store.openModal('tournamentRegistration', {})
-        store.setActiveTab('tournamentDetails', 'active')
+        result.current.close()
       })
 
-      // Filter state should still be maintained
-      updatedStore = useTestUIStore.getState()
-      expect(updatedStore.filters[filterGroup]).toEqual(filters)
+      expect(result.current.isOpen).toBe(false)
+    })
+
+    it('useTab should provide tab state and actions', () => {
+      const { result } = renderHook(() => useTab('tournamentManage'))
+
+      expect(result.current.activeTab).toBe('')
+      expect(result.current.availableTabs).toEqual([])
+
+      act(() => {
+        result.current.setAvailableTabs(['settings', 'participants', 'results'])
+        result.current.setActiveTab('settings')
+      })
+
+      expect(result.current.activeTab).toBe('settings')
+      expect(result.current.availableTabs).toEqual(['settings', 'participants', 'results'])
+    })
+
+    it('useFilters should provide filter state and actions', () => {
+      const { result } = renderHook(() => useFilters('tournaments'))
+
+      expect(result.current.filters.gameId).toBe('')
+
+      act(() => {
+        result.current.setFilters({ gameId: 'pokemon-tcg', status: 'ACTIVE' })
+      })
+
+      expect(result.current.filters.gameId).toBe('pokemon-tcg')
+      expect(result.current.filters.status).toBe('ACTIVE')
+
+      act(() => {
+        result.current.resetFilters()
+      })
+
+      expect(result.current.filters.gameId).toBe('')
+      expect(result.current.filters.status).toBe('')
+    })
+
+    it('useInteractions should provide interaction state and actions', () => {
+      const { result } = renderHook(() => useInteractions())
+
+      expect(result.current.isWithdrawing).toBe(false)
+
+      act(() => {
+        result.current.setInteraction('isWithdrawing', true)
+      })
+
+      expect(result.current.isWithdrawing).toBe(true)
+
+      act(() => {
+        result.current.resetInteractions()
+      })
+
+      expect(result.current.isWithdrawing).toBe(false)
+    })
+
+    it('useDropdown should provide dropdown state and actions', () => {
+      const { result } = renderHook(() => useDropdown('test-dropdown'))
+
+      expect(result.current.isOpen).toBe(false)
+
+      act(() => {
+        result.current.open()
+      })
+
+      expect(result.current.isOpen).toBe(true)
+
+      act(() => {
+        result.current.close()
+      })
+
+      expect(result.current.isOpen).toBe(false)
+
+      act(() => {
+        result.current.toggle()
+      })
+
+      expect(result.current.isOpen).toBe(true)
+    })
+
+    it('useModals should provide all modals state and actions', () => {
+      const { result } = renderHook(() => useModals())
+
+      expect(result.current.isAnyModalOpen).toBe(false)
+
+      act(() => {
+        useUIStore.getState().openModal('tournamentRegistration')
+      })
+
+      expect(result.current.isAnyModalOpen).toBe(true)
+
+      act(() => {
+        result.current.closeAllModals()
+      })
+
+      expect(result.current.isAnyModalOpen).toBe(false)
     })
   })
 })

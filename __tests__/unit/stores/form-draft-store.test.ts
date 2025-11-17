@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act } from '@testing-library/react'
 import { useFormDraftStore } from '@/stores/form-draft-store'
-import type { ExtendedFormDraft, AutoSaveSettings } from '@/lib/types'
+import type { ExtendedFormDraft } from '@/stores/form-draft-store'
+import { z } from 'zod'
 
 describe('Form Draft Store', () => {
   const mockFormData = {
@@ -10,35 +11,11 @@ describe('Form Draft Store', () => {
     phone: '123-456-7890'
   }
 
-  const mockDraft: ExtendedFormDraft = {
-    id: 'test-draft-id',
-    formType: 'user-profile',
-    formData: mockFormData,
-    lastUpdated: new Date(),
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
-    isSubmitted: false,
-    submittedAt: undefined,
-    metadata: {
-      userId: 'test-user-id',
-      sessionId: 'test-session-id',
-      userAgent: 'test-user-agent',
-      ipAddress: '127.0.0.1',
-      version: 1
-    },
-    validation: {
-      isValid: true,
-      errors: {},
-      warnings: {}
-    },
-    history: {
-      versions: [],
-      maxVersions: 5
-    }
-  }
-
   beforeEach(() => {
     // Reset store state before each test
     useFormDraftStore.getState().resetStore()
+    // Clear localStorage to ensure clean state
+    localStorage.clear()
   })
 
   describe('Draft Management', () => {
@@ -461,15 +438,734 @@ describe('Form Draft Store', () => {
       // Should not throw error when operating on non-existent draft
       expect(() => {
         act(() => {
-          store.updateDraft(nonExistentDraftId, { formData: {} })
+          store.updateDraft(nonExistentDraftId, { data: {} })
           store.deleteDraft(nonExistentDraftId)
           store.deleteDraft(nonExistentDraftId)
-          // extendDraft doesn't exist, using updateDraft instead
-        store.updateDraft(nonExistentDraftId, { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })
-          // markDraftAsSubmitted doesn't exist, using updateDraft instead
-        store.updateDraft(nonExistentDraftId, { isSubmitted: true })
+          store.updateDraft(nonExistentDraftId, { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })
+          store.updateDraft(nonExistentDraftId, { isSubmitted: true })
         })
       }).not.toThrow()
+    })
+  })
+
+  describe('Draft Data Updates', () => {
+    it('should update draft data and validate', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      const newData = { name: 'Jane Smith', email: 'jane@example.com' }
+      act(() => {
+        store.updateDraftData(draftId!, newData)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      const draft = updatedStore.drafts[draftId!]
+      expect(draft.data.name).toBe('Jane Smith')
+      expect(draft.data.email).toBe('jane@example.com')
+      expect(draft.isDirty).toBe(true)
+    })
+
+    it('should update draft step', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('tournament-create', mockFormData)
+      })
+
+      act(() => {
+        store.updateDraftStep(draftId!, 2)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].currentStep).toBe(2)
+    })
+  })
+
+  describe('Active Draft Management', () => {
+    it('should set and get active draft', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      // Get updated store state after creation
+      let updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.activeDraftId).toBe(draftId!)
+
+      act(() => {
+        useFormDraftStore.getState().setActiveDraft(null)
+      })
+
+      updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.activeDraftId).toBeNull()
+
+      act(() => {
+        useFormDraftStore.getState().setActiveDraft(draftId!)
+      })
+
+      updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.activeDraftId).toBe(draftId!)
+    })
+
+    it('should get active draft', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      const activeDraft = store.getActiveDraft()
+      expect(activeDraft).toBeDefined()
+      expect(activeDraft?.id).toBe(draftId!)
+    })
+
+    it('should return null when no active draft', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        store.setActiveDraft(null)
+      })
+
+      const activeDraft = store.getActiveDraft()
+      expect(activeDraft).toBeNull()
+    })
+  })
+
+  describe('Draft Retrieval', () => {
+    it('should get draft by id', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      const draft = store.getDraft(draftId!)
+      expect(draft).toBeDefined()
+      expect(draft?.id).toBe(draftId!)
+    })
+
+    it('should get drafts by type', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        store.createDraft('user-profile', mockFormData)
+        store.createDraft('user-profile', mockFormData)
+        store.createDraft('tournament-create', mockFormData)
+      })
+
+      const userProfileDrafts = store.getDraftsByType('user-profile')
+      expect(userProfileDrafts).toHaveLength(2)
+      expect(userProfileDrafts.every(d => d.formType === 'user-profile')).toBe(true)
+    })
+
+    it('should get drafts by user', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        const id1 = store.createDraft('user-profile', mockFormData)
+        store.updateDraft(id1, { userId: 'user-123' })
+        
+        const id2 = store.createDraft('tournament-create', mockFormData)
+        store.updateDraft(id2, { userId: 'user-123' })
+        
+        const id3 = store.createDraft('user-profile', mockFormData)
+        store.updateDraft(id3, { userId: 'user-456' })
+      })
+
+      const user123Drafts = store.getDraftsByUser('user-123')
+      expect(user123Drafts).toHaveLength(2)
+      expect(user123Drafts.every(d => d.userId === 'user-123')).toBe(true)
+    })
+
+    it('should get drafts by context', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        const id1 = store.createDraft('tournament-create', mockFormData)
+        store.updateDraft(id1, { context: { tournamentId: 'tour-123', page: 'create' } })
+        
+        const id2 = store.createDraft('tournament-create', mockFormData)
+        store.updateDraft(id2, { context: { tournamentId: 'tour-123', page: 'edit' } })
+        
+        const id3 = store.createDraft('user-profile', mockFormData)
+        store.updateDraft(id3, { context: { userId: 'user-123' } })
+      })
+
+      const contextDrafts = store.getDraftsByContext({ tournamentId: 'tour-123' })
+      expect(contextDrafts).toHaveLength(2)
+    })
+  })
+
+  describe('Validation', () => {
+    it('should validate draft with schema', () => {
+      const store = useFormDraftStore.getState()
+      
+      // Set up validation schema
+      const schema = z.object({
+        name: z.string().min(1),
+        email: z.string().email(),
+      })
+
+      act(() => {
+        store.setDraftMetadata('test-form', {
+          formType: 'test-form',
+          displayName: 'Test Form',
+          category: 'user',
+          validationSchema: schema,
+        })
+      })
+
+      let draftId: string
+      act(() => {
+        draftId = store.createDraft('test-form', { name: 'John', email: 'john@example.com' })
+      })
+
+      const validation = store.validateDraft(draftId!)
+      expect(validation.isValid).toBe(true)
+      expect(Object.keys(validation.errors)).toHaveLength(0)
+    })
+
+    it('should return validation errors', () => {
+      const store = useFormDraftStore.getState()
+      
+      const schema = z.object({
+        name: z.string().min(1),
+        email: z.string().email(),
+      })
+
+      act(() => {
+        store.setDraftMetadata('test-form', {
+          formType: 'test-form',
+          displayName: 'Test Form',
+          category: 'user',
+          validationSchema: schema,
+        })
+      })
+
+      let draftId: string
+      act(() => {
+        draftId = store.createDraft('test-form', { name: '', email: 'invalid' })
+      })
+
+      const validation = store.validateDraft(draftId!)
+      expect(validation.isValid).toBe(false)
+      expect(Object.keys(validation.errors).length).toBeGreaterThan(0)
+    })
+
+    it('should validate draft data without creating draft', () => {
+      const store = useFormDraftStore.getState()
+      
+      const schema = z.object({
+        name: z.string().min(1),
+        email: z.string().email(),
+      })
+
+      act(() => {
+        store.setDraftMetadata('test-form', {
+          formType: 'test-form',
+          displayName: 'Test Form',
+          category: 'user',
+          validationSchema: schema,
+        })
+      })
+
+      const validation = store.validateDraftData('test-form', { name: 'John', email: 'john@example.com' })
+      expect(validation.isValid).toBe(true)
+    })
+  })
+
+  describe('Touched Fields', () => {
+    it('should mark field as touched', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      act(() => {
+        store.markFieldTouched(draftId!, 'email')
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].touchedFields?.email).toBe(true)
+    })
+
+    it('should mark submit attempted', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      act(() => {
+        store.markSubmitAttempted(draftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].submitAttempted).toBe(true)
+    })
+
+    it('should reset touched state', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+        store.markFieldTouched(draftId!, 'email')
+        store.markSubmitAttempted(draftId!)
+      })
+
+      act(() => {
+        store.resetTouchedState(draftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].touchedFields).toEqual({})
+      expect(updatedStore.drafts[draftId!].submitAttempted).toBe(false)
+    })
+  })
+
+  describe('Auto-save Functionality', () => {
+    it('should auto-save draft', async () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      await act(async () => {
+        await store.autoSaveDraft(draftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].lastAutoSaved).toBeInstanceOf(Date)
+      expect(updatedStore.drafts[draftId!].isDirty).toBe(false)
+    })
+
+    it('should not auto-save when disabled', async () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+        store.disableAutoSave(draftId!)
+      })
+
+      await act(async () => {
+        await store.autoSaveDraft(draftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].lastAutoSaved).toBeUndefined()
+    })
+  })
+
+  describe('Draft Lifecycle', () => {
+    it('should mark draft as dirty', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      act(() => {
+        store.markDraftAsDirty(draftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].isDirty).toBe(true)
+    })
+
+    it('should mark draft as clean', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+        store.markDraftAsDirty(draftId!)
+      })
+
+      act(() => {
+        store.markDraftAsClean(draftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].isDirty).toBe(false)
+    })
+
+    it('should expire draft', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      act(() => {
+        store.expireDraft(draftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].isExpired).toBe(true)
+    })
+  })
+
+  describe('Loading States', () => {
+    it('should set loading state', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        store.setLoading('saving', true)
+      })
+
+      expect(useFormDraftStore.getState().loading.saving).toBe(true)
+
+      act(() => {
+        store.setLoading('saving', false)
+      })
+
+      expect(useFormDraftStore.getState().loading.saving).toBe(false)
+    })
+
+    it('should set multiple loading states', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        store.setLoading('saving', true)
+        store.setLoading('loading', true)
+        store.setLoading('deleting', true)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.loading.saving).toBe(true)
+      expect(updatedStore.loading.loading).toBe(true)
+      expect(updatedStore.loading.deleting).toBe(true)
+    })
+  })
+
+  describe('Error States', () => {
+    it('should set error', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        store.setError('save', 'Failed to save')
+      })
+
+      expect(useFormDraftStore.getState().errors.save).toBe('Failed to save')
+    })
+
+    it('should clear error', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        store.setError('save', 'Failed to save')
+      })
+
+      expect(useFormDraftStore.getState().errors.save).toBe('Failed to save')
+
+      act(() => {
+        store.clearError('save')
+      })
+
+      expect(useFormDraftStore.getState().errors.save).toBeNull()
+    })
+
+    it('should clear all errors', () => {
+      const store = useFormDraftStore.getState()
+
+      act(() => {
+        store.setError('save', 'Save error')
+        store.setError('load', 'Load error')
+        store.setError('delete', 'Delete error')
+      })
+
+      act(() => {
+        store.clearAllErrors()
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.errors.save).toBeNull()
+      expect(updatedStore.errors.load).toBeNull()
+      expect(updatedStore.errors.delete).toBeNull()
+    })
+  })
+
+  describe('Form Submission', () => {
+    it('should set submitting state', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      act(() => {
+        store.setSubmitting(draftId!, true)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].isSubmitting).toBe(true)
+      expect(updatedStore.loading.submitting).toBe(true)
+    })
+
+    it('should set validation errors', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      const errors = { email: 'Invalid email', name: 'Name required' }
+      act(() => {
+        store.setValidationErrors(draftId!, errors)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].errors).toEqual(errors)
+      expect(updatedStore.errors.validation).toBeDefined()
+    })
+
+    it('should clear validation errors', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+        store.setValidationErrors(draftId!, { email: 'Invalid' })
+      })
+
+      act(() => {
+        store.clearValidationErrors(draftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[draftId!].errors).toEqual({})
+      expect(updatedStore.errors.validation).toBeNull()
+    })
+  })
+
+  describe('Metadata Management', () => {
+    it('should set draft metadata', () => {
+      const store = useFormDraftStore.getState()
+      const metadata = {
+        formType: 'custom-form',
+        displayName: 'Custom Form',
+        category: 'user' as const,
+        maxDrafts: 5,
+      }
+
+      act(() => {
+        store.setDraftMetadata('custom-form', metadata)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.metadata['custom-form']).toEqual(metadata)
+    })
+
+    it('should get draft metadata', () => {
+      const store = useFormDraftStore.getState()
+      const metadata = store.getDraftMetadata('tournament-create')
+      
+      expect(metadata).toBeDefined()
+      expect(metadata?.formType).toBe('tournament-create')
+    })
+  })
+
+  describe('Utility Operations', () => {
+    it('should export draft', () => {
+      const store = useFormDraftStore.getState()
+      let draftId: string
+
+      act(() => {
+        draftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      const exported = store.exportDraft(draftId!)
+      expect(exported).toBeTruthy()
+      expect(typeof exported).toBe('string')
+      
+      const parsed = JSON.parse(exported)
+      expect(parsed.id).toBe(draftId!)
+      expect(parsed.formType).toBe('user-profile')
+    })
+
+    it('should import draft', () => {
+      const store = useFormDraftStore.getState()
+      let originalDraftId: string
+
+      act(() => {
+        originalDraftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      const exported = store.exportDraft(originalDraftId!)
+
+      act(() => {
+        store.deleteDraft(originalDraftId!)
+      })
+
+      let importedDraftId: string
+      act(() => {
+        importedDraftId = store.importDraft(exported)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[importedDraftId!]).toBeDefined()
+      expect(updatedStore.drafts[importedDraftId!].formType).toBe('user-profile')
+    })
+
+    it('should handle invalid import data', () => {
+      const store = useFormDraftStore.getState()
+
+      expect(() => {
+        act(() => {
+          store.importDraft('invalid json')
+        })
+      }).toThrow('Invalid draft data')
+    })
+
+    it('should duplicate draft', () => {
+      const store = useFormDraftStore.getState()
+      let originalDraftId: string
+
+      act(() => {
+        originalDraftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      let duplicatedDraftId: string
+      act(() => {
+        duplicatedDraftId = store.duplicateDraft(originalDraftId!)
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[duplicatedDraftId!]).toBeDefined()
+      expect(updatedStore.drafts[duplicatedDraftId!].data).toEqual(mockFormData)
+      expect(duplicatedDraftId!).not.toBe(originalDraftId!)
+    })
+
+    it('should duplicate draft with new form type', () => {
+      const store = useFormDraftStore.getState()
+      let originalDraftId: string
+
+      act(() => {
+        originalDraftId = store.createDraft('user-profile', mockFormData)
+      })
+
+      let duplicatedDraftId: string
+      act(() => {
+        duplicatedDraftId = store.duplicateDraft(originalDraftId!, 'tournament-create')
+      })
+
+      const updatedStore = useFormDraftStore.getState()
+      expect(updatedStore.drafts[duplicatedDraftId!].formType).toBe('tournament-create')
+    })
+  })
+
+  describe('Enhanced Form Management', () => {
+    it('should save draft with form id', () => {
+      const store = useFormDraftStore.getState()
+      const formId = 'test-form-123'
+      const data = { field1: 'value1', field2: 'value2' }
+
+      act(() => {
+        store.saveDraft(formId, data)
+      })
+
+      const loaded = store.loadDraft(formId)
+      expect(loaded).toEqual(data)
+    })
+
+    it('should update existing draft when saving with same form id', () => {
+      const store = useFormDraftStore.getState()
+      const formId = 'test-form-123'
+
+      act(() => {
+        store.saveDraft(formId, { field1: 'value1' })
+      })
+
+      act(() => {
+        store.saveDraft(formId, { field1: 'updated', field2: 'new' })
+      })
+
+      const loaded = store.loadDraft(formId)
+      expect(loaded.field1).toBe('updated')
+      expect(loaded.field2).toBe('new')
+    })
+
+    it('should load draft', () => {
+      const store = useFormDraftStore.getState()
+      const formId = 'test-form-123'
+      const data = { field1: 'value1' }
+
+      act(() => {
+        store.saveDraft(formId, data)
+      })
+
+      const loaded = store.loadDraft(formId)
+      expect(loaded).toEqual(data)
+    })
+
+    it('should return null when loading non-existent draft', () => {
+      const store = useFormDraftStore.getState()
+      const loaded = store.loadDraft('non-existent')
+      expect(loaded).toBeNull()
+    })
+
+    it('should clear draft', () => {
+      const store = useFormDraftStore.getState()
+      const formId = 'test-form-123'
+
+      act(() => {
+        store.saveDraft(formId, { field1: 'value1' })
+      })
+
+      expect(store.hasDraft(formId)).toBe(true)
+
+      act(() => {
+        store.clearDraft(formId)
+      })
+
+      expect(store.hasDraft(formId)).toBe(false)
+    })
+
+    it('should check if draft exists', () => {
+      const store = useFormDraftStore.getState()
+      const formId = 'test-form-123'
+
+      expect(store.hasDraft(formId)).toBe(false)
+
+      act(() => {
+        store.saveDraft(formId, { field1: 'value1' })
+      })
+
+      expect(store.hasDraft(formId)).toBe(true)
+    })
+
+    it('should get draft last saved time', () => {
+      const store = useFormDraftStore.getState()
+      const formId = 'test-form-123'
+
+      expect(store.getDraftLastSaved(formId)).toBeNull()
+
+      act(() => {
+        store.saveDraft(formId, { field1: 'value1' })
+      })
+
+      const lastSaved = store.getDraftLastSaved(formId)
+      expect(lastSaved).toBeInstanceOf(Date)
     })
   })
 })
