@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react'
 import { cn } from '@/lib/utils'
+import { announceValidationError, announceErrorCleared, announceToScreenReader } from '@/lib/utils/accessibility'
 import { Input } from './input'
 import { Label } from './label'
 import { Button } from './button'
@@ -14,36 +15,87 @@ import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 interface FormFieldProps {
   label?: string
   error?: string
+  errorType?: 'client' | 'server'
   required?: boolean
   description?: string
   className?: string
   children: React.ReactNode
+  fieldId?: string
 }
 
 export function FormField({ 
   label, 
   error, 
+  errorType,
   required, 
   description, 
   className,
-  children 
+  children,
+  fieldId
 }: FormFieldProps) {
+  const generatedId = React.useId()
+  const id = fieldId || generatedId
+  const errorId = `${id}-error`
+  const descriptionId = `${id}-description`
+  const previousErrorRef = React.useRef<string | undefined>(undefined)
+
+  // Announce errors when they appear or are cleared
+  React.useEffect(() => {
+    const fieldName = label || 'Field'
+    
+    // Error appeared
+    if (error && !previousErrorRef.current) {
+      announceValidationError(fieldName, error)
+    }
+    // Error cleared
+    else if (!error && previousErrorRef.current) {
+      announceErrorCleared(fieldName)
+    }
+    // Error changed
+    else if (error && previousErrorRef.current && error !== previousErrorRef.current) {
+      announceValidationError(fieldName, error)
+    }
+    
+    previousErrorRef.current = error
+  }, [error, label])
+
+  // Clone the child element and add ARIA attributes
+  const childWithProps = React.isValidElement(children)
+    ? React.cloneElement(children, {
+        id,
+        'aria-invalid': !!error,
+        'aria-describedby': error ? errorId : (description ? descriptionId : undefined),
+        'aria-required': required,
+      } as any)
+    : children
+
   return (
     <div className={cn("space-y-2", className)}>
       {label && (
-        <Label className="text-sm font-medium">
+        <Label htmlFor={id} className="text-sm font-medium">
           {label}
-          {required && <span className="text-destructive ml-1">*</span>}
+          {required && <span className="text-destructive ml-1" aria-label="required">*</span>}
         </Label>
       )}
       {description && (
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p id={descriptionId} className="text-sm text-muted-foreground">{description}</p>
       )}
-      {children}
+      {childWithProps}
       {error && (
-        <div className="flex items-center gap-2 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4" />
-          {error}
+        <div 
+          id={errorId}
+          role="alert"
+          aria-live="polite"
+          className={cn(
+            "flex items-center gap-2 text-sm text-destructive",
+            errorType === 'server' && "font-medium"
+          )}
+        >
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <span>
+            {errorType === 'server' && <span className="font-semibold">Server error: </span>}
+            {error}
+          </span>
         </div>
       )}
     </div>
@@ -54,6 +106,7 @@ export function FormField({
 interface FormInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string
+  errorType?: 'client' | 'server'
   required?: boolean
   description?: string
   icon?: React.ComponentType<{ className?: string }>
@@ -61,30 +114,94 @@ interface FormInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
-  ({ label, error, required, description, icon: Icon, rightIcon, className, ...props }, ref) => {
+  ({ label, error, errorType, required, description, icon: Icon, rightIcon, className, onBlur, id: providedId, ...props }, ref) => {
+    const generatedId = React.useId()
+    const fieldId = providedId || generatedId
+    const errorId = `${fieldId}-error`
+    const descriptionId = `${fieldId}-description`
+    const previousErrorRef = React.useRef<string | undefined>(undefined)
+
+    // Announce errors when they appear or are cleared
+    React.useEffect(() => {
+      const fieldName = label || 'Field'
+      
+      // Error appeared
+      if (error && !previousErrorRef.current) {
+        announceValidationError(fieldName, error)
+      }
+      // Error cleared
+      else if (!error && previousErrorRef.current) {
+        announceErrorCleared(fieldName)
+      }
+      // Error changed
+      else if (error && previousErrorRef.current && error !== previousErrorRef.current) {
+        announceValidationError(fieldName, error)
+      }
+      
+      previousErrorRef.current = error
+    }, [error, label])
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      // Call custom onBlur handler if provided
+      if (onBlur) {
+        onBlur(e)
+      }
+    }
+
     return (
-      <FormField label={label} error={error} required={required} description={description}>
+      <div className="space-y-2">
+        {label && (
+          <Label htmlFor={fieldId} className="text-sm font-medium">
+            {label}
+            {required && <span className="text-destructive ml-1" aria-label="required">*</span>}
+          </Label>
+        )}
+        {description && (
+          <p id={descriptionId} className="text-sm text-muted-foreground">{description}</p>
+        )}
         <div className="relative">
           {Icon && (
-            <Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           )}
           <Input
             ref={ref}
+            id={fieldId}
+            aria-invalid={!!error}
+            aria-describedby={error ? errorId : (description ? descriptionId : undefined)}
+            aria-required={required}
             className={cn(
               Icon && 'pl-10',
               rightIcon && 'pr-10',
               error && 'border-destructive focus-visible:ring-destructive',
               className
             )}
+            onBlur={handleBlur}
             {...props}
           />
           {rightIcon && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2" aria-hidden="true">
               {rightIcon}
             </div>
           )}
         </div>
-      </FormField>
+        {error && (
+          <div 
+            id={errorId}
+            role="alert"
+            aria-live="polite"
+            className={cn(
+              "flex items-center gap-2 text-sm text-destructive",
+              errorType === 'server' && "font-medium"
+            )}
+          >
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            <span>
+              {errorType === 'server' && <span className="font-semibold">Server error: </span>}
+              {error}
+            </span>
+          </div>
+        )}
+      </div>
     )
   }
 )
@@ -94,23 +211,88 @@ FormInput.displayName = 'FormInput'
 interface FormTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
   error?: string
+  errorType?: 'client' | 'server'
   required?: boolean
   description?: string
 }
 
 export const FormTextarea = forwardRef<HTMLTextAreaElement, FormTextareaProps>(
-  ({ label, error, required, description, className, ...props }, ref) => {
+  ({ label, error, errorType, required, description, className, onBlur, id: providedId, ...props }, ref) => {
+    const generatedId = React.useId()
+    const fieldId = providedId || generatedId
+    const errorId = `${fieldId}-error`
+    const descriptionId = `${fieldId}-description`
+    const previousErrorRef = React.useRef<string | undefined>(undefined)
+
+    // Announce errors when they appear or are cleared
+    React.useEffect(() => {
+      const fieldName = label || 'Field'
+      
+      // Error appeared
+      if (error && !previousErrorRef.current) {
+        announceValidationError(fieldName, error)
+      }
+      // Error cleared
+      else if (!error && previousErrorRef.current) {
+        announceErrorCleared(fieldName)
+      }
+      // Error changed
+      else if (error && previousErrorRef.current && error !== previousErrorRef.current) {
+        announceValidationError(fieldName, error)
+      }
+      
+      previousErrorRef.current = error
+    }, [error, label])
+
+    const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+      // Call custom onBlur handler if provided
+      if (onBlur) {
+        onBlur(e)
+      }
+    }
+
     return (
-      <FormField label={label} error={error} required={required} description={description}>
+      <div className="space-y-2">
+        {label && (
+          <Label htmlFor={fieldId} className="text-sm font-medium">
+            {label}
+            {required && <span className="text-destructive ml-1" aria-label="required">*</span>}
+          </Label>
+        )}
+        {description && (
+          <p id={descriptionId} className="text-sm text-muted-foreground">{description}</p>
+        )}
         <Textarea
           ref={ref}
+          id={fieldId}
+          aria-invalid={!!error}
+          aria-describedby={error ? errorId : (description ? descriptionId : undefined)}
+          aria-required={required}
           className={cn(
             error && 'border-destructive focus-visible:ring-destructive',
             className
           )}
+          onBlur={handleBlur}
           {...props}
         />
-      </FormField>
+        {error && (
+          <div 
+            id={errorId}
+            role="alert"
+            aria-live="polite"
+            className={cn(
+              "flex items-center gap-2 text-sm text-destructive",
+              errorType === 'server' && "font-medium"
+            )}
+          >
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            <span>
+              {errorType === 'server' && <span className="font-semibold">Server error: </span>}
+              {error}
+            </span>
+          </div>
+        )}
+      </div>
     )
   }
 )
@@ -120,30 +302,63 @@ FormTextarea.displayName = 'FormTextarea'
 interface FormSelectProps {
   label?: string
   error?: string
+  errorType?: 'client' | 'server'
   required?: boolean
   description?: string
   placeholder?: string
   value?: string
   onValueChange?: (value: string) => void
   onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void
+  onBlur?: () => void
   options?: Array<{ value: string; label: string }>
   children?: React.ReactNode
   disabled?: boolean
+  id?: string
 }
 
 export function FormSelect({ 
   label, 
   error, 
+  errorType,
   required, 
   description, 
   placeholder,
   value,
   onValueChange,
   onChange,
+  onBlur,
   options,
   children,
-  disabled 
+  disabled,
+  id: providedId
 }: FormSelectProps) {
+  const generatedId = React.useId()
+  const fieldId = providedId || generatedId
+  const errorId = `${fieldId}-error`
+  const descriptionId = `${fieldId}-description`
+  const previousValueRef = React.useRef(value)
+  const previousErrorRef = React.useRef<string | undefined>(undefined)
+
+  // Announce errors when they appear or are cleared
+  React.useEffect(() => {
+    const fieldName = label || 'Field'
+    
+    // Error appeared
+    if (error && !previousErrorRef.current) {
+      announceValidationError(fieldName, error)
+    }
+    // Error cleared
+    else if (!error && previousErrorRef.current) {
+      announceErrorCleared(fieldName)
+    }
+    // Error changed
+    else if (error && previousErrorRef.current && error !== previousErrorRef.current) {
+      announceValidationError(fieldName, error)
+    }
+    
+    previousErrorRef.current = error
+  }, [error, label])
+
   const handleValueChange = (newValue: string) => {
     if (onValueChange) {
       onValueChange(newValue)
@@ -155,14 +370,42 @@ export function FormSelect({
       } as React.ChangeEvent<HTMLSelectElement>
       onChange(syntheticEvent)
     }
+    
+    // Trigger blur event when value changes (select closes after selection)
+    if (onBlur && previousValueRef.current !== newValue) {
+      // Use setTimeout to ensure the value change is processed first
+      setTimeout(() => {
+        onBlur()
+      }, 0)
+    }
+    previousValueRef.current = newValue
   }
 
   return (
-    <FormField label={label} error={error} required={required} description={description}>
-      <Select value={value} onValueChange={handleValueChange} disabled={disabled}>
-        <SelectTrigger className={cn(
-          error && 'border-destructive focus:ring-destructive'
-        )}>
+    <div className="space-y-2">
+      {label && (
+        <Label htmlFor={fieldId} className="text-sm font-medium">
+          {label}
+          {required && <span className="text-destructive ml-1" aria-label="required">*</span>}
+        </Label>
+      )}
+      {description && (
+        <p id={descriptionId} className="text-sm text-muted-foreground">{description}</p>
+      )}
+      <Select 
+        value={value} 
+        onValueChange={handleValueChange} 
+        disabled={disabled}
+      >
+        <SelectTrigger 
+          id={fieldId}
+          aria-invalid={!!error}
+          aria-describedby={error ? errorId : (description ? descriptionId : undefined)}
+          aria-required={required}
+          className={cn(
+            error && 'border-destructive focus:ring-destructive'
+          )}
+        >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -177,7 +420,24 @@ export function FormSelect({
           )}
         </SelectContent>
       </Select>
-    </FormField>
+      {error && (
+        <div 
+          id={errorId}
+          role="alert"
+          aria-live="polite"
+          className={cn(
+            "flex items-center gap-2 text-sm text-destructive",
+            errorType === 'server' && "font-medium"
+          )}
+        >
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <span>
+            {errorType === 'server' && <span className="font-semibold">Server error: </span>}
+            {error}
+          </span>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -246,6 +506,7 @@ interface FormCheckboxProps {
   onCheckedChange?: (checked: boolean) => void
   disabled?: boolean
   className?: string
+  id?: string
 }
 
 export function FormCheckbox({ 
@@ -256,36 +517,71 @@ export function FormCheckbox({
   checked,
   onCheckedChange,
   disabled,
-  className 
+  className,
+  id: providedId
 }: FormCheckboxProps) {
+  const generatedId = React.useId()
+  const fieldId = providedId || generatedId
+  const errorId = `${fieldId}-error`
+  const descriptionId = `${fieldId}-description`
+  const previousErrorRef = React.useRef<string | undefined>(undefined)
+
+  // Announce errors when they appear or are cleared
+  React.useEffect(() => {
+    const fieldName = label || 'Checkbox'
+    
+    // Error appeared
+    if (error && !previousErrorRef.current) {
+      announceValidationError(fieldName, error)
+    }
+    // Error cleared
+    else if (!error && previousErrorRef.current) {
+      announceErrorCleared(fieldName)
+    }
+    // Error changed
+    else if (error && previousErrorRef.current && error !== previousErrorRef.current) {
+      announceValidationError(fieldName, error)
+    }
+    
+    previousErrorRef.current = error
+  }, [error, label])
+
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center space-x-2">
         <Checkbox
-          id={label}
+          id={fieldId}
           checked={checked}
           onCheckedChange={onCheckedChange}
           disabled={disabled}
+          aria-invalid={!!error}
+          aria-describedby={error ? errorId : (description ? descriptionId : undefined)}
+          aria-required={required}
           className={cn(
             error && 'border-destructive data-[state=checked]:bg-destructive'
           )}
         />
         {label && (
           <Label 
-            htmlFor={label} 
+            htmlFor={fieldId} 
             className="text-sm font-normal cursor-pointer"
           >
             {label}
-            {required && <span className="text-destructive ml-1">*</span>}
+            {required && <span className="text-destructive ml-1" aria-label="required">*</span>}
           </Label>
         )}
       </div>
       {description && !error && (
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p id={descriptionId} className="text-sm text-muted-foreground">{description}</p>
       )}
       {error && (
-        <div className="flex items-center gap-2 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4" />
+        <div 
+          id={errorId}
+          role="alert"
+          aria-live="polite"
+          className="flex items-center gap-2 text-sm text-destructive"
+        >
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
           <span>{error}</span>
         </div>
       )}
@@ -370,24 +666,66 @@ export function FormActions({
 interface FormStatusProps {
   success?: string
   error?: string
+  errorType?: 'client' | 'server'
   className?: string
 }
 
-export function FormStatus({ success, error, className }: FormStatusProps) {
+export function FormStatus({ success, error, errorType, className }: FormStatusProps) {
+  const previousStatusRef = React.useRef<{ success?: string; error?: string }>({})
+
+  // Announce status changes
+  React.useEffect(() => {
+    // Success message appeared
+    if (success && !previousStatusRef.current.success) {
+      announceToScreenReader(`Success: ${success}`, 'polite')
+    }
+    // Error message appeared
+    else if (error && !previousStatusRef.current.error) {
+      announceToScreenReader(`Error: ${error}`, 'assertive')
+    }
+    
+    previousStatusRef.current = { success, error }
+  }, [success, error])
+
   if (!success && !error) return null
 
   return (
-    <div className={cn('p-4 rounded-lg border', className)}>
+    <div 
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className={cn(
+        'p-4 rounded-lg border',
+        success && 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900',
+        error && errorType === 'server' && 'bg-destructive/10 border-destructive/30',
+        error && errorType !== 'server' && 'bg-destructive/5 border-destructive/20',
+        className
+      )}
+    >
       {success && (
-        <div className="flex items-center gap-2 text-sm text-green-600">
-          <CheckCircle className="h-4 w-4" />
-          <span>{success}</span>
+        <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+          <CheckCircle className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+          <span className="font-medium">{success}</span>
         </div>
       )}
       {error && (
-        <div className="flex items-center gap-2 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4" />
-          <span>{error}</span>
+        <div className={cn(
+          "flex items-center gap-2 text-sm",
+          errorType === 'server' ? 'text-destructive' : 'text-destructive/90'
+        )}>
+          <AlertCircle 
+            className={cn(
+              "flex-shrink-0",
+              errorType === 'server' ? 'h-5 w-5' : 'h-4 w-4'
+            )}
+            aria-hidden="true"
+          />
+          <span className={cn(
+            errorType === 'server' && 'font-semibold'
+          )}>
+            {errorType === 'server' && <span className="font-bold">Server error: </span>}
+            {error}
+          </span>
         </div>
       )}
     </div>
@@ -400,9 +738,27 @@ interface FormProps extends React.FormHTMLAttributes<HTMLFormElement> {
   description?: string
   children: React.ReactNode
   className?: string
+  onCancel?: () => void
 }
 
-export function Form({ title, description, children, className, ...props }: FormProps) {
+export function Form({ title, description, children, className, onCancel, onSubmit, ...props }: FormProps) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    // Handle Enter key for form submission
+    if (e.key === 'Enter' && !e.shiftKey && e.target instanceof HTMLInputElement) {
+      // Only submit if not in a textarea
+      e.preventDefault()
+      if (onSubmit) {
+        onSubmit(e as any)
+      }
+    }
+    
+    // Handle Escape key for cancel/reset
+    if (e.key === 'Escape' && onCancel) {
+      e.preventDefault()
+      onCancel()
+    }
+  }
+
   return (
     <Card className={className}>
       {(title || description) && (
@@ -412,7 +768,7 @@ export function Form({ title, description, children, className, ...props }: Form
         </CardHeader>
       )}
       <CardContent>
-        <form {...props}>
+        <form onKeyDown={handleKeyDown} onSubmit={onSubmit} {...props}>
           <div className="space-y-6">
             {children}
           </div>
@@ -423,7 +779,24 @@ export function Form({ title, description, children, className, ...props }: Form
 }
 
 // Modal-specific form component (no Card wrapper)
-export function ModalForm({ title, description, children, className, ...props }: FormProps) {
+export function ModalForm({ title, description, children, className, onCancel, onSubmit, ...props }: FormProps) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    // Handle Enter key for form submission
+    if (e.key === 'Enter' && !e.shiftKey && e.target instanceof HTMLInputElement) {
+      // Only submit if not in a textarea
+      e.preventDefault()
+      if (onSubmit) {
+        onSubmit(e as any)
+      }
+    }
+    
+    // Handle Escape key for cancel/reset
+    if (e.key === 'Escape' && onCancel) {
+      e.preventDefault()
+      onCancel()
+    }
+  }
+
   return (
     <div className={className}>
       {(title || description) && (
@@ -432,7 +805,7 @@ export function ModalForm({ title, description, children, className, ...props }:
           {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
         </div>
       )}
-      <form {...props}>
+      <form onKeyDown={handleKeyDown} onSubmit={onSubmit} {...props}>
         <div className="space-y-6">
           {children}
         </div>
@@ -442,7 +815,24 @@ export function ModalForm({ title, description, children, className, ...props }:
 }
 
 // Standalone form component with modal-like styling (for use outside of modals)
-export function StandaloneForm({ title, description, children, className, ...props }: FormProps) {
+export function StandaloneForm({ title, description, children, className, onCancel, onSubmit, ...props }: FormProps) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    // Handle Enter key for form submission
+    if (e.key === 'Enter' && !e.shiftKey && e.target instanceof HTMLInputElement) {
+      // Only submit if not in a textarea
+      e.preventDefault()
+      if (onSubmit) {
+        onSubmit(e as any)
+      }
+    }
+    
+    // Handle Escape key for cancel/reset
+    if (e.key === 'Escape' && onCancel) {
+      e.preventDefault()
+      onCancel()
+    }
+  }
+
   return (
     <div className={className}>
       {(title || description) && (
@@ -452,7 +842,7 @@ export function StandaloneForm({ title, description, children, className, ...pro
         </div>
       )}
       <div className="p-6">
-        <form {...props}>
+        <form onKeyDown={handleKeyDown} onSubmit={onSubmit} {...props}>
           <div className="space-y-4">
             {children}
           </div>
