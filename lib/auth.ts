@@ -1,6 +1,10 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+} from "./email";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -14,8 +18,34 @@ export const auth = betterAuth({
   ],
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false, // Disable email verification for development
+    requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || false, // Enable via env var
     autoSignInAfterVerification: true, // This should trigger afterSignUp after email verification
+    sendResetPassword: async ({ user, url, token }, _request) => {
+      await sendPasswordResetEmail({
+        user: {
+          email: user.email,
+          name: user.name || undefined,
+        },
+        url,
+        token,
+      });
+    },
+    resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
+  },
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url, token }, _request) => {
+      await sendVerificationEmail({
+        user: {
+          email: user.email,
+          name: user.name || undefined,
+        },
+        url,
+        token,
+      });
+    },
+    sendOnSignUp: true, // Automatically send verification email upon sign-up
+    autoSignInAfterVerification: true, // Automatically sign in after verification
+    expiresIn: 60 * 60 * 24, // Token expiration time in seconds (24 hours)
   },
   socialProviders: {
     google: {
@@ -126,6 +156,10 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // 1 day
   },
   callbacks: {
+    async onPasswordReset({ user }: { user: any }) {
+      console.log(`Password reset successful for user: ${user.email}`);
+      // Add any additional logic after password reset here
+    },
     async beforeSignUp({ user, account }: { user: any; account: any }) {
       console.log("beforeSignUp callback triggered for user:", user.id, "account:", account?.providerId);
       
@@ -161,17 +195,23 @@ export const auth = betterAuth({
     async afterSignUp({ user, account }: { user: any; account: any }) {
       console.log("afterSignUp callback triggered for user:", user.id, "account:", account?.providerId);
       
-      // Development mode: Auto-verify email since we're not sending verification emails
-      if (process.env.NODE_ENV !== 'production') {
+      // OAuth providers (Google, Discord, Apple) are already verified by the provider
+      // Only auto-verify for OAuth providers or if email verification is disabled
+      const isOAuthProvider = account && account.providerId !== 'credential';
+      const emailVerificationRequired = process.env.REQUIRE_EMAIL_VERIFICATION === 'true';
+      
+      if (isOAuthProvider || !emailVerificationRequired) {
         try {
           await prisma.user.update({
             where: { id: user.id },
             data: { emailVerified: true },
           });
-          console.log("Auto-verified email for development user", user.id);
+          console.log(`Auto-verified email for ${isOAuthProvider ? 'OAuth' : 'non-verification'} user`, user.id);
         } catch (error) {
           console.error("Error auto-verifying email:", error);
         }
+      } else {
+        console.log("Email verification required - verification email should be sent automatically");
       }
       
       // Note: Player and UserPreferences records are now automatically created

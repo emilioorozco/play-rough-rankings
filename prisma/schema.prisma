@@ -24,6 +24,7 @@ model User {
   player               Player?
   sessions             Session[]
   organizedTournaments Tournament[]     @relation("TournamentOrganizer")
+  sentInvitations      RoleInvitation[] @relation("RoleInvitations")
 
   @@map("user")
 }
@@ -70,6 +71,24 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@map("verification")
+}
+
+model RoleInvitation {
+  id          String   @id @default(cuid())
+  email       String
+  role        String   // 'organizer' or 'admin'
+  token       String   @unique
+  invitedById String
+  invitedBy   User     @relation("RoleInvitations", fields: [invitedById], references: [id], onDelete: Cascade)
+  acceptedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("role_invitations")
 }
 
 model Game {
