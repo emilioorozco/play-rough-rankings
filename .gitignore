@@ -1,6 +1,16 @@
 node_modules
 # Keep environment variables out of version control
 .env
+.env.local
+.env.production
+.env.production.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.staging
+.env.staging.local
+.env*.local
 
 /generated/prisma
 
@@ -15,6 +25,10 @@ design-drafts/
 
 # macOS files
 .DS_Store
+
+# Editor directories
+.vscode/
+.idea/
 
 # Temporary directories
 tmp/
