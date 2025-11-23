@@ -182,7 +182,7 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // 1 day
   },
   callbacks: {
-    async onPasswordReset({ user }: { user: any }) {
+    async onPasswordReset({ user: _user }: { user: any }) {
       // Future enhancement: Send security notification email to user
       // This would inform security-conscious users that their password was changed
       // Example:
@@ -277,7 +277,7 @@ export const auth = betterAuth({
       
       // Ensure Player record exists for this user (defensive measure)
       try {
-        const player = await prisma.player.upsert({
+        await prisma.player.upsert({
           where: { userId: user.id },
           update: {}, // No updates needed if player already exists
           create: {
@@ -289,7 +289,7 @@ export const auth = betterAuth({
       }
       
     },
-    async onSuccess({ user, account }: { user: any; account: any }) {
+    async onSuccess({ user: _user, account: _account }: { user: any; account: any }) {
     },
   },
 });

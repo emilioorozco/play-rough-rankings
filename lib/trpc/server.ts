@@ -233,7 +233,6 @@ export const appRouter = router({
           validateToken, 
           logEmailOperation 
         } = await import('@/lib/email/error-handler');
-        const { TokenError } = await import('@/lib/email/errors');
         const { 
           SUCCESS_MESSAGES, 
           VERIFICATION_ERROR_MESSAGES 

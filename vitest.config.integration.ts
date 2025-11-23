@@ -65,7 +65,6 @@ export default defineConfig({
     },
     // Disable file-level parallelism - ensures test files run one at a time
     // This prevents beforeEach cleanup from interfering with other test files
-    // @ts-expect-error - fileParallelism exists in Vitest but types may be incomplete
     fileParallelism: false,
     
     // Retry flaky tests in CI
