@@ -74,16 +74,16 @@ model Verification {
 }
 
 model RoleInvitation {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   email       String
-  role        String   // 'organizer' or 'admin'
-  token       String   @unique
+  role        String // 'organizer' or 'admin'
+  token       String    @unique
   invitedById String
-  invitedBy   User     @relation("RoleInvitations", fields: [invitedById], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation("RoleInvitations", fields: [invitedById], references: [id], onDelete: Cascade)
   acceptedAt  DateTime?
   expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([email])
   @@index([token])
@@ -267,4 +267,86 @@ model UserPreferences {
   user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "UserPreferences_userId_fkey")
 
   @@map("UserPreferences")
+}
+
+// Track all message delivery failures (email bounces, SMS failures, etc.)
+model MessageBounce {
+  id             String   @id @default(uuid())
+  recipient      String // Email address or phone number
+  channel        String // "email" or "sms"
+  bounceType     String // "Permanent" or "Transient"
+  bounceSubType  String // e.g., "General", "NoEmail", "Suppressed"
+  diagnosticCode String? // SMTP diagnostic code or SMS error code
+  action         String? // "failed" or "delayed"
+  status         String? // Status code
+  feedbackId     String? // AWS feedback ID
+  messageId      String? // AWS message ID
+  timestamp      DateTime // When bounce occurred
+  createdAt      DateTime @default(now())
+
+  @@index([recipient])
+  @@index([channel])
+  @@index([timestamp])
+  @@index([bounceType])
+  @@map("message_bounces")
+}
+
+// Track all spam complaints (email complaints, SMS opt-outs, etc.)
+model MessageComplaint {
+  id            String   @id @default(uuid())
+  recipient     String // Email address or phone number
+  channel       String // "email" or "sms"
+  complaintType String? // "abuse", "fraud", "opt-out", etc.
+  userAgent     String? // Email client or SMS carrier
+  feedbackId    String? // AWS feedback ID
+  messageId     String? // AWS message ID
+  timestamp     DateTime // When complaint occurred
+  createdAt     DateTime @default(now())
+
+  @@index([recipient])
+  @@index([channel])
+  @@index([timestamp])
+  @@map("message_complaints")
+}
+
+// Suppression list - recipients that should never be contacted
+model MessageSuppressionList {
+  id              String    @id @default(uuid())
+  recipient       String // Email address or phone number
+  channel         String // "email" or "sms"
+  reason          String // "hard_bounce", "soft_bounce_threshold", "complaint", "opt_out"
+  suppressionType String // "bounce", "complaint", "opt_out"
+  bounceCount     Int       @default(0) // For soft bounce tracking
+  lastBounceAt    DateTime? // Last bounce timestamp
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Unique constraint: one suppression per recipient per channel
+  @@unique([recipient, channel])
+  @@index([recipient])
+  @@index([channel])
+  @@index([reason])
+  @@index([createdAt])
+  @@map("message_suppression_list")
+}
+
+// Comprehensive message delivery logging
+model MessageDeliveryLog {
+  id          String   @id @default(uuid())
+  recipient   String // Email address or phone number
+  channel     String // "email" or "sms"
+  subject     String? // Email subject (null for SMS)
+  messageType String // "verification", "password_reset", "role_invitation", "notification"
+  status      String // "sent", "failed", "suppressed", "bounced", "complained"
+  messageId   String? // AWS message ID (if sent)
+  error       String? // Error message (if failed)
+  metadata    Json? // Additional context
+  sentAt      DateTime @default(now())
+
+  @@index([recipient])
+  @@index([channel])
+  @@index([status])
+  @@index([messageType])
+  @@index([sentAt])
+  @@map("message_delivery_logs")
 }
