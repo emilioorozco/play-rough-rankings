@@ -13,13 +13,6 @@ export async function addToSuppressionList(data: {
 }) {
   const recipient = data.recipient.toLowerCase();
   
-  console.log('[DEBUG] addToSuppressionList called:', {
-    recipient,
-    channel: data.channel,
-    reason: data.reason,
-    suppressionType: data.suppressionType,
-  });
-  
   try {
     const result = await prisma.messageSuppressionList.upsert({
       where: {
@@ -41,15 +34,9 @@ export async function addToSuppressionList(data: {
       },
     });
     
-    console.log('[DEBUG] addToSuppressionList - Successfully upserted suppression:', {
-      recipient: result.recipient,
-      channel: result.channel,
-      reason: result.reason,
-    });
-    
     return result;
   } catch (error) {
-    console.error('[DEBUG] addToSuppressionList - Error upserting suppression:', error);
+    console.error('Error upserting suppression:', error);
     throw error;
   }
 }
@@ -120,11 +107,6 @@ export async function incrementSoftBounceCount(
 ): Promise<number> {
   const recipientLower = recipient.toLowerCase();
   
-  console.log('[DEBUG] incrementSoftBounceCount called:', {
-    recipient: recipientLower,
-    channel,
-  });
-  
   try {
     // Use upsert to handle race conditions atomically
     // This ensures we don't have issues with findUnique -> create/update race conditions
@@ -151,14 +133,9 @@ export async function incrementSoftBounceCount(
       },
     });
     
-    console.log('[DEBUG] incrementSoftBounceCount - Successfully updated:', {
-      recipient: updated.recipient,
-      bounceCount: updated.bounceCount,
-    });
-    
     return updated.bounceCount;
   } catch (error) {
-    console.error('[DEBUG] incrementSoftBounceCount - Error:', error);
+    console.error('Error incrementing soft bounce count:', error);
     throw error;
   }
 }

@@ -8,31 +8,15 @@ import { calculateEmailMetrics } from './rate-calculator';
  * Handles both hard bounces (immediate suppression) and soft bounces (threshold-based suppression)
  */
 export async function processBounce(bounce: any, mail: any) {
-  console.log('[DEBUG] processBounce called:', {
-    bounceType: bounce.bounceType,
-    bounceSubType: bounce.bounceSubType,
-    recipients: bounce.bouncedRecipients?.length || 0,
-    mailMessageId: mail?.messageId,
-  });
-  
   if (!bounce.bouncedRecipients || bounce.bouncedRecipients.length === 0) {
-    console.warn('[DEBUG] No bounced recipients found in bounce notification');
     return;
   }
   
   for (const recipient of bounce.bouncedRecipients) {
     const email = recipient.emailAddress.toLowerCase();
-    console.log('[DEBUG] Processing bounce for recipient:', email);
     
     try {
       // Log bounce to channel-agnostic database model
-      console.log('[DEBUG] Calling logBounce with data:', {
-        recipient: email,
-        bounceType: bounce.bounceType,
-        bounceSubType: bounce.bounceSubType,
-        messageId: mail.messageId,
-      });
-      
       await logBounce({
         recipient: email,
         channel: 'email', // Specify channel for this email implementation
@@ -45,11 +29,9 @@ export async function processBounce(bounce: any, mail: any) {
         messageId: mail.messageId,
         timestamp: new Date(bounce.timestamp),
       });
-      
-      console.log('[DEBUG] logBounce completed successfully for:', email);
     } catch (error) {
-      console.error('[DEBUG] Error in logBounce for', email, ':', error);
-      throw error; // Re-throw to see the actual error
+      console.error('Error logging bounce for', email, ':', error);
+      throw error;
     }
     
     // Handle based on bounce type
@@ -62,13 +44,9 @@ export async function processBounce(bounce: any, mail: any) {
         suppressionType: 'bounce',
       });
       
-      console.log(`Hard bounce: ${email} added to suppression list`);
-      
     } else if (bounce.bounceType === 'Transient') {
       // Soft bounce - track and check threshold
       const softBounceCount = await incrementSoftBounceCount(email, 'email');
-      
-      console.log(`Soft bounce: ${email} (count: ${softBounceCount})`);
       
       // Suppress after 3 soft bounces in 30 days
       if (softBounceCount >= 3) {
@@ -78,8 +56,6 @@ export async function processBounce(bounce: any, mail: any) {
           reason: 'soft_bounce_threshold',
           suppressionType: 'bounce',
         });
-        
-        console.log(`Soft bounce threshold: ${email} added to suppression list`);
       }
     }
   }
@@ -108,13 +84,6 @@ async function logBounce(data: {
   messageId?: string;
   timestamp: Date;
 }) {
-  console.log('[DEBUG] logBounce - Creating bounce record:', {
-    recipient: data.recipient,
-    channel: data.channel,
-    bounceType: data.bounceType,
-    messageId: data.messageId,
-  });
-  
   try {
     const result = await prisma.messageBounce.create({
       data: {
@@ -131,19 +100,9 @@ async function logBounce(data: {
       },
     });
     
-    console.log('[DEBUG] logBounce - Successfully created bounce record:', {
-      id: result.id,
-      recipient: result.recipient,
-      bounceType: result.bounceType,
-    });
-    
     return result;
   } catch (error) {
-    console.error('[DEBUG] logBounce - Error creating bounce record:', error);
-    console.error('[DEBUG] logBounce - Error details:', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    console.error('Error creating bounce record:', error);
     throw error;
   }
 }
