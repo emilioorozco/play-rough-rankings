@@ -8,8 +8,11 @@ import { loginSchema, type LoginFormData } from "@/lib/validation/schemas";
 import { ModalForm, FormInput, FormCheckbox, FormActions, FormStatus } from "../ui/form-components";
 import { Modal } from "../ui/modal";
 import { Button } from "../ui/button";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, AlertCircle } from "lucide-react";
 import { transformError } from "@/lib/utils/error-transformer";
+import { EmailVerificationPending } from "./email-verification-pending";
+import { PasswordResetRequest } from "./password-reset-request";
+import { Alert, AlertDescription } from "../ui/alert";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -22,6 +25,9 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
   const pathname = usePathname();
   const { signIn } = useSession();
   const [socialLoginLoading, setSocialLoginLoading] = useState<string | null>(null);
+  const [showVerificationPending, setShowVerificationPending] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   // Don't show sign up link if we're on the sign-up page
   const showSignUpLink = pathname !== '/sign-up';
@@ -51,6 +57,16 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       });
 
       if (result.error) {
+        // Check if the error is due to unverified email
+        const errorMessage = (result.error as any)?.message || '';
+        if (errorMessage.toLowerCase().includes('email not verified') || 
+            errorMessage.toLowerCase().includes('verify your email')) {
+          // Show verification pending component
+          setUnverifiedEmail(data.email);
+          setShowVerificationPending(true);
+          return;
+        }
+
         // Log full error structure to understand Better Auth error format
         console.error("Login error details:", {
           error: result.error,
@@ -103,6 +119,59 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       setSocialLoginLoading(null);
     }
   };
+
+  // If showing password reset, render that instead
+  if (showPasswordReset) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={() => {
+          setShowPasswordReset(false);
+        }}
+        size="md"
+      >
+        <div className="p-6">
+          <PasswordResetRequest
+            onClose={() => {
+              setShowPasswordReset(false);
+            }}
+          />
+        </div>
+      </Modal>
+    );
+  }
+
+  // If showing verification pending, render that instead
+  if (showVerificationPending && unverifiedEmail) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={() => {
+          setShowVerificationPending(false);
+          setUnverifiedEmail(null);
+          onClose();
+        }}
+        size="md"
+      >
+        <div className="p-6">
+          <Alert className="mb-4 border-warning bg-warning/10">
+            <AlertCircle className="h-4 w-4 text-warning" />
+            <AlertDescription className="text-warning">
+              Your email address has not been verified. Please check your inbox for the verification email.
+            </AlertDescription>
+          </Alert>
+          <EmailVerificationPending
+            email={unverifiedEmail}
+            onClose={() => {
+              setShowVerificationPending(false);
+              setUnverifiedEmail(null);
+              onClose();
+            }}
+          />
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
@@ -195,7 +264,7 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
           <button
             type="button"
             className="text-sm text-primary hover:underline"
-            onClick={() => {/* TODO: Implement forgot password */}}
+            onClick={() => setShowPasswordReset(true)}
           >
             Forgot password?
           </button>

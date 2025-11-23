@@ -5,10 +5,26 @@ import { trpc } from '@/lib/trpc/client'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'games' | 'users' | 'system'>('games')
+  const [activeTab, setActiveTab] = useState<'games' | 'users' | 'system' | 'email'>('games')
+  const [metricsDays, setMetricsDays] = useState(30)
 
   // Get system stats
   const { data: gamesData } = trpc.games.list.useQuery({ includeInactive: true })
+  
+  // Get email metrics
+  const { data: emailMetrics, isLoading: metricsLoading } = trpc.emailMetrics.getMetrics.useQuery({
+    channel: 'email',
+    days: metricsDays,
+  })
+  
+  const { data: compliance } = trpc.emailMetrics.checkCompliance.useQuery({
+    channel: 'email',
+    days: metricsDays,
+  })
+  
+  const { data: deliveryStats } = trpc.emailMetrics.getDeliveryStats.useQuery({})
+  
+  const { data: suppressionStats } = trpc.emailMetrics.getSuppressionStats.useQuery({ channel: 'email' })
 
   return (
     <ProtectedRoute requiredRole="admin">
@@ -41,6 +57,13 @@ export default function AdminPage() {
             >
               <span className="tab-icon">⚙️</span>
               <span className="tab-label">System</span>
+            </button>
+            <button
+              className={`tab-button ${activeTab === 'email' ? 'active' : ''}`}
+              onClick={() => setActiveTab('email')}
+            >
+              <span className="tab-icon">📧</span>
+              <span className="tab-label">Email</span>
             </button>
           </div>
         </div>
@@ -180,6 +203,174 @@ export default function AdminPage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'email' && (
+            <div className="email-admin">
+              <div className="admin-section">
+                <h2>Email Metrics & Monitoring</h2>
+                <p className="text-muted-foreground mb-4">
+                  Monitor email delivery rates, bounce/complaint rates, and AWS SES compliance status
+                </p>
+
+                {/* Time Period Selector */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium mb-2">Time Period:</label>
+                  <select
+                    value={metricsDays}
+                    onChange={(e) => setMetricsDays(Number(e.target.value))}
+                    className="px-3 py-2 border rounded-md"
+                  >
+                    <option value={7}>Last 7 days</option>
+                    <option value={30}>Last 30 days</option>
+                    <option value={90}>Last 90 days</option>
+                  </select>
+                </div>
+
+                {/* AWS SES Compliance Status */}
+                {compliance && (
+                  <div className={`mb-6 p-4 rounded-lg border-2 ${
+                    compliance.compliant 
+                      ? 'bg-green-50 border-green-200' 
+                      : 'bg-red-50 border-red-200'
+                  }`}>
+                    <h3 className="text-lg font-semibold mb-2">
+                      AWS SES Compliance Status
+                      {compliance.compliant ? (
+                        <span className="ml-2 text-green-600">✅ Compliant</span>
+                      ) : (
+                        <span className="ml-2 text-red-600">⚠️ Non-Compliant</span>
+                      )}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <strong>Bounce Rate:</strong> {compliance.metrics.bounceRate.toFixed(2)}%
+                        {compliance.bounceCompliant ? (
+                          <span className="text-green-600 ml-2">✓</span>
+                        ) : (
+                          <span className="text-red-600 ml-2">✗ (Limit: {compliance.limits.bounceLimit}%)</span>
+                        )}
+                      </div>
+                      <div>
+                        <strong>Complaint Rate:</strong> {compliance.metrics.complaintRate.toFixed(4)}%
+                        {compliance.complaintCompliant ? (
+                          <span className="text-green-600 ml-2">✓</span>
+                        ) : (
+                          <span className="text-red-600 ml-2">✗ (Limit: {compliance.limits.complaintLimit}%)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Email Metrics Overview */}
+                {emailMetrics && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="stat-card">
+                      <h4>Total Sent</h4>
+                      <div className="stat-number">{emailMetrics.totalSent.toLocaleString()}</div>
+                      <small>Last {metricsDays} days</small>
+                    </div>
+                    <div className={`stat-card ${
+                      emailMetrics.bounceWarning ? 'border-red-300 bg-red-50' : ''
+                    }`}>
+                      <h4>Bounce Rate</h4>
+                      <div className={`stat-number ${
+                        emailMetrics.bounceWarning ? 'text-red-600' : ''
+                      }`}>
+                        {emailMetrics.bounceRate.toFixed(2)}%
+                      </div>
+                      <small>
+                        {emailMetrics.totalBounces} bounces
+                        {emailMetrics.bounceWarning && ' ⚠️ Warning'}
+                      </small>
+                    </div>
+                    <div className={`stat-card ${
+                      emailMetrics.complaintWarning ? 'border-red-300 bg-red-50' : ''
+                    }`}>
+                      <h4>Complaint Rate</h4>
+                      <div className={`stat-number ${
+                        emailMetrics.complaintWarning ? 'text-red-600' : ''
+                      }`}>
+                        {emailMetrics.complaintRate.toFixed(4)}%
+                      </div>
+                      <small>
+                        {emailMetrics.totalComplaints} complaints
+                        {emailMetrics.complaintWarning && ' ⚠️ Warning'}
+                      </small>
+                    </div>
+                  </div>
+                )}
+
+                {/* Delivery Statistics */}
+                {deliveryStats && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-3">Delivery Statistics</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="stat-card">
+                        <h4>Total Attempts</h4>
+                        <div className="stat-number">{deliveryStats.total.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card">
+                        <h4>Sent</h4>
+                        <div className="stat-number text-green-600">{deliveryStats.sent.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card">
+                        <h4>Failed</h4>
+                        <div className="stat-number text-red-600">{deliveryStats.failed.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card">
+                        <h4>Suppressed</h4>
+                        <div className="stat-number text-yellow-600">{deliveryStats.suppressed.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card">
+                        <h4>Bounced</h4>
+                        <div className="stat-number text-orange-600">{deliveryStats.bounced.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card">
+                        <h4>Complained</h4>
+                        <div className="stat-number text-red-600">{deliveryStats.complained.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card col-span-2 md:col-span-3">
+                        <h4>Success Rate</h4>
+                        <div className="stat-number text-green-600">{deliveryStats.successRate.toFixed(2)}%</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Suppression Statistics */}
+                {suppressionStats && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-3">Suppression List</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="stat-card">
+                        <h4>Total Suppressed</h4>
+                        <div className="stat-number">{suppressionStats.total.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card">
+                        <h4>Hard Bounces</h4>
+                        <div className="stat-number">{suppressionStats.hardBounces.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card">
+                        <h4>Soft Bounces</h4>
+                        <div className="stat-number">{suppressionStats.softBounces.toLocaleString()}</div>
+                      </div>
+                      <div className="stat-card">
+                        <h4>Complaints</h4>
+                        <div className="stat-number">{suppressionStats.complaints.toLocaleString()}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {metricsLoading && (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Loading metrics...</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
