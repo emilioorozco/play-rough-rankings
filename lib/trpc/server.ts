@@ -120,79 +120,26 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { 
           handleEmailError, 
-          createSecureResponse, 
           logEmailOperation 
         } = await import('@/lib/email/error-handler');
         const { SUCCESS_MESSAGES } = await import('@/lib/email/error-messages');
         
         try {
-          // Find user by email
-          const user = await ctx.prisma.user.findUnique({
-            where: { email: input.email },
-          });
-
-          // If user doesn't exist or is already verified, return success anyway (security)
-          if (!user) {
-            logEmailOperation('resend_verification', 'verification', {
-              email: input.email,
-              reason: 'user_not_found',
-            });
-            return createSecureResponse(
-              false,
-              'If an account exists with this email, a verification link has been sent.'
-            );
-          }
-
-          if (user.emailVerified) {
-            logEmailOperation('resend_verification', 'verification', {
-              email: input.email,
-              reason: 'already_verified',
-            });
-            return createSecureResponse(
-              false,
-              'If an account exists with this email, a verification link has been sent.'
-            );
-          }
-
-          // Check rate limit before generating token
-          const { checkRateLimit } = await import('@/lib/email/rate-limiter');
-          checkRateLimit(input.email, 'verification');
-
-          // Generate new verification token
-          const crypto = await import('crypto');
-          const token = crypto.randomBytes(32).toString('hex');
-          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-          // Invalidate old tokens for this email
-          await ctx.prisma.verification.deleteMany({
-            where: {
-              identifier: input.email,
-            },
-          });
-
-          // Create new verification token
-          await ctx.prisma.verification.create({
-            data: {
-              identifier: input.email,
-              value: token,
-              expiresAt,
-            },
-          });
-
-          // Send verification email
-          const { sendVerificationEmail } = await import('@/lib/email');
+          // Use Better Auth's built-in verification email resend method
+          // This handles token generation, expiration, and calls our sendVerificationEmail callback
           const baseUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-          const verificationUrl = `${baseUrl}/verify-email?token=${token}`;
-
-          await sendVerificationEmail({
-            user: {
-              email: user.email,
-              name: user.name || undefined,
+          const callbackURL = `${baseUrl}/verify-email`;
+          
+          await auth.api.sendVerificationEmail({
+            body: {
+              email: input.email,
+              callbackURL: callbackURL,
             },
-            url: verificationUrl,
-            token,
+            headers: ctx.headers || new Headers(),
           });
 
+          // Always return success message for security (doesn't reveal if email exists or is already verified)
+          // Better Auth handles user existence and verification status checking internally
           logEmailOperation('resend_verification', 'verification', {
             email: input.email,
             success: true,
@@ -230,7 +177,6 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { 
           handleEmailError, 
-          validateToken, 
           logEmailOperation 
         } = await import('@/lib/email/error-handler');
         const { 
@@ -239,86 +185,60 @@ export const appRouter = router({
         } = await import('@/lib/email/error-messages');
         
         try {
-          // Find verification token
-          const verification = await ctx.prisma.verification.findFirst({
-            where: {
-              value: input.token,
+          // Use Better Auth's built-in email verification method
+          // This handles token validation, expiration checking, user verification, token cleanup,
+          // and triggers auto sign-in if configured (emailVerification.autoSignInAfterVerification)
+          const baseUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+          const callbackURL = `${baseUrl}/profile-completion`;
+          
+          const result = await auth.api.verifyEmail({
+            query: {
+              token: input.token,
+              callbackURL: callbackURL,
             },
+            headers: ctx.headers || new Headers(),
           });
 
-          // Validate token exists and is not expired
-          validateToken(
-            verification?.value,
-            verification?.expiresAt,
-            'verification'
-          );
-
-          // Find user by email (identifier)
-          const user = await ctx.prisma.user.findUnique({
-            where: { email: verification!.identifier },
-          });
-
-          if (!user) {
-            logEmailOperation('verify_email', 'verification', {
-              token: input.token.substring(0, 8) + '...',
-              error: 'user_not_found',
-            });
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: VERIFICATION_ERROR_MESSAGES.USER_NOT_FOUND,
-            });
-          }
-
-          // Check if already verified
-          if (user.emailVerified) {
-            // Delete the token since it's no longer needed
-            await ctx.prisma.verification.delete({
-              where: { id: verification!.id },
-            });
-
-            logEmailOperation('verify_email', 'verification', {
-              email: user.email,
-              alreadyVerified: true,
-            });
-
-            return {
-              success: true,
-              message: VERIFICATION_ERROR_MESSAGES.ALREADY_VERIFIED,
-              alreadyVerified: true,
-            };
-          }
-
-          // Mark email as verified and delete the token in a transaction
-          await ctx.prisma.$transaction([
-            ctx.prisma.user.update({
-              where: { id: user.id },
-              data: { emailVerified: true },
-            }),
-            ctx.prisma.verification.delete({
-              where: { id: verification!.id },
-            }),
-          ]);
+          // Better Auth handles all the logic including:
+          // - Token validation and expiration checking
+          // - User lookup and verification status checking
+          // - Marking email as verified
+          // - Deleting the verification token
+          // - Auto sign-in if configured (autoSignInAfterVerification)
+          // - Triggering afterSignUp/afterSignIn callbacks
 
           logEmailOperation('verify_email', 'verification', {
-            email: user.email,
             success: true,
           });
 
-          // Note: Auto sign-in is handled by Better Auth's emailVerification.autoSignInAfterVerification
-          // The client should redirect to the sign-in page or use Better Auth's built-in auto sign-in
+          // Check if email was already verified (Better Auth returns different response)
+          const alreadyVerified = result === undefined || (typeof result === 'object' && !result.status);
 
           return {
             success: true,
-            message: SUCCESS_MESSAGES.EMAIL_VERIFIED,
-            alreadyVerified: false,
+            message: alreadyVerified 
+              ? VERIFICATION_ERROR_MESSAGES.ALREADY_VERIFIED 
+              : SUCCESS_MESSAGES.EMAIL_VERIFIED,
+            alreadyVerified: alreadyVerified,
           };
-        } catch (error) {
+        } catch (error: any) {
           // Handle errors with proper conversion to tRPC errors
           if (error instanceof TRPCError) {
             throw error;
           }
+
+          // Better Auth may return specific error messages
+          const errorMessage = error?.message || error?.statusText || 'Failed to verify email';
           
-          // Convert email errors to tRPC errors
+          // Convert to tRPC error with appropriate code
+          if (errorMessage.includes('expired') || errorMessage.includes('invalid')) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: VERIFICATION_ERROR_MESSAGES.TOKEN_INVALID,
+            });
+          }
+
+          // Convert other email errors to tRPC errors
           handleEmailError(error, 'verification');
         }
       }),
@@ -341,68 +261,26 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { 
           handleEmailError, 
-          createSecureResponse, 
           logEmailOperation 
         } = await import('@/lib/email/error-handler');
         const { SUCCESS_MESSAGES } = await import('@/lib/email/error-messages');
         
         try {
-          // Find user by email
-          const user = await ctx.prisma.user.findUnique({
-            where: { email: input.email },
-          });
-
-          // If user doesn't exist, return success anyway (security - don't reveal if email exists)
-          if (!user) {
-            logEmailOperation('request_password_reset', 'password_reset', {
-              email: input.email,
-              reason: 'user_not_found',
-            });
-            return createSecureResponse(
-              false,
-              'If an account exists with this email, a password reset link has been sent.'
-            );
-          }
-
-          // Check rate limit before generating token
-          const { checkRateLimit } = await import('@/lib/email/rate-limiter');
-          checkRateLimit(input.email, 'password_reset');
-
-          // Generate password reset token
-          const crypto = await import('crypto');
-          const token = crypto.randomBytes(32).toString('hex');
-          const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-          // Invalidate old reset tokens for this email
-          await ctx.prisma.verification.deleteMany({
-            where: {
-              identifier: input.email,
-            },
-          });
-
-          // Create new reset token
-          await ctx.prisma.verification.create({
-            data: {
-              identifier: input.email,
-              value: token,
-              expiresAt,
-            },
-          });
-
-          // Send password reset email
-          const { sendPasswordResetEmail } = await import('@/lib/email');
+          // Use Better Auth's built-in password reset request method
+          // This handles token generation, expiration, and calls our sendResetPassword callback
           const baseUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-          const resetUrl = `${baseUrl}/reset-password?token=${token}`;
-
-          await sendPasswordResetEmail({
-            user: {
-              email: user.email,
-              name: user.name || undefined,
+          const resetUrl = `${baseUrl}/reset-password`;
+          
+          await auth.api.requestPasswordReset({
+            body: {
+              email: input.email,
+              redirectTo: resetUrl,
             },
-            url: resetUrl,
-            token,
+            headers: ctx.headers || new Headers(),
           });
 
+          // Always return success message for security (doesn't reveal if email exists)
+          // Better Auth handles user existence checking internally
           logEmailOperation('request_password_reset', 'password_reset', {
             email: input.email,
             success: true,
@@ -442,7 +320,6 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { 
           handleEmailError, 
-          validateToken, 
           logEmailOperation 
         } = await import('@/lib/email/error-handler');
         const { 
@@ -451,105 +328,53 @@ export const appRouter = router({
         } = await import('@/lib/email/error-messages');
         
         try {
-          // Find and validate reset token
-          const verification = await ctx.prisma.verification.findFirst({
-            where: {
-              value: input.token,
+          // Use Better Auth's built-in password reset method
+          // This handles token validation, password hashing, session invalidation, and triggers callbacks
+          await auth.api.resetPassword({
+            body: {
+              newPassword: input.password,
+              token: input.token,
             },
+            query: {
+              token: input.token,
+            },
+            headers: ctx.headers || new Headers(),
           });
 
-          // Validate token exists and is not expired
-          validateToken(
-            verification?.value,
-            verification?.expiresAt,
-            'password_reset'
-          );
-
-          // Find user by email (identifier)
-          const user = await ctx.prisma.user.findUnique({
-            where: { email: verification!.identifier },
-          });
-
-          if (!user) {
-            logEmailOperation('reset_password', 'password_reset', {
-              token: input.token.substring(0, 8) + '...',
-              error: 'user_not_found',
-            });
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: PASSWORD_RESET_ERROR_MESSAGES.USER_NOT_FOUND,
-            });
-          }
-
-          // Use Better Auth's password hashing (compatible with their system)
-          // Better Auth uses a specific hashing algorithm, so we need to use their method
-          // We'll hash the password using the same method Better Auth uses internally
-          const crypto = await import('crypto');
-          const { scrypt, randomBytes } = crypto;
-          
-          // Generate salt and hash password (compatible with Better Auth)
-          const salt = randomBytes(16).toString('hex');
-          const hashedPassword = await new Promise<string>((resolve, reject) => {
-            scrypt(input.password, salt, 64, (err, derivedKey) => {
-              if (err) reject(err);
-              resolve(salt + ':' + derivedKey.toString('hex'));
-            });
-          });
-
-          // Update password and invalidate all sessions in a transaction
-          await ctx.prisma.$transaction(async (tx) => {
-            // Update user password
-            // Note: Better Auth stores passwords in the Account table with providerId 'credential'
-            await tx.account.updateMany({
-              where: {
-                userId: user.id,
-                providerId: 'credential',
-              },
-              data: {
-                password: hashedPassword,
-              },
-            });
-
-            // Invalidate all existing sessions for security
-            await tx.session.deleteMany({
-              where: {
-                userId: user.id,
-              },
-            });
-
-            // Delete the reset token
-            await tx.verification.delete({
-              where: { id: verification!.id },
-            });
-          });
+          // Better Auth handles all the logic including:
+          // - Token validation and expiration checking
+          // - Password hashing (using correct algorithm)
+          // - Updating account password
+          // - Invalidating all user sessions
+          // - Deleting the reset token
+          // - Triggering onPasswordReset callback
 
           logEmailOperation('reset_password', 'password_reset', {
-            email: user.email,
             success: true,
           });
-
-          // Trigger onPasswordReset callback
-          try {
-            const { auth } = await import('@/lib/auth');
-            if (auth.options.callbacks?.onPasswordReset) {
-              await auth.options.callbacks.onPasswordReset({ user });
-            }
-          } catch (callbackError) {
-            console.error('[AUTH] Error in onPasswordReset callback:', callbackError);
-            // Don't fail the password reset if callback fails
-          }
 
           return {
             success: true,
             message: SUCCESS_MESSAGES.PASSWORD_RESET_SUCCESS,
           };
-        } catch (error) {
+        } catch (error: any) {
           // Handle errors with proper conversion to tRPC errors
           if (error instanceof TRPCError) {
             throw error;
           }
+
+          // Better Auth may return specific error messages
+          const errorMessage = error?.message || error?.statusText || 'Failed to reset password';
           
-          // Convert email errors to tRPC errors
+          // Convert to tRPC error with appropriate code
+          if (errorMessage.includes('expired') || errorMessage.includes('invalid')) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: PASSWORD_RESET_ERROR_MESSAGES.TOKEN_INVALID,
+            });
+          }
+
+          // Convert other email errors to tRPC errors
           handleEmailError(error, 'password_reset');
         }
       }),
