@@ -80,6 +80,7 @@ import { userPreferencesRouter } from "./routers/user-preferences";
 import { tournamentLifecycleRouter } from "./routers/tournament-lifecycle";
 import { matchManagementRouter } from "./routers/match-management";
 import { invitationsRouter } from "./routers/invitations";
+import { emailMetricsRouter } from "./routers/email-metrics";
 
 // Main app router with basic structure
 export const appRouter = router({
@@ -99,6 +100,935 @@ export const appRouter = router({
         user: null,
         session: null,
       };
+    }),
+
+    /**
+     * Resend verification email
+     * 
+     * Generates a new verification token and sends a verification email.
+     * Always returns success for security (doesn't reveal if email exists).
+     * Includes rate limiting to prevent abuse.
+     * 
+     * Requirements: 1.1, 4.3, 8.5
+     */
+    resendVerificationEmail: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email('Invalid email address'),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { 
+          handleEmailError, 
+          createSecureResponse, 
+          logEmailOperation 
+        } = await import('@/lib/email/error-handler');
+        const { SUCCESS_MESSAGES } = await import('@/lib/email/error-messages');
+        
+        try {
+          // Find user by email
+          const user = await ctx.prisma.user.findUnique({
+            where: { email: input.email },
+          });
+
+          // If user doesn't exist or is already verified, return success anyway (security)
+          if (!user) {
+            logEmailOperation('resend_verification', 'verification', {
+              email: input.email,
+              reason: 'user_not_found',
+            });
+            return createSecureResponse(
+              false,
+              'If an account exists with this email, a verification link has been sent.'
+            );
+          }
+
+          if (user.emailVerified) {
+            logEmailOperation('resend_verification', 'verification', {
+              email: input.email,
+              reason: 'already_verified',
+            });
+            return createSecureResponse(
+              false,
+              'If an account exists with this email, a verification link has been sent.'
+            );
+          }
+
+          // Check rate limit before generating token
+          const { checkRateLimit } = await import('@/lib/email/rate-limiter');
+          checkRateLimit(input.email, 'verification');
+
+          // Generate new verification token
+          const crypto = await import('crypto');
+          const token = crypto.randomBytes(32).toString('hex');
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+          // Invalidate old tokens for this email
+          await ctx.prisma.verification.deleteMany({
+            where: {
+              identifier: input.email,
+            },
+          });
+
+          // Create new verification token
+          await ctx.prisma.verification.create({
+            data: {
+              identifier: input.email,
+              value: token,
+              expiresAt,
+            },
+          });
+
+          // Send verification email
+          const { sendVerificationEmail } = await import('@/lib/email');
+          const baseUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+          const verificationUrl = `${baseUrl}/verify-email?token=${token}`;
+
+          await sendVerificationEmail({
+            user: {
+              email: user.email,
+              name: user.name || undefined,
+            },
+            url: verificationUrl,
+            token,
+          });
+
+          logEmailOperation('resend_verification', 'verification', {
+            email: input.email,
+            success: true,
+          });
+
+          return {
+            success: true,
+            message: SUCCESS_MESSAGES.VERIFICATION_RESENT,
+          };
+        } catch (error) {
+          // Handle errors with proper conversion to tRPC errors
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          
+          // Convert email errors to tRPC errors
+          handleEmailError(error, 'verification');
+        }
+      }),
+
+    /**
+     * Verify email with token
+     * 
+     * Validates the verification token and marks the user's email as verified.
+     * Automatically signs in the user after successful verification.
+     * 
+     * Requirements: 1.3, 1.5, 8.3, 8.4
+     */
+    verifyEmail: publicProcedure
+      .input(
+        z.object({
+          token: z.string().min(1, 'Token is required'),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { 
+          handleEmailError, 
+          validateToken, 
+          logEmailOperation 
+        } = await import('@/lib/email/error-handler');
+        const { TokenError } = await import('@/lib/email/errors');
+        const { 
+          SUCCESS_MESSAGES, 
+          VERIFICATION_ERROR_MESSAGES 
+        } = await import('@/lib/email/error-messages');
+        
+        try {
+          // Find verification token
+          const verification = await ctx.prisma.verification.findFirst({
+            where: {
+              value: input.token,
+            },
+          });
+
+          // Validate token exists and is not expired
+          validateToken(
+            verification?.value,
+            verification?.expiresAt,
+            'verification'
+          );
+
+          // Find user by email (identifier)
+          const user = await ctx.prisma.user.findUnique({
+            where: { email: verification!.identifier },
+          });
+
+          if (!user) {
+            logEmailOperation('verify_email', 'verification', {
+              token: input.token.substring(0, 8) + '...',
+              error: 'user_not_found',
+            });
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: VERIFICATION_ERROR_MESSAGES.USER_NOT_FOUND,
+            });
+          }
+
+          // Check if already verified
+          if (user.emailVerified) {
+            // Delete the token since it's no longer needed
+            await ctx.prisma.verification.delete({
+              where: { id: verification!.id },
+            });
+
+            logEmailOperation('verify_email', 'verification', {
+              email: user.email,
+              alreadyVerified: true,
+            });
+
+            return {
+              success: true,
+              message: VERIFICATION_ERROR_MESSAGES.ALREADY_VERIFIED,
+              alreadyVerified: true,
+            };
+          }
+
+          // Mark email as verified and delete the token in a transaction
+          await ctx.prisma.$transaction([
+            ctx.prisma.user.update({
+              where: { id: user.id },
+              data: { emailVerified: true },
+            }),
+            ctx.prisma.verification.delete({
+              where: { id: verification!.id },
+            }),
+          ]);
+
+          logEmailOperation('verify_email', 'verification', {
+            email: user.email,
+            success: true,
+          });
+
+          // Note: Auto sign-in is handled by Better Auth's emailVerification.autoSignInAfterVerification
+          // The client should redirect to the sign-in page or use Better Auth's built-in auto sign-in
+
+          return {
+            success: true,
+            message: SUCCESS_MESSAGES.EMAIL_VERIFIED,
+            alreadyVerified: false,
+          };
+        } catch (error) {
+          // Handle errors with proper conversion to tRPC errors
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          
+          // Convert email errors to tRPC errors
+          handleEmailError(error, 'verification');
+        }
+      }),
+
+    /**
+     * Request password reset
+     * 
+     * Generates a password reset token and sends a reset email.
+     * Always returns success for security (doesn't reveal if email exists).
+     * Includes rate limiting to prevent abuse.
+     * 
+     * Requirements: 2.1, 2.2, 8.5
+     */
+    requestPasswordReset: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email('Invalid email address'),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { 
+          handleEmailError, 
+          createSecureResponse, 
+          logEmailOperation 
+        } = await import('@/lib/email/error-handler');
+        const { SUCCESS_MESSAGES } = await import('@/lib/email/error-messages');
+        
+        try {
+          // Find user by email
+          const user = await ctx.prisma.user.findUnique({
+            where: { email: input.email },
+          });
+
+          // If user doesn't exist, return success anyway (security - don't reveal if email exists)
+          if (!user) {
+            logEmailOperation('request_password_reset', 'password_reset', {
+              email: input.email,
+              reason: 'user_not_found',
+            });
+            return createSecureResponse(
+              false,
+              'If an account exists with this email, a password reset link has been sent.'
+            );
+          }
+
+          // Check rate limit before generating token
+          const { checkRateLimit } = await import('@/lib/email/rate-limiter');
+          checkRateLimit(input.email, 'password_reset');
+
+          // Generate password reset token
+          const crypto = await import('crypto');
+          const token = crypto.randomBytes(32).toString('hex');
+          const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+          // Invalidate old reset tokens for this email
+          await ctx.prisma.verification.deleteMany({
+            where: {
+              identifier: input.email,
+            },
+          });
+
+          // Create new reset token
+          await ctx.prisma.verification.create({
+            data: {
+              identifier: input.email,
+              value: token,
+              expiresAt,
+            },
+          });
+
+          // Send password reset email
+          const { sendPasswordResetEmail } = await import('@/lib/email');
+          const baseUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+          const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+          await sendPasswordResetEmail({
+            user: {
+              email: user.email,
+              name: user.name || undefined,
+            },
+            url: resetUrl,
+            token,
+          });
+
+          logEmailOperation('request_password_reset', 'password_reset', {
+            email: input.email,
+            success: true,
+          });
+
+          return {
+            success: true,
+            message: SUCCESS_MESSAGES.PASSWORD_RESET_SENT,
+          };
+        } catch (error) {
+          // Handle errors with proper conversion to tRPC errors
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          
+          // Convert email errors to tRPC errors
+          handleEmailError(error, 'password_reset');
+        }
+      }),
+
+    /**
+     * Reset password with token
+     * 
+     * Validates the reset token and updates the user's password.
+     * Invalidates all existing sessions for security.
+     * Triggers the onPasswordReset callback.
+     * 
+     * Requirements: 2.3, 2.4, 2.6, 8.3, 8.4
+     */
+    resetPassword: publicProcedure
+      .input(
+        z.object({
+          token: z.string().min(1, 'Token is required'),
+          password: z.string().min(8, 'Password must be at least 8 characters long'),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { 
+          handleEmailError, 
+          validateToken, 
+          logEmailOperation 
+        } = await import('@/lib/email/error-handler');
+        const { 
+          SUCCESS_MESSAGES, 
+          PASSWORD_RESET_ERROR_MESSAGES 
+        } = await import('@/lib/email/error-messages');
+        
+        try {
+          // Find and validate reset token
+          const verification = await ctx.prisma.verification.findFirst({
+            where: {
+              value: input.token,
+            },
+          });
+
+          // Validate token exists and is not expired
+          validateToken(
+            verification?.value,
+            verification?.expiresAt,
+            'password_reset'
+          );
+
+          // Find user by email (identifier)
+          const user = await ctx.prisma.user.findUnique({
+            where: { email: verification!.identifier },
+          });
+
+          if (!user) {
+            logEmailOperation('reset_password', 'password_reset', {
+              token: input.token.substring(0, 8) + '...',
+              error: 'user_not_found',
+            });
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: PASSWORD_RESET_ERROR_MESSAGES.USER_NOT_FOUND,
+            });
+          }
+
+          // Use Better Auth's password hashing (compatible with their system)
+          // Better Auth uses a specific hashing algorithm, so we need to use their method
+          // We'll hash the password using the same method Better Auth uses internally
+          const crypto = await import('crypto');
+          const { scrypt, randomBytes } = crypto;
+          
+          // Generate salt and hash password (compatible with Better Auth)
+          const salt = randomBytes(16).toString('hex');
+          const hashedPassword = await new Promise<string>((resolve, reject) => {
+            scrypt(input.password, salt, 64, (err, derivedKey) => {
+              if (err) reject(err);
+              resolve(salt + ':' + derivedKey.toString('hex'));
+            });
+          });
+
+          // Update password and invalidate all sessions in a transaction
+          await ctx.prisma.$transaction(async (tx) => {
+            // Update user password
+            // Note: Better Auth stores passwords in the Account table with providerId 'credential'
+            await tx.account.updateMany({
+              where: {
+                userId: user.id,
+                providerId: 'credential',
+              },
+              data: {
+                password: hashedPassword,
+              },
+            });
+
+            // Invalidate all existing sessions for security
+            await tx.session.deleteMany({
+              where: {
+                userId: user.id,
+              },
+            });
+
+            // Delete the reset token
+            await tx.verification.delete({
+              where: { id: verification!.id },
+            });
+          });
+
+          logEmailOperation('reset_password', 'password_reset', {
+            email: user.email,
+            success: true,
+          });
+
+          // Trigger onPasswordReset callback
+          try {
+            const { auth } = await import('@/lib/auth');
+            if (auth.options.callbacks?.onPasswordReset) {
+              await auth.options.callbacks.onPasswordReset({ user });
+            }
+          } catch (callbackError) {
+            console.error('[AUTH] Error in onPasswordReset callback:', callbackError);
+            // Don't fail the password reset if callback fails
+          }
+
+          return {
+            success: true,
+            message: SUCCESS_MESSAGES.PASSWORD_RESET_SUCCESS,
+          };
+        } catch (error) {
+          // Handle errors with proper conversion to tRPC errors
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          
+          // Convert email errors to tRPC errors
+          handleEmailError(error, 'password_reset');
+        }
+      }),
+
+    /**
+     * Send role invitation
+     * 
+     * Creates a role invitation and sends an invitation email.
+     * Only admins can send invitations.
+     * Validates that the user exists and doesn't already have the role.
+     * Prevents duplicate pending invitations.
+     * 
+     * Requirements: 3.1, 3.2, 6.1, 6.2, 6.3
+     */
+    sendRoleInvitation: adminProcedure
+      .input(
+        z.object({
+          email: z.string().email('Invalid email address'),
+          role: z.enum(['organizer', 'admin']),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { 
+          handleEmailError, 
+          logEmailOperation 
+        } = await import('@/lib/email/error-handler');
+        const { 
+          SUCCESS_MESSAGES, 
+          INVITATION_ERROR_MESSAGES 
+        } = await import('@/lib/email/error-messages');
+        
+        try {
+          const { email, role } = input;
+          const inviterId = ctx.user!.id;
+
+          // Check if user with this email exists
+          const existingUser = await ctx.prisma.user.findUnique({
+            where: { email },
+            select: { 
+              id: true, 
+              role: true,
+              firstName: true,
+              lastName: true,
+              name: true,
+            },
+          });
+
+          if (!existingUser) {
+            logEmailOperation('send_role_invitation', 'invitation', {
+              email,
+              role,
+              error: 'user_not_found',
+            });
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: INVITATION_ERROR_MESSAGES.USER_NOT_FOUND,
+            });
+          }
+
+          // Check if user already has this role or higher
+          const roleHierarchy: Record<string, number> = { player: 0, organizer: 1, admin: 2 };
+          const currentRoleLevel = roleHierarchy[existingUser.role] || 0;
+          const targetRoleLevel = roleHierarchy[role];
+
+          if (currentRoleLevel >= targetRoleLevel) {
+            logEmailOperation('send_role_invitation', 'invitation', {
+              email,
+              role,
+              currentRole: existingUser.role,
+              error: 'already_has_role',
+            });
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: INVITATION_ERROR_MESSAGES.ALREADY_HAS_ROLE,
+            });
+          }
+
+          // Check for existing pending invitation
+          const existingInvitation = await ctx.prisma.roleInvitation.findFirst({
+            where: {
+              email,
+              role,
+              acceptedAt: null,
+              expiresAt: {
+                gt: new Date(),
+              },
+            },
+          });
+
+          if (existingInvitation) {
+            logEmailOperation('send_role_invitation', 'invitation', {
+              email,
+              role,
+              error: 'duplicate_invitation',
+            });
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: INVITATION_ERROR_MESSAGES.DUPLICATE_INVITATION,
+            });
+          }
+
+          // Generate secure token
+          const crypto = await import('crypto');
+          const token = crypto.randomBytes(32).toString('hex');
+
+          // Create invitation (expires in 7 days)
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 7);
+
+          const invitation = await ctx.prisma.roleInvitation.create({
+            data: {
+              email,
+              role,
+              token,
+              invitedById: inviterId,
+              expiresAt,
+            },
+            include: {
+              invitedBy: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          });
+
+          // Send invitation email
+          const { sendRoleInvitationEmail } = await import('@/lib/email');
+          const baseUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+          const invitationUrl = `${baseUrl}/accept-invitation?token=${token}`;
+
+          // Get inviter display name
+          const inviterName = invitation.invitedBy.firstName && invitation.invitedBy.lastName
+            ? `${invitation.invitedBy.firstName} ${invitation.invitedBy.lastName}`
+            : invitation.invitedBy.name || invitation.invitedBy.email;
+
+          await sendRoleInvitationEmail({
+            email,
+            role,
+            invitedBy: {
+              name: inviterName,
+              email: invitation.invitedBy.email,
+            },
+            url: invitationUrl,
+            token,
+          });
+
+          logEmailOperation('send_role_invitation', 'invitation', {
+            email,
+            role,
+            invitedBy: inviterName,
+            success: true,
+          });
+
+          return {
+            success: true,
+            message: SUCCESS_MESSAGES.INVITATION_SENT,
+            invitation: {
+              id: invitation.id,
+              email: invitation.email,
+              role: invitation.role,
+              expiresAt: invitation.expiresAt,
+              createdAt: invitation.createdAt,
+            },
+          };
+        } catch (error) {
+          // Handle errors with proper conversion to tRPC errors
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          
+          // Convert email errors to tRPC errors
+          handleEmailError(error, 'invitation');
+        }
+      }),
+
+    /**
+     * Get role invitation details
+     * 
+     * Fetches invitation details by token.
+     * Public endpoint - anyone with the token can view details.
+     * Returns invitation status (expired, accepted, valid).
+     * 
+     * Requirements: 3.3, 6.4
+     */
+    getRoleInvitation: publicProcedure
+      .input(
+        z.object({
+          token: z.string().min(1, 'Token is required'),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const { handleEmailError } = await import('@/lib/email/error-handler');
+        const { INVITATION_ERROR_MESSAGES } = await import('@/lib/email/error-messages');
+        
+        try {
+          const { token } = input;
+
+          // Find invitation by token
+          const invitation = await ctx.prisma.roleInvitation.findUnique({
+            where: { token },
+            include: {
+              invitedBy: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          });
+
+          if (!invitation) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: INVITATION_ERROR_MESSAGES.TOKEN_INVALID,
+            });
+          }
+
+          // Check invitation status
+          const isExpired = invitation.expiresAt < new Date();
+          const isAccepted = invitation.acceptedAt !== null;
+
+          // Get inviter display name
+          const inviterName = invitation.invitedBy.firstName && invitation.invitedBy.lastName
+            ? `${invitation.invitedBy.firstName} ${invitation.invitedBy.lastName}`
+            : invitation.invitedBy.name || invitation.invitedBy.email;
+
+          return {
+            success: true,
+            invitation: {
+              id: invitation.id,
+              email: invitation.email,
+              role: invitation.role,
+              invitedBy: {
+                name: inviterName,
+                email: invitation.invitedBy.email,
+              },
+              expiresAt: invitation.expiresAt,
+              createdAt: invitation.createdAt,
+              isExpired,
+              isAccepted,
+            },
+          };
+        } catch (error) {
+          // Handle errors with proper conversion to tRPC errors
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          
+          // Convert email errors to tRPC errors
+          handleEmailError(error, 'invitation');
+        }
+      }),
+
+    /**
+     * Accept role invitation
+     * 
+     * Validates the invitation token and upgrades the user's role.
+     * Requires authentication - user must be signed in.
+     * Validates that the invitation email matches the signed-in user's email.
+     * Updates user role and marks invitation as accepted in a transaction.
+     * Updates the user session to reflect the new role.
+     * 
+     * Requirements: 3.4, 3.5, 8.3, 8.4
+     */
+    acceptRoleInvitation: protectedProcedure
+      .input(
+        z.object({
+          token: z.string().min(1, 'Token is required'),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { 
+          handleEmailError, 
+          logEmailOperation 
+        } = await import('@/lib/email/error-handler');
+        const { TokenError } = await import('@/lib/email/errors');
+        const { 
+          SUCCESS_MESSAGES, 
+          INVITATION_ERROR_MESSAGES 
+        } = await import('@/lib/email/error-messages');
+        
+        try {
+          const { token } = input;
+          const userId = ctx.user!.id;
+
+          // Find invitation
+          const invitation = await ctx.prisma.roleInvitation.findUnique({
+            where: { token },
+            include: {
+              invitedBy: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          });
+
+          if (!invitation) {
+            throw new TokenError(
+              INVITATION_ERROR_MESSAGES.TOKEN_INVALID,
+              'INVALID'
+            );
+          }
+
+          // Check if already accepted
+          if (invitation.acceptedAt) {
+            throw new TokenError(
+              INVITATION_ERROR_MESSAGES.TOKEN_ALREADY_USED,
+              'ALREADY_USED'
+            );
+          }
+
+          // Check if expired
+          if (invitation.expiresAt < new Date()) {
+            throw new TokenError(
+              INVITATION_ERROR_MESSAGES.TOKEN_EXPIRED,
+              'EXPIRED'
+            );
+          }
+
+          // Get current user
+          const user = await ctx.prisma.user.findUnique({
+            where: { id: userId },
+            select: { 
+              email: true, 
+              role: true,
+              firstName: true,
+              lastName: true,
+              name: true,
+            },
+          });
+
+          if (!user) {
+            logEmailOperation('accept_role_invitation', 'invitation', {
+              token: token.substring(0, 8) + '...',
+              error: 'user_not_found',
+            });
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: INVITATION_ERROR_MESSAGES.USER_NOT_FOUND,
+            });
+          }
+
+          // Verify email matches
+          if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+            logEmailOperation('accept_role_invitation', 'invitation', {
+              userEmail: user.email,
+              invitationEmail: invitation.email,
+              error: 'email_mismatch',
+            });
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: INVITATION_ERROR_MESSAGES.USER_MISMATCH,
+            });
+          }
+
+          // Check if user already has this role or higher
+          const roleHierarchy: Record<string, number> = { player: 0, organizer: 1, admin: 2 };
+          const currentRoleLevel = roleHierarchy[user.role] || 0;
+          const targetRoleLevel = roleHierarchy[invitation.role];
+
+          if (currentRoleLevel >= targetRoleLevel) {
+            // Mark as accepted even if role is already sufficient
+            await ctx.prisma.roleInvitation.update({
+              where: { id: invitation.id },
+              data: { acceptedAt: new Date() },
+            });
+
+            logEmailOperation('accept_role_invitation', 'invitation', {
+              email: user.email,
+              role: invitation.role,
+              alreadyHasRole: true,
+            });
+
+            return {
+              success: true,
+              message: INVITATION_ERROR_MESSAGES.ALREADY_HAS_ROLE,
+              role: user.role,
+            };
+          }
+
+          // Update user role and mark invitation as accepted in a transaction
+          await ctx.prisma.$transaction([
+            ctx.prisma.user.update({
+              where: { id: userId },
+              data: { role: invitation.role },
+            }),
+            ctx.prisma.roleInvitation.update({
+              where: { id: invitation.id },
+              data: { acceptedAt: new Date() },
+            }),
+          ]);
+
+          logEmailOperation('accept_role_invitation', 'invitation', {
+            email: user.email,
+            role: invitation.role,
+            success: true,
+          });
+
+          // Note: Session update is handled by Better Auth automatically on next request
+          // The client should refresh the session or redirect to trigger the update
+
+          return {
+            success: true,
+            message: SUCCESS_MESSAGES.INVITATION_ACCEPTED,
+            role: invitation.role,
+          };
+        } catch (error) {
+          // Handle errors with proper conversion to tRPC errors
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          
+          // Convert email errors to tRPC errors
+          handleEmailError(error, 'invitation');
+        }
+      }),
+
+    /**
+     * List role invitations
+     * 
+     * Lists all role invitations (admin only).
+     * Useful for displaying invitation status in admin UI.
+     * 
+     * Requirements: 6.1, 6.2
+     */
+    listRoleInvitations: adminProcedure.query(async ({ ctx }) => {
+      try {
+        const invitations = await ctx.prisma.roleInvitation.findMany({
+          orderBy: { createdAt: 'desc' },
+          include: {
+            invitedBy: {
+              select: {
+                firstName: true,
+                lastName: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        });
+
+        return invitations.map((invitation) => {
+          const inviterName = invitation.invitedBy.firstName && invitation.invitedBy.lastName
+            ? `${invitation.invitedBy.firstName} ${invitation.invitedBy.lastName}`
+            : invitation.invitedBy.name || invitation.invitedBy.email;
+
+          return {
+            id: invitation.id,
+            email: invitation.email,
+            role: invitation.role,
+            invitedBy: {
+              name: inviterName,
+              email: invitation.invitedBy.email,
+            },
+            acceptedAt: invitation.acceptedAt,
+            expiresAt: invitation.expiresAt,
+            createdAt: invitation.createdAt,
+            isExpired: invitation.expiresAt < new Date(),
+            isAccepted: invitation.acceptedAt !== null,
+          };
+        });
+      } catch (error) {
+        console.error('[AUTH] Error listing role invitations:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'An error occurred while fetching invitations.',
+        });
+      }
     }),
   }),
 
@@ -214,6 +1144,34 @@ export const appRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create player record",
+        });
+      }
+    }),
+
+    // List all users (admin only)
+    list: adminProcedure.query(async ({ ctx }) => {
+      try {
+        const users = await ctx.prisma.user.findMany({
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            name: true,
+            role: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+
+        return users;
+      } catch (error) {
+        console.error('[USER] Error listing users:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'An error occurred while fetching users.',
         });
       }
     }),
@@ -2829,6 +3787,9 @@ export const appRouter = router({
 
   // Invitations router
   invitations: invitationsRouter,
+
+  // Email metrics router (admin only)
+  emailMetrics: emailMetricsRouter,
 });
 
 export type AppRouter = typeof appRouter;
