@@ -1,4 +1,4 @@
-// Integration tests for tRPC procedures
+// Unit tests for tRPC procedures
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import { createMockUser, createMockTournament } from '../utils/test-utils'

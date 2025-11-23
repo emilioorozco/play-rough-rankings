@@ -8,8 +8,11 @@ import { loginSchema, type LoginFormData } from "@/lib/validation/schemas";
 import { ModalForm, FormInput, FormCheckbox, FormActions, FormStatus } from "../ui/form-components";
 import { Modal } from "../ui/modal";
 import { Button } from "../ui/button";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, AlertCircle } from "lucide-react";
 import { transformError } from "@/lib/utils/error-transformer";
+import { EmailVerificationPending } from "./email-verification-pending";
+import { PasswordResetRequest } from "./password-reset-request";
+import { Alert, AlertDescription } from "../ui/alert";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -22,6 +25,9 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
   const pathname = usePathname();
   const { signIn } = useSession();
   const [socialLoginLoading, setSocialLoginLoading] = useState<string | null>(null);
+  const [showVerificationPending, setShowVerificationPending] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   // Don't show sign up link if we're on the sign-up page
   const showSignUpLink = pathname !== '/sign-up';
@@ -51,7 +57,27 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       });
 
       if (result.error) {
-        console.error("Login error details:", result.error);
+        // Check if the error is due to unverified email
+        const errorMessage = (result.error as any)?.message || '';
+        if (errorMessage.toLowerCase().includes('email not verified') || 
+            errorMessage.toLowerCase().includes('verify your email')) {
+          // Show verification pending component
+          setUnverifiedEmail(data.email);
+          setShowVerificationPending(true);
+          return;
+        }
+
+        // Log full error structure to understand Better Auth error format
+        console.error("Login error details:", {
+          error: result.error,
+          errorType: typeof result.error,
+          errorKeys: result.error ? Object.keys(result.error) : [],
+          errorCode: (result.error as any)?.code,
+          errorMessage: (result.error as any)?.message,
+          errorStatus: (result.error as any)?.status,
+          errorStatusText: (result.error as any)?.statusText,
+          fullError: JSON.stringify(result.error, null, 2)
+        });
         // Throw error to be handled by error transformer
         throw result.error;
       } else {
@@ -94,6 +120,59 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
     }
   };
 
+  // If showing password reset, render that instead
+  if (showPasswordReset) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={() => {
+          setShowPasswordReset(false);
+        }}
+        size="md"
+      >
+        <div className="p-6">
+          <PasswordResetRequest
+            onClose={() => {
+              setShowPasswordReset(false);
+            }}
+          />
+        </div>
+      </Modal>
+    );
+  }
+
+  // If showing verification pending, render that instead
+  if (showVerificationPending && unverifiedEmail) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={() => {
+          setShowVerificationPending(false);
+          setUnverifiedEmail(null);
+          onClose();
+        }}
+        size="md"
+      >
+        <div className="p-6">
+          <Alert className="mb-4 border-warning bg-warning/10">
+            <AlertCircle className="h-4 w-4 text-warning" />
+            <AlertDescription className="text-warning">
+              Your email address has not been verified. Please check your inbox for the verification email.
+            </AlertDescription>
+          </Alert>
+          <EmailVerificationPending
+            email={unverifiedEmail}
+            onClose={() => {
+              setShowVerificationPending(false);
+              setUnverifiedEmail(null);
+              onClose();
+            }}
+          />
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal
       isOpen={isOpen}
@@ -104,12 +183,38 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
       <ModalForm
         title="Welcome Back"
         description="Sign in to your account to continue"
-          onSubmit={formState.submit}
+          onSubmit={(e) => {
+            e.preventDefault()
+            // Blur any focused input to ensure errors clear properly
+            if (document.activeElement instanceof HTMLInputElement) {
+              document.activeElement.blur()
+            }
+            formState.submit()
+          }}
       >
+        {/* FormStatus shows general errors at the top of the form */}
+        {/* Authentication errors are shown here to avoid confusion about which field is wrong */}
         <FormStatus 
           success={undefined}
-          error={formState.displayErrors.email || formState.displayErrors.password || (formState.displayErrors as any).general}
-          errorType={formState.serverErrors.email || formState.serverErrors.password ? 'server' : 'client'}
+          error={
+            // Show general errors (like authentication errors)
+            (formState.serverErrors as any).general || 
+            (formState.displayErrors as any).general
+          }
+          errorType={
+            // Authentication errors are user input errors, not server errors
+            // Check if it's an authentication error to avoid "Server error:" prefix
+            (() => {
+              const generalError = (formState.serverErrors as any).general || (formState.displayErrors as any).general
+              if (!generalError) return 'client'
+              const lowerError = generalError.toLowerCase()
+              const isAuthError = lowerError.includes('invalid email or password') ||
+                                 lowerError.includes('invalid password') ||
+                                 lowerError.includes('invalid credential')
+              // Don't show "Server error:" for auth errors - they're user input validation
+              return isAuthError ? 'client' : ((formState.serverErrors as any).general ? 'server' : 'client')
+            })()
+          }
         />
 
         <FormInput
@@ -117,6 +222,12 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
           type="email"
           value={formState.data.email}
           onChange={(e) => formState.setField('email', e.target.value)}
+          onFocus={() => {
+            // Clear general authentication error when user focuses on email field
+            if ((formState.serverErrors as any).general) {
+              formState.clearServerErrors()
+            }
+          }}
           onBlur={() => formState.handleBlur('email')}
           error={formState.displayErrors.email}
           errorType={formState.serverErrors.email ? 'server' : 'client'}
@@ -130,6 +241,12 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
           type="password"
           value={formState.data.password}
           onChange={(e) => formState.setField('password', e.target.value)}
+          onFocus={() => {
+            // Clear general authentication error when user focuses on password field
+            if ((formState.serverErrors as any).general) {
+              formState.clearServerErrors()
+            }
+          }}
           onBlur={() => formState.handleBlur('password')}
           error={formState.displayErrors.password}
           errorType={formState.serverErrors.password ? 'server' : 'client'}
@@ -147,7 +264,7 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
           <button
             type="button"
             className="text-sm text-primary hover:underline"
-            onClick={() => {/* TODO: Implement forgot password */}}
+            onClick={() => setShowPasswordReset(true)}
           >
             Forgot password?
           </button>

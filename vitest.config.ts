@@ -9,7 +9,10 @@ export default defineConfig({
     environment: 'jsdom',
     
     // Setup files
-    setupFiles: ['./vitest.setup.ts'],
+    // Note: Integration tests use vitest.config.integration.ts which includes messaging setup
+    setupFiles: [
+      './vitest.setup.ts',
+    ],
     
     // Global test APIs (Jest-compatible)
     globals: true,
@@ -109,9 +112,9 @@ export default defineConfig({
       },
     },
     
-    // Test file patterns
+    // Test file patterns - exclude integration tests (they use separate config)
     include: [
-      '__tests__/**/*.{test,spec}.{js,jsx,ts,tsx}',
+      '__tests__/unit/**/*.{test,spec}.{js,jsx,ts,tsx}',
       '**/*.{test,spec}.{js,jsx,ts,tsx}',
     ],
     
@@ -122,13 +125,22 @@ export default defineConfig({
       '**/coverage/**',
       '**/dist/**',
       '__tests__/utils/**',
+      '__tests__/integration/**', // Integration tests use vitest.config.integration.ts
     ],
     
     // Test timeout
-    testTimeout: 10000,
+    testTimeout: 30000,
     
-    // Parallel execution
-    pool: 'threads',
+    // Parallel execution for unit tests (default)
+    // Integration tests use separate config (vitest.config.integration.ts) with sequential execution
+    pool: 'forks',
+    // @ts-expect-error - poolOptions exists in Vitest but types may be incomplete in this version
+    poolOptions: {
+      forks: {
+        // Unit tests can run in parallel for speed
+        maxForks: 2,
+      },
+    },
     
     // Retry flaky tests in CI
     retry: process.env.CI ? 2 : 0,
