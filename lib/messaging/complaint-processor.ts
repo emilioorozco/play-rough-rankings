@@ -8,29 +8,15 @@ import { calculateEmailMetrics } from './rate-calculator';
  * Implements zero-tolerance policy: immediate suppression for all complaints
  */
 export async function processComplaint(complaint: any, mail: any) {
-  console.log('[DEBUG] processComplaint called:', {
-    complaintType: complaint.complaintFeedbackType,
-    recipients: complaint.complainedRecipients?.length || 0,
-    mailMessageId: mail?.messageId,
-  });
-  
   if (!complaint.complainedRecipients || complaint.complainedRecipients.length === 0) {
-    console.warn('[DEBUG] No complained recipients found in complaint notification');
     return;
   }
   
   for (const recipient of complaint.complainedRecipients) {
     const email = recipient.emailAddress.toLowerCase();
-    console.log('[DEBUG] Processing complaint for recipient:', email);
     
     try {
       // Log complaint to channel-agnostic database model
-      console.log('[DEBUG] Calling logComplaint with data:', {
-        recipient: email,
-        complaintType: complaint.complaintFeedbackType,
-        messageId: mail.messageId,
-      });
-      
       await logComplaint({
         recipient: email,
         channel: 'email', // Specify channel for this email implementation
@@ -40,11 +26,9 @@ export async function processComplaint(complaint: any, mail: any) {
         messageId: mail.messageId,
         timestamp: new Date(complaint.timestamp),
       });
-      
-      console.log('[DEBUG] logComplaint completed successfully for:', email);
     } catch (error) {
-      console.error('[DEBUG] Error in logComplaint for', email, ':', error);
-      throw error; // Re-throw to see the actual error
+      console.error('Error logging complaint for', email, ':', error);
+      throw error;
     }
     
     // Immediately suppress - zero tolerance for complaints
@@ -54,8 +38,6 @@ export async function processComplaint(complaint: any, mail: any) {
       reason: 'complaint',
       suppressionType: 'complaint',
     });
-    
-    console.log(`Complaint: ${email} added to suppression list`);
   }
   
   // Calculate and log current email metrics after processing complaints
@@ -79,13 +61,6 @@ async function logComplaint(data: {
   messageId?: string;
   timestamp: Date;
 }) {
-  console.log('[DEBUG] logComplaint - Creating complaint record:', {
-    recipient: data.recipient,
-    channel: data.channel,
-    complaintType: data.complaintType,
-    messageId: data.messageId,
-  });
-  
   try {
     const result = await prisma.messageComplaint.create({
       data: {
@@ -99,19 +74,9 @@ async function logComplaint(data: {
       },
     });
     
-    console.log('[DEBUG] logComplaint - Successfully created complaint record:', {
-      id: result.id,
-      recipient: result.recipient,
-      complaintType: result.complaintType,
-    });
-    
     return result;
   } catch (error) {
-    console.error('[DEBUG] logComplaint - Error creating complaint record:', error);
-    console.error('[DEBUG] logComplaint - Error details:', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    console.error('Error creating complaint record:', error);
     throw error;
   }
 }

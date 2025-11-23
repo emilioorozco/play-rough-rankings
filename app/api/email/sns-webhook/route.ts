@@ -111,7 +111,6 @@ export async function POST(request: NextRequest) {
 
     // STEP 4: Handle SNS subscription confirmation
     if (message.Type === 'SubscriptionConfirmation') {
-      console.log('Confirming SNS subscription...');
       await confirmSNSSubscription(message.SubscribeURL);
       return NextResponse.json({ message: 'Subscription confirmed' });
     }
@@ -120,7 +119,6 @@ export async function POST(request: NextRequest) {
     if (message.Type === 'Notification') {
       // Check idempotency (prevent duplicate processing)
       if (processedMessages.has(message.MessageId)) {
-        console.log('Duplicate message, skipping:', message.MessageId);
         return NextResponse.json({ message: 'Already processed' });
       }
 
@@ -147,14 +145,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid bounce notification' }, { status: 400 });
           }
           await processBounce(notification.bounce, notification.mail);
-          console.log('Bounce notification processed successfully');
         } else if (notification.notificationType === 'Complaint') {
           if (!notification.complaint || !notification.mail) {
             console.error('Missing complaint or mail data in notification');
             return NextResponse.json({ error: 'Invalid complaint notification' }, { status: 400 });
           }
           await processComplaint(notification.complaint, notification.mail);
-          console.log('Complaint notification processed successfully');
         } else {
           console.warn('Unknown notification type:', notification.notificationType);
           return NextResponse.json({ message: 'Unknown notification type' }, { status: 200 });
@@ -198,7 +194,6 @@ async function confirmSNSSubscription(subscribeURL: string): Promise<void> {
     if (!response.ok) {
       throw new Error(`Failed to confirm SNS subscription: ${response.status}`);
     }
-    console.log('SNS subscription confirmed successfully');
   } catch (error) {
     console.error('Error confirming SNS subscription:', error);
     throw error;

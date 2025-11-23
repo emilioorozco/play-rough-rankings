@@ -176,8 +176,5 @@ export function logEmailOperation(
   context: 'verification' | 'password_reset' | 'invitation',
   details: Record<string, unknown>
 ): void {
-  console.log(`[EMAIL] ${operation} (${context}):`, {
-    timestamp: new Date().toISOString(),
-    ...details,
-  })
+  // Debug logging removed
 }
