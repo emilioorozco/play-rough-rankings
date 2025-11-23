@@ -4,6 +4,7 @@ import { prisma } from "./prisma";
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
+  RateLimitError,
 } from "./email";
 
 export const auth = betterAuth({
@@ -14,37 +15,88 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL!,
   trustedOrigins: [
     process.env.BETTER_AUTH_URL!,
+    process.env.NEXT_PUBLIC_APP_URL,
     "https://appleid.apple.com",
-  ],
+  ].filter(Boolean) as string[],
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || false, // Enable via env var
     autoSignInAfterVerification: true, // This should trigger afterSignUp after email verification
     sendResetPassword: async ({ user, url, token }, _request) => {
-      await sendPasswordResetEmail({
-        user: {
-          email: user.email,
-          name: user.name || undefined,
-        },
-        url,
-        token,
-      });
+      try {
+        console.log(`[AUTH] Attempting to send password reset email to ${user.email}`);
+        
+        await sendPasswordResetEmail({
+          user: {
+            email: user.email,
+            name: user.name || undefined,
+          },
+          url,
+          token,
+        });
+        
+        console.log(`[AUTH] Password reset email sent successfully to ${user.email}`);
+      } catch (error) {
+        // Log rate limit errors with details
+        if (error instanceof RateLimitError) {
+          console.warn(
+            `[AUTH] Rate limit exceeded for password reset email`,
+            `\n  Email: ${user.email}`,
+            `\n  Retry after: ${error.retryAfter.toISOString()}`,
+            `\n  Message: ${error.message}`
+          );
+          throw error;
+        }
+        
+        // Log other email send failures
+        console.error(
+          `[AUTH] Failed to send password reset email`,
+          `\n  Email: ${user.email}`,
+          `\n  Error: ${error instanceof Error ? error.message : String(error)}`
+        );
+        throw error;
+      }
     },
     resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
   },
   emailVerification: {
     sendVerificationEmail: async ({ user, url, token }, _request) => {
-      await sendVerificationEmail({
-        user: {
-          email: user.email,
-          name: user.name || undefined,
-        },
-        url,
-        token,
-      });
+      try {
+        console.log(`[AUTH] Attempting to send verification email to ${user.email}`);
+        
+        await sendVerificationEmail({
+          user: {
+            email: user.email,
+            name: user.name || undefined,
+          },
+          url,
+          token,
+        });
+        
+        console.log(`[AUTH] Verification email sent successfully to ${user.email}`);
+      } catch (error) {
+        // Log rate limit errors with details
+        if (error instanceof RateLimitError) {
+          console.warn(
+            `[AUTH] Rate limit exceeded for verification email`,
+            `\n  Email: ${user.email}`,
+            `\n  Retry after: ${error.retryAfter.toISOString()}`,
+            `\n  Message: ${error.message}`
+          );
+          throw error;
+        }
+        
+        // Log other email send failures
+        console.error(
+          `[AUTH] Failed to send verification email`,
+          `\n  Email: ${user.email}`,
+          `\n  Error: ${error instanceof Error ? error.message : String(error)}`
+        );
+        throw error;
+      }
     },
     sendOnSignUp: true, // Automatically send verification email upon sign-up
-    autoSignInAfterVerification: true, // Automatically sign in after verification
+    autoSignInAfterVerification: true, // ✅ VERIFIED: Automatically sign in after verification (Requirement 1.5)
     expiresIn: 60 * 60 * 24, // Token expiration time in seconds (24 hours)
   },
   socialProviders: {
@@ -157,8 +209,24 @@ export const auth = betterAuth({
   },
   callbacks: {
     async onPasswordReset({ user }: { user: any }) {
-      console.log(`Password reset successful for user: ${user.email}`);
-      // Add any additional logic after password reset here
+      const timestamp = new Date().toISOString();
+      console.log(
+        `[AUTH] [${timestamp}] Password reset successful`,
+        `\n  User ID: ${user.id}`,
+        `\n  Email: ${user.email}`,
+        `\n  Name: ${user.name || 'N/A'}`
+      );
+      
+      // Future enhancement: Send security notification email to user
+      // This would inform security-conscious users that their password was changed
+      // Example:
+      // await sendPasswordChangedNotification({
+      //   user: {
+      //     email: user.email,
+      //     name: user.name || undefined,
+      //   },
+      //   timestamp: new Date(),
+      // });
     },
     async beforeSignUp({ user, account }: { user: any; account: any }) {
       console.log("beforeSignUp callback triggered for user:", user.id, "account:", account?.providerId);
@@ -283,3 +351,81 @@ export const auth = betterAuth({
 
 export type Session = typeof auth.$Infer.Session;
 export type User = typeof auth.$Infer.Session.user;
+
+/**
+ * Validate required environment variables for email functionality
+ * 
+ * Checks that all required AWS SES environment variables are configured.
+ * In production, missing variables will throw an error.
+ * In development, missing variables will log a warning and allow console fallback.
+ */
+function validateEmailEnvironmentVariables(): void {
+  const requiredVars = [
+    'AWS_REGION',
+    'AWS_EMAIL_ACCESS_KEY_ID',
+    'AWS_EMAIL_SECRET_ACCESS_KEY',
+    'AWS_SES_FROM_EMAIL',
+  ];
+  
+  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+  
+  if (missingVars.length > 0) {
+    const errorMessage = `Missing required email environment variables: ${missingVars.join(', ')}`;
+    
+    if (process.env.NODE_ENV === 'production') {
+      // In production, missing email variables are critical
+      console.error(`[AUTH] [CRITICAL] ${errorMessage}`);
+      console.error('[AUTH] Email functionality will not work without these variables.');
+      console.error('[AUTH] Please configure AWS SES credentials in your environment.');
+      throw new Error(errorMessage);
+    } else {
+      // In development, allow graceful fallback to console logging
+      console.warn(`[AUTH] [WARNING] ${errorMessage}`);
+      console.warn('[AUTH] Email functionality will fall back to console logging.');
+      console.warn('[AUTH] To test email sending, configure AWS SES credentials.');
+    }
+  } else {
+    console.log('[AUTH] Email environment variables validated successfully');
+  }
+}
+
+/**
+ * Validate all required Better Auth environment variables
+ * 
+ * Checks that all required environment variables are configured.
+ * Throws an error if any required variables are missing.
+ */
+function validateAuthEnvironmentVariables(): void {
+  const requiredVars = [
+    'BETTER_AUTH_SECRET',
+    'BETTER_AUTH_URL',
+  ];
+  
+  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+  
+  if (missingVars.length > 0) {
+    const errorMessage = `Missing required authentication environment variables: ${missingVars.join(', ')}`;
+    console.error(`[AUTH] [CRITICAL] ${errorMessage}`);
+    throw new Error(errorMessage);
+  }
+  
+  // Validate BETTER_AUTH_SECRET length (should be at least 32 characters)
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (secret && secret.length < 32) {
+    console.warn('[AUTH] [WARNING] BETTER_AUTH_SECRET should be at least 32 characters long for security');
+  }
+  
+  console.log('[AUTH] Authentication environment variables validated successfully');
+}
+
+// Run validation on module load
+try {
+  validateAuthEnvironmentVariables();
+  validateEmailEnvironmentVariables();
+} catch (error) {
+  console.error('[AUTH] Environment variable validation failed:', error);
+  // In production, this will prevent the application from starting
+  if (process.env.NODE_ENV === 'production') {
+    throw error;
+  }
+}
