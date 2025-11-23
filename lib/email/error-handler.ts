@@ -5,8 +5,6 @@
 
 import { TRPCError } from '@trpc/server'
 import { 
-  EmailError, 
-  RateLimitError, 
   TokenError,
   isEmailError,
   isRateLimitError,
@@ -172,9 +170,9 @@ export function validateToken(
  * Log email operation for monitoring and debugging
  */
 export function logEmailOperation(
-  operation: string,
-  context: 'verification' | 'password_reset' | 'invitation',
-  details: Record<string, unknown>
+  _operation: string,
+  _context: 'verification' | 'password_reset' | 'invitation',
+  _details: Record<string, unknown>
 ): void {
   // Debug logging removed
 }

@@ -20,7 +20,7 @@ function VerifyEmailContent() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
   const verifyMutation = trpc.auth.verifyEmail.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (_data) => {
       setVerificationStatus('success')
       // Auto-redirect to profile completion after 2 seconds
       setTimeout(() => {
