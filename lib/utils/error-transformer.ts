@@ -135,7 +135,9 @@ export function transformError(error: any): TransformedError {
     }
   }
   // Handle Better Auth errors
-  else if (error.code) {
+  // Better Auth error structure: { message: string, status: number, statusText: string, code?: string }
+  else if (error.code || (error.status && error.message)) {
+    // Better Auth errors have code, message, status, and statusText
     errorCode = error.code
     errorMessage = error.message
     
@@ -177,37 +179,85 @@ export function transformError(error: any): TransformedError {
   }
 
   // Transform the error message
+  // First check error codes (most reliable) - Better Auth uses specific error codes
   if (errorCode && ERROR_CODE_MAP[errorCode]) {
     // Use mapped user-friendly message
     transformed.message = ERROR_CODE_MAP[errorCode]
+    
+    // Authentication-related error codes should be shown at form level, not on specific fields
+    const authErrorCodes = [
+      'UNAUTHORIZED',
+      'INVALID_CREDENTIALS', 
+      'AUTHENTICATION_FAILED',
+      'USER_NOT_FOUND'
+    ]
+    if (authErrorCodes.includes(errorCode)) {
+      transformed.isFieldSpecific = false
+    }
   } else if (errorMessage) {
+    // Fallback to message matching if no code found
+    // Better Auth returns exact messages like "Invalid password" for credential errors
+    const lowerMessage = errorMessage.toLowerCase().trim()
+    
+    // Match exact Better Auth error messages for authentication failures
+    // Based on Better Auth docs, these are the exact messages returned
+    const isAuthErrorMessage = 
+      lowerMessage === 'invalid password' ||
+      lowerMessage === 'invalid email' ||
+      lowerMessage === 'invalid credentials' ||
+      lowerMessage.includes('invalid password') ||
+      lowerMessage.includes('incorrect password') ||
+      lowerMessage.includes('password is incorrect') ||
+      lowerMessage.includes('wrong password') ||
+      lowerMessage.includes('invalid email') ||
+      lowerMessage.includes('email not found') ||
+      lowerMessage.includes('user not found') ||
+      lowerMessage.includes('no account found') ||
+      lowerMessage.includes('invalid credential')
+    
+    if (isAuthErrorMessage) {
+      transformed.message = 'Invalid email or password'
+      // Don't assign to a field - show at form level
+      transformed.isFieldSpecific = false
+    }
+    // Map Better Auth account-related errors
+    else if (lowerMessage.includes('account') && lowerMessage.includes('disabled')) {
+      transformed.message = 'Your account has been disabled. Please contact support.'
+    }
+    else if (lowerMessage.includes('email not verified') || lowerMessage.includes('email verification')) {
+      transformed.message = 'Please verify your email address before signing in'
+      transformed.field = 'email'
+      transformed.isFieldSpecific = true
+    }
     // Check if the error message is already user-friendly
     // User-friendly messages typically don't contain technical terms
-    const technicalTerms = [
-      'prisma',
-      'database',
-      'query',
-      'constraint',
-      'foreign key',
-      'null',
-      'undefined',
-      'stack trace',
-      'exception',
-      'P2002', // Prisma error codes
-      'P2003',
-      'P2025',
-    ]
-    
-    const isTechnical = technicalTerms.some(term => 
-      errorMessage!.toLowerCase().includes(term.toLowerCase())
-    )
-    
-    if (!isTechnical && errorMessage.length < 200) {
-      // Message appears user-friendly, use it
-      transformed.message = errorMessage
-    } else {
-      // Message is technical, use generic message
-      transformed.message = 'Something went wrong. Please try again later'
+    else {
+      const technicalTerms = [
+        'prisma',
+        'database',
+        'query',
+        'constraint',
+        'foreign key',
+        'null',
+        'undefined',
+        'stack trace',
+        'exception',
+        'P2002', // Prisma error codes
+        'P2003',
+        'P2025',
+      ]
+      
+      const isTechnical = technicalTerms.some(term => 
+        lowerMessage.includes(term.toLowerCase())
+      )
+      
+      if (!isTechnical && errorMessage.length < 200) {
+        // Message appears user-friendly, use it
+        transformed.message = errorMessage
+      } else {
+        // Message is technical, use generic message
+        transformed.message = 'Something went wrong. Please try again later'
+      }
     }
   }
 
