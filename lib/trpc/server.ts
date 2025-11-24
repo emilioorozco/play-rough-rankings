@@ -24,6 +24,75 @@ export type TRPCContext = {
   session?: { id: string; userId: string; expiresAt: Date };
 };
 
+// List of public procedure paths that don't require session validation
+// These are procedures that use publicProcedure and don't need user context
+const PUBLIC_PROCEDURE_PATHS = new Set([
+  'health',
+  'auth.resendVerificationEmail',
+  'auth.verifyEmail',
+  'auth.requestPasswordReset',
+  'auth.resetPassword',
+  'auth.getRoleInvitation',
+  'games.list',
+  'games.getById',
+  'games.getStats',
+  'players.getProfile',
+  'players.getGameStats',
+  'players.searchPlayers',
+  'stores.list',
+  'tournaments.getUpcoming',
+  'tournaments.list',
+  'tournaments.getById',
+  'matches.getById',
+  'matches.getByTournament',
+  'leaderboards.getSeasonal',
+  'leaderboards.getTopPlayers',
+  'leaderboards.getFiltered',
+  'leaderboards.getHistoricalSeasons',
+  'leaderboards.getAvailableSeasons',
+  'leaderboards.getSeasonalCached',
+  'leaderboards.getPlayerTrends',
+  'leaderboards.getRankingStats',
+  'leaderboards.getPlayerDeckStats',
+  'decks.list',
+  'decks.getById',
+  'decks.getStats',
+  'decks.getUsage',
+  'decks.getArchetypes',
+  'tournamentEntries.getByTournament',
+  'tournamentEntries.getByPlayer',
+])
+
+/**
+ * Extract procedure paths from tRPC request URL
+ * Handles both single procedures and batched requests
+ */
+function extractProcedurePaths(url: string): string[] {
+  try {
+    const urlObj = new URL(url)
+    const pathname = urlObj.pathname
+    
+    // Extract the procedure path(s) from /api/trpc/procedure1,procedure2
+    const match = pathname.match(/\/api\/trpc\/(.+)$/)
+    if (!match) return []
+    
+    const procedures = match[1]
+    // Split by comma for batched requests
+    return procedures.split(',')
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Check if all procedures in a request are public
+ */
+function areAllProceduresPublic(procedurePaths: string[]): boolean {
+  if (procedurePaths.length === 0) return false
+  
+  return procedurePaths.every(path => PUBLIC_PROCEDURE_PATHS.has(path))
+}
+
 // Create context for tRPC with enhanced error handling
 export const createTRPCContext = async (opts?: {
   headers?: Headers;
@@ -32,7 +101,14 @@ export const createTRPCContext = async (opts?: {
   let user = undefined;
   let session = undefined;
 
-  if (opts?.headers) {
+  // Check if this is a public-only request to skip session validation
+  const procedurePaths = opts?.req?.url ? extractProcedurePaths(opts.req.url) : []
+  const isPublicOnly = areAllProceduresPublic(procedurePaths)
+
+  // Only validate session if:
+  // 1. Headers are provided
+  // 2. Not all procedures are public (some might need auth)
+  if (opts?.headers && !isPublicOnly) {
     try {
       // Use Better Auth's built-in session validation
       const sessionData = await auth.api.getSession({
@@ -95,13 +171,6 @@ export const appRouter = router({
 
   // Basic auth router
   auth: router({
-    getSession: publicProcedure.query(async () => {
-      return {
-        user: null,
-        session: null,
-      };
-    }),
-
     /**
      * Resend verification email
      * 
