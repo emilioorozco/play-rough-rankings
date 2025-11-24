@@ -513,6 +513,36 @@ export function useZustandForm<T extends Record<string, any>>({
       } else if (transformedError.isFieldSpecific && transformedError.field) {
         // Single field error from transformed error
         actions.setServerError(draftId, transformedError.field, transformedError.message)
+      } else {
+        // Non-field-specific error - check if it's an authentication error
+        const errorMessage = transformedError.message.toLowerCase()
+        const isAuthError = errorMessage.includes('invalid email or password') ||
+                           errorMessage.includes('invalid password') ||
+                           errorMessage.includes('invalid credential') ||
+                           (errorMessage.includes('invalid') && errorMessage.includes('credential'))
+        
+        if (isAuthError) {
+          // Authentication errors should be shown at form level, not on specific fields
+          // This prevents users from thinking only one field is wrong
+          actions.setServerError(draftId, 'general', transformedError.message)
+        } else {
+          // For other non-field errors, try to assign to a sensible default field
+          let defaultField: string | undefined
+          const commonFields = ['email', 'name', 'username', 'title']
+          for (const field of commonFields) {
+            if (field in draftData) {
+              defaultField = field
+              break
+            }
+          }
+          
+          // Set error on default field if found, otherwise use 'general'
+          if (defaultField) {
+            actions.setServerError(draftId, defaultField, transformedError.message)
+          } else {
+            actions.setServerError(draftId, 'general', transformedError.message)
+          }
+        }
       }
       
       // Call onError with user-friendly error
@@ -536,7 +566,8 @@ export function useZustandForm<T extends Record<string, any>>({
     resetOnSuccess, 
     reset, 
     onError,
-    customErrorTransformer
+    customErrorTransformer,
+    draftData
   ])
   
   // Handle form submission
