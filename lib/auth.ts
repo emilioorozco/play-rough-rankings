@@ -7,6 +7,29 @@ import {
   RateLimitError,
 } from "./email";
 
+/**
+ * Normalize a URL to use BETTER_AUTH_URL as the base domain.
+ * This ensures verification and password reset links always use the correct domain
+ * regardless of which domain the user signed up from.
+ */
+export function normalizeAuthUrl(url: string): string {
+  const authBaseUrl = process.env.BETTER_AUTH_URL;
+  if (!authBaseUrl) return url;
+  
+  try {
+    const urlObj = new URL(url);
+    const authUrlObj = new URL(authBaseUrl);
+    
+
+    // Keep the pathname, search params, and hash
+    return `${authUrlObj.origin}${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
+  } catch (error) {
+    // If URL parsing fails, return original URL
+    console.warn(`[AUTH] Failed to normalize URL: ${url}`, error);
+    return url;
+  }
+}
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
@@ -24,12 +47,13 @@ export const auth = betterAuth({
     autoSignInAfterVerification: true, // This should trigger afterSignUp after email verification
     sendResetPassword: async ({ user, url, token }, _request) => {
       try {
+        const normalizedUrl = normalizeAuthUrl(url);
         await sendPasswordResetEmail({
           user: {
             email: user.email,
             name: user.name || undefined,
           },
-          url,
+          url: normalizedUrl,
           token,
         });
       } catch (error) {
@@ -58,12 +82,14 @@ export const auth = betterAuth({
   emailVerification: {
     sendVerificationEmail: async ({ user, url, token }, _request) => {
       try {
+        // Normalize URL to always use BETTER_AUTH_URL domain
+        const normalizedUrl = normalizeAuthUrl(url);
         await sendVerificationEmail({
           user: {
             email: user.email,
             name: user.name || undefined,
           },
-          url,
+          url: normalizedUrl,
           token,
         });
       } catch (error) {
