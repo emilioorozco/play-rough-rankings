@@ -303,7 +303,7 @@ export const auth = betterAuth({
       
       // Ensure Player record exists for this user (defensive measure)
       try {
-        const player = await prisma.player.upsert({
+        await prisma.player.upsert({
           where: { userId: user.id },
           update: {}, // No updates needed if player already exists
           create: {
