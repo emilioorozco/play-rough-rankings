@@ -35,6 +35,11 @@ export const metadata: Metadata = {
     "rankings",
   ],
   authors: [{ name: "Play Rough Rankings" }],
+  icons: {
+    icon: "/play-rough-logo.svg",
+    shortcut: "/play-rough-logo.svg",
+    apple: "/play-rough-logo.svg",
+  },
 };
 
 export const viewport = {
