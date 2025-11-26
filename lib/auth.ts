@@ -335,7 +335,7 @@ function validateEmailEnvironmentVariables(): void {
     'AWS_REGION',
     'AWS_EMAIL_ACCESS_KEY_ID',
     'AWS_EMAIL_SECRET_ACCESS_KEY',
-    'AWS_SES_FROM_EMAIL',
+    'FROM_EMAIL',
   ];
   
   const missingVars = requiredVars.filter(varName => !process.env[varName]);

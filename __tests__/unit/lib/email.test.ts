@@ -28,6 +28,11 @@ vi.mock('@aws-sdk/client-ses', () => {
   return import('@/__tests__/__mocks__/@aws-sdk/client-ses')
 })
 
+// Mock Resend using __mocks__ directory
+vi.mock('resend', () => {
+  return import('@/__tests__/__mocks__/resend')
+})
+
 // Mock suppression manager
 vi.mock('@/lib/messaging/suppression-manager', () => ({
   isRecipientSuppressed: vi.fn().mockResolvedValue(false),
@@ -46,6 +51,10 @@ import {
   getCommandInstances,
   clearCommandInstances,
 } from '@/__tests__/__mocks__/@aws-sdk/client-ses'
+import {
+  mockEmailsSend as mockResendSendFn,
+  clearMockEmailsSend,
+} from '@/__tests__/__mocks__/resend'
 import { isRecipientSuppressed, getSuppressionDetails } from '@/lib/messaging/suppression-manager'
 import { logMessageDelivery } from '@/lib/messaging/delivery-logger'
 
@@ -67,10 +76,15 @@ describe('Email Service', () => {
     // Clear mocks
     vi.clearAllMocks()
     mockSendFn.mockClear()
+    mockResendSendFn.mockClear()
     clearCommandInstances()
+    clearMockEmailsSend()
     
     // Clear rate limits
     clearAllRateLimits()
+    
+    // Clear Resend API key to ensure tests use AWS SES by default
+    delete process.env.RESEND_API_KEY
   })
 
   afterEach(() => {
@@ -108,7 +122,6 @@ describe('Email Service', () => {
       })
 
       it('should use default FROM email when not configured', async () => {
-        delete process.env.AWS_SES_FROM_EMAIL
         delete process.env.FROM_EMAIL
 
         await sendEmail(mockEmailOptions)
@@ -116,21 +129,12 @@ describe('Email Service', () => {
         expect(consoleLogSpy).toHaveBeenCalledWith('From:', 'noreply@example.com')
       })
 
-      it('should use AWS_SES_FROM_EMAIL when configured', async () => {
-        process.env.AWS_SES_FROM_EMAIL = 'custom@example.com'
+      it('should use FROM_EMAIL when configured', async () => {
+        process.env.FROM_EMAIL = 'custom@example.com'
 
         await sendEmail(mockEmailOptions)
 
         expect(consoleLogSpy).toHaveBeenCalledWith('From:', 'custom@example.com')
-      })
-
-      it('should use FROM_EMAIL as fallback when AWS_SES_FROM_EMAIL not set', async () => {
-        process.env.FROM_EMAIL = 'fallback@example.com'
-        delete process.env.AWS_SES_FROM_EMAIL
-
-        await sendEmail(mockEmailOptions)
-
-        expect(consoleLogSpy).toHaveBeenCalledWith('From:', 'fallback@example.com')
       })
 
       it('should handle emails without HTML content', async () => {
@@ -166,7 +170,7 @@ describe('Email Service', () => {
 
         expect(consoleLogSpy).toHaveBeenCalled()
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          '[WARNING] AWS credentials not configured. Email not sent.'
+          '[WARNING] No email provider configured. Email not sent.'
         )
         expect(mockSendFn).not.toHaveBeenCalled()
       })
@@ -178,7 +182,7 @@ describe('Email Service', () => {
         process.env.AWS_EMAIL_ACCESS_KEY_ID = 'test-access-key'
         process.env.AWS_EMAIL_SECRET_ACCESS_KEY = 'test-secret-key'
         process.env.AWS_REGION = 'us-west-2'
-        process.env.AWS_SES_FROM_EMAIL = 'noreply@example.com'
+        process.env.FROM_EMAIL = 'noreply@example.com'
       })
 
       it('should send email via AWS SES when credentials are configured', async () => {
@@ -234,7 +238,7 @@ describe('Email Service', () => {
         mockSendFn.mockRejectedValue('String error')
 
         await expect(sendEmail(mockEmailOptions)).rejects.toThrow(
-          'Failed to send email: Unknown error'
+          'Failed to send email: Unknown AWS SES error'
         )
       })
     })
