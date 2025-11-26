@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, Maximize2, Edit } from 'lucide-react'
 import { MatchSubmissionForm } from '@/components/tournaments/match-submission-form'
 import { OrganizerMatchControls } from '@/components/tournaments/organizer-match-controls'
 import { Modal } from '@/components/ui/modal'
+import { useTournamentStore } from '@/stores/tournament-store'
 import type { ApiTournament } from '@/lib/types/api'
 
 interface TournamentBracketsProps {
@@ -26,6 +27,10 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
   const [showSubmissionModal, setShowSubmissionModal] = useState(false)
   const [showOrganizerModal, setShowOrganizerModal] = useState(false)
 
+  // Get selected round from Zustand store - using selector to subscribe to changes
+  const storedRound = useTournamentStore((state) => state.selectedRoundCache[tournament.id])
+  const setSelectedRound = useTournamentStore((state) => state.setSelectedRound)
+
   // Group matches by round
   const matchesByRound = tournament.matches?.reduce((acc, match) => {
     if (!acc[match.round]) {
@@ -36,8 +41,22 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
   }, {} as Record<number, typeof tournament.matches>) || {}
 
   const rounds = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b)
-  const currentRound = rounds[0] // For now, show first round
+  
+  // Get selected round from store or default to first round
+  const currentRound = storedRound || rounds[0] || 1
   const currentRoundMatches = matchesByRound[currentRound] || []
+
+  // Initialize selected round in store if not set
+  useEffect(() => {
+    if (!storedRound && rounds.length > 0) {
+      setSelectedRound(tournament.id, rounds[0])
+    }
+  }, [tournament.id, storedRound, rounds, setSelectedRound])
+
+  // Check if a match is a bye (same player on both sides)
+  const isBye = (match: any) => {
+    return match.player1?.id && match.player2?.id && match.player1.id === match.player2.id
+  }
 
   // Check if current user is in a match
   const isPlayerInMatch = (match: any) => {
@@ -50,6 +69,7 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
   // Handle match click
   const handleMatchClick = (match: any) => {
     if (match.status === 'COMPLETED') return // Don't allow editing completed matches
+    if (isBye(match)) return // Don't allow interaction with bye matches
     
     setSelectedMatch(match)
     
@@ -107,7 +127,17 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
         {/* Round Navigation */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={currentRound <= 1}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={currentRound <= 1}
+              onClick={() => {
+                const currentIndex = rounds.indexOf(currentRound)
+                if (currentIndex > 0) {
+                  setSelectedRound(tournament.id, rounds[currentIndex - 1])
+                }
+              }}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             
@@ -118,13 +148,24 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
                   variant={round === currentRound ? "default" : "outline"}
                   size="sm"
                   className="min-w-fit"
+                  onClick={() => setSelectedRound(tournament.id, round)}
                 >
                   Round {round}
                 </Button>
               ))}
             </div>
             
-            <Button variant="outline" size="sm" disabled={currentRound >= rounds.length}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={currentRound >= rounds.length}
+              onClick={() => {
+                const currentIndex = rounds.indexOf(currentRound)
+                if (currentIndex < rounds.length - 1) {
+                  setSelectedRound(tournament.id, rounds[currentIndex + 1])
+                }
+              }}
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -137,13 +178,16 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
         {/* Matches Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
           {currentRoundMatches.map((match) => {
-            const canInteract = canManage || isPlayerInMatch(match)
+            const matchIsBye = isBye(match)
+            const canInteract = !matchIsBye && (canManage || isPlayerInMatch(match))
             const isCompleted = match.status === 'COMPLETED'
             
             return (
               <Card 
                 key={match.id} 
                 className={`relative dark:bg-muted dark:text-foreground border-border ${
+                  matchIsBye ? 'opacity-75 border-dashed' : ''
+                } ${
                   canInteract && !isCompleted ? 'cursor-pointer hover:border-primary transition-colors' : ''
                 }`}
                 onClick={() => canInteract && handleMatchClick(match)}
@@ -152,7 +196,10 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">Match {match.id}</span>
-                      {canInteract && !isCompleted && (
+                      {matchIsBye && (
+                        <Badge variant="secondary" className="text-xs">BYE</Badge>
+                      )}
+                      {canInteract && !isCompleted && !matchIsBye && (
                         <Edit className="h-3 w-3 text-muted-foreground" />
                       )}
                     </div>
@@ -165,16 +212,37 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {renderPlayer(
-                    match.player1, 
-                    match.winner?.id === match.player1.id
-                  )}
-                  <div className="text-center text-xs text-muted-foreground font-medium">
-                    VS
-                  </div>
-                  {renderPlayer(
-                    match.player2, 
-                    match.winner?.id === match.player2.id
+                  {matchIsBye ? (
+                    // Render bye match - single player gets automatic win
+                    <>
+                      {renderPlayer(
+                        match.player1, 
+                        true // Bye matches are automatic wins
+                      )}
+                      <div className="text-center text-xs text-muted-foreground font-medium">
+                        BYE
+                      </div>
+                      <div className="flex items-center justify-center p-2">
+                        <Badge variant="outline" className="text-xs">
+                          Automatic Win
+                        </Badge>
+                      </div>
+                    </>
+                  ) : (
+                    // Render normal match
+                    <>
+                      {renderPlayer(
+                        match.player1, 
+                        match.winner?.id === match.player1.id
+                      )}
+                      <div className="text-center text-xs text-muted-foreground font-medium">
+                        VS
+                      </div>
+                      {renderPlayer(
+                        match.player2, 
+                        match.winner?.id === match.player2.id
+                      )}
+                    </>
                   )}
                 </CardContent>
               </Card>
