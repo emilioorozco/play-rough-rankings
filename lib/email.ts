@@ -6,12 +6,12 @@
  * - Password reset
  * - Role upgrade invitations
  * 
- * Uses AWS SES for production email sending.
- * Falls back to console logging in development.
+ * Uses provider abstraction layer to support multiple email providers:
+ * - Resend (primary, if RESEND_API_KEY is set)
+ * - AWS SES (fallback, if AWS credentials are set)
+ * - Console logging (development fallback)
  */
 
-import { SendEmailCommand } from '@aws-sdk/client-ses';
-import { sesClient } from '@/lib/aws/ses/client';
 import {
   emailTemplateBuilder,
   createVerificationEmailTemplate,
@@ -21,6 +21,7 @@ import {
 import { checkRateLimit, RateLimitError } from './email/rate-limiter';
 import { isRecipientSuppressed, getSuppressionDetails } from './messaging/suppression-manager';
 import { logMessageDelivery } from './messaging/delivery-logger';
+import { getEmailProvider, isEmailProviderConfigured, EmailProvider, EmailProviderResponse, EmailRateLimitError } from './email/providers';
 
 // Re-export RateLimitError for convenience
 export { RateLimitError } from './email/rate-limiter';
@@ -123,32 +124,42 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Check if an error is retryable
+ * Check if an error is retryable (provider-agnostic)
  * 
- * Determines if an AWS SES error is transient and should be retried.
+ * Determines if an email provider error is transient and should be retried.
  * 
  * @param error - Error object
  * @returns True if the error is retryable
  */
 function isRetryableError(error: any): boolean {
-  // Retry on network errors, throttling, and temporary service issues
-  const retryableErrorCodes = [
-    'Throttling',
-    'ServiceUnavailable',
-    'RequestTimeout',
+  // Retry on rate limit errors
+  if (error instanceof EmailRateLimitError) {
+    return true;
+  }
+  
+  // Retry on provider errors with 5xx status codes
+  if (error.statusCode && error.statusCode >= 500) {
+    return true;
+  }
+  
+  // Retry on network errors
+  const retryableErrorNames = [
     'NetworkingError',
     'TimeoutError',
+    'RequestTimeout',
+    'Throttling',
+    'ServiceUnavailable',
   ];
   
-  if (error.name && retryableErrorCodes.includes(error.name)) {
+  if (error.name && retryableErrorNames.includes(error.name)) {
     return true;
   }
   
-  if (error.code && retryableErrorCodes.includes(error.code)) {
+  if (error.code && retryableErrorNames.includes(error.code)) {
     return true;
   }
   
-  // Retry on 5xx status codes
+  // Retry on AWS SES 5xx status codes
   if (error.$metadata?.httpStatusCode && error.$metadata.httpStatusCode >= 500) {
     return true;
   }
@@ -157,24 +168,26 @@ function isRetryableError(error: any): boolean {
 }
 
 /**
- * Send email with retry logic
+ * Send email with retry logic (provider-agnostic)
  * 
  * Attempts to send an email with exponential backoff retry for transient errors.
  * 
- * @param command - AWS SES SendEmailCommand
+ * @param provider - Email provider instance
+ * @param params - Email parameters
  * @param maxRetries - Maximum number of retry attempts (default: 3)
- * @returns AWS SES response with message ID
+ * @returns Email provider response with message ID
  * @throws Error if all retry attempts fail
  */
 async function sendEmailWithRetry(
-  command: SendEmailCommand,
+  provider: EmailProvider,
+  params: { from: string; to: string; subject: string; text: string; html?: string },
   maxRetries: number = 3
-): Promise<{ MessageId?: string }> {
+): Promise<EmailProviderResponse> {
   let lastError: any;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const response = await sesClient.send(command);
+      const response = await provider.sendEmail(params);
       return response;
     } catch (error) {
       lastError = error;
@@ -189,6 +202,7 @@ async function sendEmailWithRetry(
       
       console.warn(
         `[EMAIL SERVICE] Retry attempt ${attempt + 1}/${maxRetries} after ${delayMs}ms`,
+        `\n  Provider: ${provider.name}`,
         `\n  Error: ${error instanceof Error ? error.message : String(error)}`
       );
       
@@ -200,13 +214,18 @@ async function sendEmailWithRetry(
 }
 
 /**
- * Send an email using AWS SES
+ * Send an email using the configured provider
+ * 
+ * Provider selection (automatic):
+ * 1. Resend (if RESEND_API_KEY is set)
+ * 2. AWS SES (if AWS credentials are set)
+ * 3. Console logging (development fallback)
  * 
  * In development, this logs to console by default. To send real emails locally:
  * - Set ENABLE_EMAIL_SENDING=true in your .env file
- * - Configure AWS SES credentials (AWS_EMAIL_ACCESS_KEY_ID, AWS_EMAIL_SECRET_ACCESS_KEY, AWS_REGION)
+ * - Configure email provider credentials (RESEND_API_KEY or AWS credentials)
  * 
- * In production, sends emails via AWS SES with retry logic.
+ * In production, sends emails via configured provider with retry logic.
  * 
  * Includes pre-send suppression checks to prevent sending to suppressed addresses.
  * Logs all delivery attempts (sent, failed, suppressed) to the delivery log.
@@ -219,7 +238,7 @@ export async function sendEmail(
   options: EmailOptions,
   emailType?: 'verification' | 'password_reset' | 'role_invitation'
 ): Promise<void> {
-  const fromEmail = process.env.AWS_SES_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@example.com';
+  const fromEmail = process.env.FROM_EMAIL || 'noreply@example.com';
   const email = options.to.toLowerCase();
   
   // Check suppression list before sending
@@ -242,22 +261,16 @@ export async function sendEmail(
     throw new Error(error);
   }
   
-  // Check if AWS credentials are configured
-  const hasAwsCredentials = !!(
-    process.env.AWS_EMAIL_ACCESS_KEY_ID &&
-    process.env.AWS_EMAIL_SECRET_ACCESS_KEY &&
-    process.env.AWS_REGION
-  );
-
-  // Check if email sending is explicitly enabled for development
+  // Check if email provider is configured
+  const hasProvider = isEmailProviderConfigured();
   const enableEmailSending = process.env.ENABLE_EMAIL_SENDING === 'true';
-
+  
   // Determine if we should send real emails:
-  // - In production with credentials -> send
-  // - In development with ENABLE_EMAIL_SENDING=true and credentials -> send
+  // - In production with provider -> send
+  // - In development with ENABLE_EMAIL_SENDING=true and provider -> send
   // - Otherwise -> log to console
   const shouldSendEmail = 
-    hasAwsCredentials && 
+    hasProvider && 
     (process.env.NODE_ENV === 'production' || enableEmailSending);
 
   if (!shouldSendEmail) {
@@ -272,8 +285,8 @@ export async function sendEmail(
       console.log('\n--- HTML Preview ---');
       console.log(options.html.substring(0, 500) + '...');
     }
-    if (!hasAwsCredentials && process.env.NODE_ENV === 'production') {
-      console.warn('[WARNING] AWS credentials not configured. Email not sent.');
+    if (!hasProvider && process.env.NODE_ENV === 'production') {
+      console.warn('[WARNING] No email provider configured. Email not sent.');
     }
     console.log('=====================================\n');
     
@@ -302,36 +315,21 @@ export async function sendEmail(
     return;
   }
 
-  // Send email via AWS SES with retry logic
+  // Send email via configured provider with retry logic
   try {
-    const command = new SendEmailCommand({
-      Source: fromEmail,
-      Destination: {
-        ToAddresses: [options.to],
+    const provider = getEmailProvider();
+    
+    const response = await sendEmailWithRetry(
+      provider,
+      {
+        from: fromEmail,
+        to: options.to,
+        subject: options.subject,
+        text: options.text,
+        html: options.html,
       },
-      Message: {
-        Subject: {
-          Data: options.subject,
-          Charset: 'UTF-8',
-        },
-        Body: {
-          ...(options.html
-            ? {
-                Html: {
-                  Data: options.html,
-                  Charset: 'UTF-8',
-                },
-              }
-            : {}),
-          Text: {
-            Data: options.text,
-            Charset: 'UTF-8',
-          },
-        },
-      },
-    });
-
-    const response = await sendEmailWithRetry(command, 3);
+      3 // max retries
+    );
     
     // Log successful delivery to delivery log
     if (emailType) {
@@ -341,7 +339,7 @@ export async function sendEmail(
         subject: options.subject,
         messageType: emailType,
         status: 'sent',
-        messageId: response.MessageId,
+        messageId: response.messageId,
       });
       
       // Keep legacy logging for backwards compatibility
@@ -350,7 +348,7 @@ export async function sendEmail(
         to: options.to,
         subject: options.subject,
         status: 'sent',
-        messageId: response.MessageId,
+        messageId: response.messageId,
         timestamp: new Date(),
       });
     }
