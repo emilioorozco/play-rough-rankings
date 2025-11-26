@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { ProjectedRatingsDisplay } from '@/components/tournaments/projected-ratings-display'
 import { getDisplayName, getDisplayInitials } from '@/lib/utils/name-display'
 import type { ApiTournament } from '@/lib/types/api'
+import { getTournamentRegistrationState } from '@/lib/utils/registration-state'
 
 interface TournamentOverviewProps {
   tournament: ApiTournament
@@ -44,6 +45,16 @@ export function TournamentOverview({
   const participantCount = tournament.participants?.length || 0
   const maxParticipants = tournament.maxPlayers || 0
   const registrationProgress = maxParticipants > 0 ? (participantCount / maxParticipants) * 100 : 0
+  const registrationState = getTournamentRegistrationState({
+    status: tournament.status,
+    tournamentStructure: tournament.tournamentStructure,
+    registrationDeadline: tournament.registrationDeadline,
+    maxPlayers: tournament.maxPlayers,
+    participantCount,
+    participants: tournament.participants,
+    totalRounds: tournament.totalRounds,
+    matches: tournament.matches?.map(m => ({ round: m.round })),
+  })
 
   // Get organizer display name based on user preferences
   const organizerDisplayName = getDisplayName(
@@ -154,12 +165,14 @@ export function TournamentOverview({
               value={registrationProgress} 
               className="h-2"
             />
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground space-y-1">
               <p>Registration Status:</p>
               <p className="font-medium dark:text-foreground">
-                {tournament.status === 'UPCOMING' ? 'Open' : 
-                 tournament.status === 'ACTIVE' ? 'Closed' : 'Completed'}
+                {registrationState.label}
               </p>
+              {registrationState.reason && (
+                <p>{registrationState.reason}</p>
+              )}
             </div>
           </CardContent>
         </Card>

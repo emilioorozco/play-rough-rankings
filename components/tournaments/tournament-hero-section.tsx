@@ -1,11 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
-  Clock,
-  Play,
-  CheckCircle,
-  AlertCircle,
   Trophy,
   UserPlus,
   UserMinus,
@@ -28,6 +24,7 @@ import {
   useInteractions 
 } from '@/stores/ui-store'
 import { useTournamentStore } from '@/stores/tournament-store'
+import { getTournamentRegistrationState } from '@/lib/utils/registration-state'
 
 interface TournamentHeroSectionProps {
   tournament: ApiTournament
@@ -121,33 +118,6 @@ export function TournamentHeroSection({
       resetInteractions()
     }
   }, [tournament.id, resetInteractions])
-  
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'UPCOMING':
-        return 'default'
-      case 'ACTIVE':
-        return 'default'
-      case 'COMPLETED':
-        return 'secondary'
-      default:
-        return 'outline'
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'UPCOMING':
-        return <Clock className="h-4 w-4" />
-      case 'ACTIVE':
-        return <Play className="h-4 w-4" />
-      case 'COMPLETED':
-        return <CheckCircle className="h-4 w-4" />
-      default:
-        return <AlertCircle className="h-4 w-4" />
-    }
-  }
 
   const getLevelBadge = () => {
     if (!tournament.tournamentLevel) return null
@@ -217,7 +187,40 @@ export function TournamentHeroSection({
 
   const isActive = tournament.status === 'ACTIVE'
   const isCompleted = tournament.status === 'COMPLETED'
-  const isLive = isActive
+  const participantsCount = safeTournament.participantCount ?? safeTournament.participants?.length ?? 0
+
+  const registrationState = useMemo(
+    () =>
+      getTournamentRegistrationState({
+        status: tournament.status,
+        tournamentStructure: tournament.tournamentStructure,
+        registrationDeadline: tournament.registrationDeadline,
+        maxPlayers: tournament.maxPlayers,
+        participantCount: participantsCount,
+        participants: safeTournament.participants,
+        totalRounds: tournament.totalRounds,
+        matches: tournament.matches?.map(m => ({ round: m.round })),
+      }),
+    [
+      participantsCount,
+      safeTournament.participants,
+      tournament.maxPlayers,
+      tournament.registrationDeadline,
+      tournament.status,
+      tournament.tournamentStructure,
+      tournament.totalRounds,
+      tournament.matches,
+    ],
+  )
+
+  const canShowRegistrationButton =
+    !isOrganizer &&
+    tournament.status !== 'CANCELLED' &&
+    tournament.status !== 'COMPLETED' &&
+    (registrationState.canRegister || effectiveIsRegistered)
+
+  const isRegistrationButtonDisabled =
+    isWithdrawing || (!effectiveIsRegistered && !registrationState.canRegister)
 
   return (
     <>
@@ -225,19 +228,6 @@ export function TournamentHeroSection({
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-6">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
-              <Badge
-                variant={getStatusBadgeVariant(tournament.status) as any}
-                className="flex items-center gap-1"
-              >
-                {getStatusIcon(tournament.status)}
-                {tournament.status.charAt(0).toUpperCase() + tournament.status.slice(1).toLowerCase()}
-                {isLive && (
-                  <span className="flex h-2 w-2 ml-1">
-                    <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-primary opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                  </span>
-                )}
-              </Badge>
               {getLevelBadge()}
             </div>
 
@@ -263,36 +253,47 @@ export function TournamentHeroSection({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            {!isOrganizer && (
-              <Button
-                onClick={handleRegistration}
-                className={effectiveIsRegistered ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : ''}
-                variant={effectiveIsRegistered ? 'destructive' : 'default'}
-                disabled={(() => {
-                  const participantsCount = safeTournament.participants?.length ?? 0
-                  const maxPlayers = tournament.maxPlayers
-                  const isCapacityLimited = typeof maxPlayers === 'number' && maxPlayers > 0
-                  const isFull = isCapacityLimited && participantsCount >= maxPlayers
-                  return isCompleted || isFull || isWithdrawing
-                })()}
-              >
-                {isWithdrawing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-destructive-foreground border-t-transparent rounded-full animate-spin mr-2" />
-                    Withdrawing...
-                  </>
-                ) : effectiveIsRegistered ? (
-                  <>
-                    <UserMinus className="h-4 w-4 mr-2" />
-                    Withdraw
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Register Now
-                  </>
+            {canShowRegistrationButton && (
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={handleRegistration}
+                  className={effectiveIsRegistered ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : ''}
+                  variant={effectiveIsRegistered ? 'destructive' : 'default'}
+                  disabled={isRegistrationButtonDisabled}
+                >
+                  {isWithdrawing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-destructive-foreground border-t-transparent rounded-full animate-spin mr-2" />
+                      Withdrawing...
+                    </>
+                  ) : effectiveIsRegistered ? (
+                    <>
+                      <UserMinus className="h-4 w-4 mr-2" />
+                      Withdraw
+                    </>
+                  ) : registrationState.isLateRegistration ? (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Late Registration
+                    </>
+                  ) : registrationState.canRegister ? (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Register Now
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Registration Closed
+                    </>
+                  )}
+                </Button>
+                {!effectiveIsRegistered && !registrationState.canRegister && registrationState.reason && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {registrationState.reason}
+                  </p>
                 )}
-              </Button>
+              </div>
             )}
 
             {canManage && (
