@@ -3,7 +3,6 @@
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { ConfirmationModal } from '@/components/ui/confirmation-modal'
 import { Modal } from '@/components/ui/modal'
 import { FormTextarea } from '@/components/ui/form-components'
@@ -21,7 +20,6 @@ import {
   Calendar
 } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
-import { cn } from '@/lib/utils'
 import type { ApiTournament } from '@/lib/types/api'
 
 interface TournamentManagementPanelProps {
@@ -67,8 +65,29 @@ export function TournamentManagementPanel({
   // Check if all current round matches are completed
   const areAllMatchesCompleted = () => {
     if (!tournament.matches || tournament.matches.length === 0) return false
+    
+    // Check matches in the current round
     const currentRoundMatches = tournament.matches.filter(m => m.round === currentRound)
-    return currentRoundMatches.length > 0 && currentRoundMatches.every(m => m.status === 'COMPLETED')
+    
+    // If no matches in the current round, we can't determine completion
+    if (currentRoundMatches.length === 0) return false
+    
+    // All matches in the current round must be completed
+    return currentRoundMatches.every(m => m.status === 'COMPLETED')
+  }
+
+  // Check if tournament is ready to be completed
+  const isReadyToComplete = () => {
+    // Must have matches completed in the current round
+    if (!areAllMatchesCompleted()) return false
+    
+    // Must be on or past the last round (no remaining rounds)
+    return !hasRemainingRounds()
+  }
+
+  const hasRemainingRounds = () => {
+    if (!tournament.totalRounds) return true
+    return currentRound < tournament.totalRounds
   }
 
   // Handle start tournament
@@ -187,42 +206,6 @@ export function TournamentManagementPanel({
     }
   }
 
-  // Get status badge variant
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'UPCOMING':
-        return 'default'
-      case 'ACTIVE':
-        return 'default'
-      case 'PAUSED':
-        return 'secondary'
-      case 'COMPLETED':
-        return 'default'
-      case 'CANCELLED':
-        return 'destructive'
-      default:
-        return 'default'
-    }
-  }
-
-  // Get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'UPCOMING':
-        return 'text-blue-600'
-      case 'ACTIVE':
-        return 'text-green-600'
-      case 'PAUSED':
-        return 'text-yellow-600'
-      case 'COMPLETED':
-        return 'text-gray-600'
-      case 'CANCELLED':
-        return 'text-red-600'
-      default:
-        return 'text-gray-600'
-    }
-  }
-
   const isLoading = startMutation.isPending || 
                     advanceMutation.isPending || 
                     completeMutation.isPending || 
@@ -234,14 +217,8 @@ export function TournamentManagementPanel({
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Tournament Management</span>
-            <Badge 
-              variant={getStatusVariant(tournament.status)}
-              className={cn(getStatusColor(tournament.status))}
-            >
-              {tournament.status}
-            </Badge>
+          <CardTitle>
+            Tournament Management
           </CardTitle>
           <CardDescription>
             Manage tournament lifecycle and progression
@@ -304,7 +281,7 @@ export function TournamentManagementPanel({
             )}
 
             {/* Advance Round */}
-            {tournament.status === 'ACTIVE' && (
+            {tournament.status === 'ACTIVE' && hasRemainingRounds() && (
               <Button
                 onClick={() => setShowAdvanceConfirm(true)}
                 disabled={isLoading || !areAllMatchesCompleted()}
@@ -320,7 +297,7 @@ export function TournamentManagementPanel({
             {tournament.status === 'ACTIVE' && (
               <Button
                 onClick={() => setShowCompleteConfirm(true)}
-                disabled={isLoading || !areAllMatchesCompleted()}
+                disabled={isLoading || !isReadyToComplete()}
                 className="w-full"
                 size="lg"
                 variant="default"
