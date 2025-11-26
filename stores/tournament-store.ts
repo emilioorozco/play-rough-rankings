@@ -57,6 +57,9 @@ interface TournamentState {
   // Registration status cache
   registrationStatusCache: Record<string, RegistrationStatus>
   
+  // Selected round per tournament (for bracket view)
+  selectedRoundCache: Record<string, number>
+  
   // Filters
   filters: TournamentFilters
   
@@ -100,6 +103,11 @@ interface TournamentState {
   updateRegistrationStatus: (tournamentId: string, updates: Partial<RegistrationStatus>) => void
   clearRegistrationStatus: (tournamentId: string) => void
   clearAllRegistrationStatus: () => void
+  
+  // Actions for selected round
+  setSelectedRound: (tournamentId: string, round: number) => void
+  getSelectedRound: (tournamentId: string) => number | null
+  clearSelectedRound: (tournamentId: string) => void
   
   // Actions for filters
   setFilters: (filters: Partial<TournamentFilters>) => void
@@ -165,6 +173,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   tournamentList: { ...initialTournamentList },
   tournamentCache: {},
   registrationStatusCache: {},
+  selectedRoundCache: {},
   filters: { ...initialFilters },
   loading: { ...initialLoading },
   errors: { ...initialErrors },
@@ -422,6 +431,31 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     })
   },
   
+  // Selected round actions
+  setSelectedRound: (tournamentId, round) => {
+    set((state) => ({
+      selectedRoundCache: {
+        ...state.selectedRoundCache,
+        [tournamentId]: round,
+      },
+    }))
+  },
+  
+  getSelectedRound: (tournamentId) => {
+    const state = get()
+    return state.selectedRoundCache[tournamentId] || null
+  },
+  
+  clearSelectedRound: (tournamentId) => {
+    set((state) => {
+      const newCache = { ...state.selectedRoundCache }
+      delete newCache[tournamentId]
+      return {
+        selectedRoundCache: newCache,
+      }
+    })
+  },
+  
   // Filter actions
   setFilters: (filters) => {
     set((state) => {
@@ -515,6 +549,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       tournamentList: { ...initialTournamentList },
       tournamentCache: {},
       registrationStatusCache: {},
+      selectedRoundCache: {},
       filters: { ...initialFilters },
       loading: { ...initialLoading },
       errors: { ...initialErrors },
