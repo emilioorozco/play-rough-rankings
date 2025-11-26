@@ -84,6 +84,11 @@ export function ManualPairingEditor({
     return tournament.matches?.filter(match => match.round === currentRound && match.status === 'PENDING') || []
   }, [tournament.matches, currentRound])
 
+  // Check if a match is a bye (same player on both sides)
+  const isBye = (match: any) => {
+    return match.player1?.id && match.player2?.id && match.player1.id === match.player2.id
+  }
+
   // Get available players (registered, not dropped, not already paired in current round)
   const availablePlayers = useMemo(() => {
     const pairedPlayerIds = new Set(
@@ -556,6 +561,9 @@ export function ManualPairingEditor({
                         <div className="flex items-center gap-2">
                           <Badge variant="outline">P2</Badge>
                           <span className="text-sm font-medium">{match.player2.displayName}</span>
+                          {isBye(match) && (
+                            <Badge variant="secondary" className="text-xs">BYE</Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           {match.table && (
