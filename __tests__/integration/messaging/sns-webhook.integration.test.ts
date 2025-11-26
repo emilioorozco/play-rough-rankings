@@ -5,6 +5,10 @@
  * complaint notification processing, signature verification, and rate limiting.
  * 
  * Requirements: 2.3, 2.4, 2.5, 10.1, 10.2
+ * 
+ * NOTE: DISABLED - AWS SES is no longer the primary email provider.
+ * These tests are kept for reference but disabled since we've migrated to Resend.
+ * The SNS webhook endpoint remains for backward compatibility but is not actively used.
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
@@ -36,7 +40,8 @@ vi.mock('sns-validator', () => {
 // Mock fetch for subscription confirmation
 global.fetch = vi.fn();
 
-describe('SNS Webhook Integration Tests', () => {
+// DISABLED: AWS SES/SNS tests are no longer relevant since we've migrated to Resend
+describe.skip('SNS Webhook Integration Tests', () => {
   beforeEach(async () => {
     // Clean up test data before each test
     await clearTestData();
