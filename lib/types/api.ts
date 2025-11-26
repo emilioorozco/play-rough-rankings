@@ -105,10 +105,17 @@ export interface ApiTournament {
   date: string | Date
   status: string
   format: string
+  tournamentStructure?: string | null
   maxPlayers?: number | null
+  totalRounds?: number | null
   entryFee?: number | null
   prizePool?: string | null
   tournamentLevel?: string | null
+  registrationDeadline?: string | Date | null
+  registrationOpen?: boolean
+  timeUntilDeadline?: string | null
+  participantCount?: number
+  registrationProgress?: number
   game: ApiGameInfo
   store: ApiStoreInfo
   organizer: ApiOrganizerInfo
