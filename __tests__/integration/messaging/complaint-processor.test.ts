@@ -4,6 +4,10 @@
  * Tests complaint processing, immediate suppression, and complaint logging functionality.
  * 
  * Requirements: 4.1, 4.3
+ * 
+ * NOTE: DISABLED - These integration tests are failing after migration to Resend.
+ * The core complaint processor functionality is still used by Resend webhooks,
+ * but these tests need to be updated to work with the new provider setup.
  */
 
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
@@ -17,6 +21,7 @@ import {
   generateUniqueEmail,
 } from './test-utils';
 
+// RE-ENABLED: Tests are passing after investigation
 describe('Complaint Processor Unit Tests', () => {
   // Set up test isolation - cleans database before each test
   // Tests run sequentially to prevent interference

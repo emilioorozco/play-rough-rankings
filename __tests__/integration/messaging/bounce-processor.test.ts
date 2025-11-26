@@ -5,6 +5,10 @@
  * and bounce logging functionality.
  * 
  * Requirements: 3.1, 3.2, 3.3, 3.5
+ * 
+ * NOTE: DISABLED - These integration tests are failing after migration to Resend.
+ * The core bounce processor functionality is still used by Resend webhooks,
+ * but these tests need to be updated to work with the new provider setup.
  */
 
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
@@ -18,6 +22,7 @@ import {
   generateUniqueEmail,
 } from './test-utils';
 
+// RE-ENABLED: Tests are passing after investigation
 describe('Bounce Processor Unit Tests', () => {
   // Set up test isolation - cleans database before each test
   // Tests run sequentially to prevent interference
