@@ -15,8 +15,7 @@ import {
   getDeliveryStats,
 } from '@/lib/messaging/delivery-logger';
 
-// DISABLED: Integration tests failing after Resend migration
-describe.skip('Delivery Logger Property Tests', () => {
+describe('Delivery Logger Property Tests', () => {
   beforeEach(async () => {
     // Clean up all messaging test data before each test
     // Order matters due to foreign key constraints
