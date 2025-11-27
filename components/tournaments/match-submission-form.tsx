@@ -78,11 +78,11 @@ export function MatchSubmissionForm({
     includeParticipants: true
   })
 
-  const entries = tournamentQuery.data?.entries || []
-  const player1Entry = entries.find((e: any) => e.playerId === match.player1Id)
-  const player2Entry = entries.find((e: any) => e.playerId === match.player2Id)
-  const isPlayer1Dropped = player1Entry?.dropped || false
-  const isPlayer2Dropped = player2Entry?.dropped || false
+  const participants = tournamentQuery.data?.participants || []
+  const player1Participant = participants.find((participant) => participant.id === match.player1Id)
+  const player2Participant = participants.find((participant) => participant.id === match.player2Id)
+  const isPlayer1Dropped = player1Participant?.dropped || false
+  const isPlayer2Dropped = player2Participant?.dropped || false
   const isCurrentPlayerDropped = isPlayer1 ? isPlayer1Dropped : isPlayer2Dropped
   const isEitherPlayerDropped = isPlayer1Dropped || isPlayer2Dropped
 
