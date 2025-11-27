@@ -16,9 +16,10 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
         // Cache queries for 5 minutes by default
         staleTime: 5 * 60 * 1000,
         // Retry failed requests up to 3 times
-        retry: (failureCount, error: any) => {
+        retry: (failureCount, error: unknown) => {
           // Don't retry auth errors
-          if (error?.data?.code === 'UNAUTHORIZED' || error?.data?.code === 'FORBIDDEN') {
+          const trpcError = error as { data?: { code?: string } } | null;
+          if (trpcError?.data?.code === 'UNAUTHORIZED' || trpcError?.data?.code === 'FORBIDDEN') {
             return false
           }
           return failureCount < 3
@@ -26,8 +27,9 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
       },
       mutations: {
         // Retry mutations once on network errors
-        retry: (failureCount, error: any) => {
-          if (error?.data?.code === 'UNAUTHORIZED' || error?.data?.code === 'FORBIDDEN') {
+        retry: (failureCount, error: unknown) => {
+          const trpcError = error as { data?: { code?: string } } | null;
+          if (trpcError?.data?.code === 'UNAUTHORIZED' || trpcError?.data?.code === 'FORBIDDEN') {
             return false
           }
           return failureCount < 1

@@ -21,7 +21,13 @@ export const invitationsRouter = router({
         role: z.enum(['organizer', 'admin']),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      id: string;
+      email: string;
+      role: string;
+      expiresAt: Date;
+      createdAt: Date;
+    }> => {
       const { email, role } = input;
       const inviterId = ctx.user!.id;
 
@@ -125,10 +131,20 @@ export const invitationsRouter = router({
         })
         .optional(),
     )
-    .query(async ({ ctx: _ctx, input }) => {
+    .query(async ({ ctx: _ctx, input }): Promise<Array<{
+      id: string;
+      email: string;
+      role: string;
+      invitedBy: { id: string; name: string | null; email: string };
+      acceptedAt: Date | null;
+      expiresAt: Date;
+      createdAt: Date;
+      isExpired: boolean;
+      isAccepted: boolean;
+    }>> => {
       const { includeAccepted = false, includeExpired = false } = input || {};
 
-      const where: any = {};
+      const where: Record<string, unknown> = {};
 
       if (!includeAccepted) {
         where.acceptedAt = null;
@@ -179,7 +195,11 @@ export const invitationsRouter = router({
         token: z.string().min(1, 'Token is required'),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      role: string;
+    }> => {
       const { token } = input;
       const userId = ctx.user.id;
 
@@ -285,7 +305,18 @@ export const invitationsRouter = router({
         token: z.string().min(1, 'Token is required'),
       }),
     )
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<{
+      id: string;
+      email: string;
+      role: string;
+      invitedBy: { name: string | null; email: string };
+      expiresAt: Date;
+      createdAt: Date;
+      isExpired: boolean;
+      isAccepted: boolean;
+      emailMatches: boolean;
+      canAccept: boolean;
+    }> => {
       const { token } = input;
 
       const invitation = await prisma.roleInvitation.findUnique({
@@ -339,7 +370,10 @@ export const invitationsRouter = router({
         id: z.string(),
       }),
     )
-    .mutation(async ({ ctx: _ctx, input }) => {
+    .mutation(async ({ ctx: _ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+    }> => {
       const invitation = await prisma.roleInvitation.findUnique({
         where: { id: input.id },
       });

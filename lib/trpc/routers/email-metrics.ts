@@ -9,6 +9,22 @@ import {
   getAllSuppressedRecipients,
   getSuppressionStats,
 } from '@/lib/messaging';
+import type { EmailMetrics } from '@/lib/messaging/rate-calculator';
+
+type SerializedEmailMetrics = Omit<EmailMetrics, 'calculatedAt'> & {
+  calculatedAt: string;
+};
+
+const serializeEmailMetrics = (metrics: EmailMetrics): SerializedEmailMetrics => ({
+  ...metrics,
+  calculatedAt: metrics.calculatedAt.toISOString(),
+});
+
+type SESComplianceResult = Awaited<ReturnType<typeof checkSESCompliance>>;
+
+type SerializedComplianceResult = Omit<SESComplianceResult, 'metrics'> & {
+  metrics: SerializedEmailMetrics;
+};
 
 /**
  * Email Metrics Router
@@ -28,17 +44,13 @@ export const emailMetricsRouter = router({
         days: z.number().min(1).max(365).optional().default(30),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input }): Promise<SerializedEmailMetrics> => {
       const metrics = await calculateEmailMetrics({
         channel: input.channel,
         days: input.days,
       });
 
-      return {
-        ...metrics,
-        // Convert Date to ISO string for JSON serialization
-        calculatedAt: metrics.calculatedAt.toISOString(),
-      };
+      return serializeEmailMetrics(metrics);
     }),
 
   /**
@@ -52,7 +64,7 @@ export const emailMetricsRouter = router({
         days: z.number().min(1).max(365).optional().default(30),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input }): Promise<unknown> => {
       return await getBounceRateBreakdown({
         channel: input.channel,
         days: input.days,
@@ -70,7 +82,7 @@ export const emailMetricsRouter = router({
         days: z.number().min(1).max(365).optional().default(30),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input }): Promise<SerializedComplianceResult> => {
       const compliance = await checkSESCompliance({
         channel: input.channel,
         days: input.days,
@@ -78,10 +90,7 @@ export const emailMetricsRouter = router({
 
       return {
         ...compliance,
-        metrics: {
-          ...compliance.metrics,
-          calculatedAt: compliance.metrics.calculatedAt.toISOString(),
-        },
+        metrics: serializeEmailMetrics(compliance.metrics),
       };
     }),
 
@@ -97,7 +106,7 @@ export const emailMetricsRouter = router({
         dateTo: z.string().datetime().optional(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input }): Promise<unknown> => {
       return await getDeliveryStats({
         channel: input.channel,
         dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
@@ -115,7 +124,7 @@ export const emailMetricsRouter = router({
         channel: z.enum(['email', 'sms']).optional(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input }): Promise<unknown> => {
       return await getSuppressionStats(input.channel);
     }),
 
@@ -132,7 +141,14 @@ export const emailMetricsRouter = router({
         reason: z.string().optional(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input }): Promise<{
+      recipients: Array<unknown & {
+        createdAt: string;
+        updatedAt: string;
+        lastBounceAt?: string;
+      }>;
+      total: number;
+    }> => {
       const recipients = await getAllSuppressedRecipients({
         limit: input.limit,
         offset: input.offset,
