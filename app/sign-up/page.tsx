@@ -1,19 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/components/auth/session-provider";
 import { useZustandFormSteps } from "@/hooks/use-form-zustand";
 import { registerSchema } from "@/lib/validation/schemas";
 import { FormInput, FormSelect, FormCheckbox, FormStatus } from "@/components/ui/form-components";
-import { Modal } from "@/components/ui/modal";
-import { Mail, Lock, User, Eye, EyeOff, Info } from "lucide-react";
+import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useDraftIdByFormId, useFormDraftActions } from "@/stores/form-draft-store-selectors";
+import { cn } from "@/lib/utils";
+import { Mail, Lock, User, Eye, EyeOff, Info, Loader2 } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { signUp } = useSession();
+  const { signUp, user, isLoading, refetch } = useSession();
   
   const steps = ['personal-info', 'account-info', 'preferences'];
+  
+  // Get draft ID and actions for cleanup
+  const draftId = useDraftIdByFormId('user-registration');
+  const actions = useFormDraftActions();
+  
+  // Redirect logged-in users away from sign-up page
+  useEffect(() => {
+    if (!isLoading && user) {
+      router.replace("/");
+    }
+  }, [user, isLoading, router]);
   
   // Multi-step form state using Zustand
   const formState = useZustandFormSteps({
@@ -77,16 +91,60 @@ export default function RegisterPage() {
         }
         
         throw new Error(errorMessage);
-      } else {
-        router.push("/");
       }
+      // Success - cleanup will happen in onSuccess callback
     },
-    onSuccess: () => {},
+    onSuccess: async () => {
+      // Cleanup draft data on successful registration
+      if (draftId) {
+        formState.reset();
+        actions.deleteDraft(draftId);
+      }
+      // Refetch session to ensure we have the updated user data
+      await refetch();
+      // Use window.location for a hard redirect to ensure we get the updated session
+      // This forces a full page reload which ensures the session is properly set
+      window.location.href = "/";
+    },
     onError: () => {},
     showLoadingBar: true,
     enableAutoSave: true,
     autoSaveDelay: 2000,
   });
+  
+  // Reset step to 0 on component mount (always start at step 1)
+  useEffect(() => {
+    // Always reset to step 0 on mount, regardless of draft state
+    formState.goToStep(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - we intentionally don't include formState to avoid re-running
+
+  // Slide animation state (similar to modal)
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | 'none'>('none')
+  const previousStepRef = useRef(formState.currentStep)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Track step changes for slide direction
+  useEffect(() => {
+    const previousStep = previousStepRef.current
+    const currentStep = formState.currentStep
+    
+    if (previousStep !== currentStep) {
+      if (currentStep > previousStep) {
+        setSlideDirection('left') // Moving forward - slide left
+      } else if (currentStep < previousStep) {
+        setSlideDirection('right') // Moving backward - slide right
+      }
+      previousStepRef.current = currentStep
+      
+      // Reset slide direction after animation
+      const timer = setTimeout(() => {
+        setSlideDirection('none')
+      }, 300) // Match animation duration
+      
+      return () => clearTimeout(timer)
+    }
+  }, [formState.currentStep])
 
   // UI state for password visibility
   const [showPassword, setShowPassword] = useState(false);
@@ -100,9 +158,9 @@ export default function RegisterPage() {
 
   const renderPersonalInfoStep = () => (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium mb-2">Personal Information</h3>
-        <p className="text-sm text-muted-foreground mb-4">
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium">Personal Information</h3>
+        <p className="text-sm text-muted-foreground">
           Tell us a bit about yourself
         </p>
       </div>
@@ -144,9 +202,9 @@ export default function RegisterPage() {
 
   const renderAccountInfoStep = () => (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium mb-2">Account Information</h3>
-        <p className="text-sm text-muted-foreground mb-4">
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium">Account Information</h3>
+        <p className="text-sm text-muted-foreground">
           Create your account credentials
         </p>
       </div>
@@ -206,9 +264,9 @@ export default function RegisterPage() {
 
   const renderPreferencesStep = () => (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium mb-2">Preferences</h3>
-        <p className="text-sm text-muted-foreground mb-4">
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium">Preferences</h3>
+        <p className="text-sm text-muted-foreground">
           Set your account preferences
         </p>
       </div>
@@ -289,41 +347,126 @@ export default function RegisterPage() {
     }
   };
 
-  // Render modal children directly so form field updates re-render immediately
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Don't render sign-up form if user is already logged in
+  if (user) {
+    return null;
+  }
 
   return (
-    <main className="bg-background text-foreground min-h-screen py-8 px-4">
-      <div className="container mx-auto max-w-2xl">
-        <Modal
-          isOpen={true}
-          onClose={() => {}} // No-op since this is a page, not a modal
-          title="Create Account"
-          description="Join the community and start competing"
-          size="lg"
-          showCloseButton={false}
-          closeOnOverlayClick={false}
-          usePortal={false}
-          isMultiStep={true}
-          currentStep={formState.currentStep}
-          totalSteps={formState.totalSteps}
-          onSubmit={isLastStep ? formState.submit : formState.nextStep}
-          onCancel={formState.prevStep}
-          isSubmitting={formState.isSubmitting}
-          isValid={formState.isCurrentStepValid}
-          isDirty={formState.isDirty}
-          submitLabel={isLastStep ? "Create Account" : "Continue"}
-          cancelLabel="Back"
-          showCancel={!isFirstStep}
-          showReset={false}
-        >
-          <>
-            <FormStatus 
-              error={formState.errors.email || formState.errors.password || formState.errors.username || (formState.errors as any).general}
-            />
-            {renderCurrentStep()}
-          </>
-        </Modal>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-6 sm:py-8">
+        <Card className="max-w-2xl mx-auto bg-background">
+          {/* Card Header with Progress */}
+          <CardHeader className="p-0">
+            <div className="relative">
+              <div className="flex items-center justify-between p-6 border-b">
+                <div className="flex-1">
+                  <CardTitle className="mb-2 text-foreground text-lg font-semibold">
+                    Create Your Account
+                  </CardTitle>
+                  <CardDescription>
+                    Join the community and start competing
+                  </CardDescription>
+                </div>
+              </div>
+              {/* Multi-step progress bar on top of divider - matching modal pattern exactly */}
+              {(() => {
+                const isLastStep = formState.currentStep === formState.totalSteps - 1
+                const baseProgress = isLastStep && formState.isSubmitting 
+                  ? 100 
+                  : Math.min((formState.currentStep / formState.totalSteps) * 100 + (100 / formState.totalSteps / 2), 90)
+                
+                return (
+                  <div className="absolute -bottom-px left-0 right-0 h-1 bg-muted">
+                    <div 
+                      className="h-full bg-primary transition-all duration-500 ease-out"
+                      style={{ 
+                        width: `${baseProgress}%`,
+                        transition: 'width 500ms ease-out'
+                      }}
+                    />
+                  </div>
+                )
+              })()}
+            </div>
+          </CardHeader>
+          
+          {/* Card Content with Form */}
+          <CardContent className="pt-6">
+            <form 
+              id="signup-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (isLastStep) {
+                  formState.submit();
+                } else {
+                  // Validate current step before proceeding
+                  if (formState.isCurrentStepValid) {
+                    formState.nextStep();
+                  }
+                }
+              }}
+            >
+              <FormStatus 
+                error={formState.errors.email || formState.errors.password || formState.errors.username || (formState.errors as any).general}
+              />
+              {/* Step content with slide animation */}
+              <div 
+                ref={contentRef}
+                className={cn(
+                  "relative overflow-x-visible",
+                  slideDirection === 'left' && "animate-slide-left",
+                  slideDirection === 'right' && "animate-slide-right"
+                )}
+              >
+                {renderCurrentStep()}
+              </div>
+            </form>
+          </CardContent>
+          
+          {/* Card Footer with Actions */}
+          <CardFooter className="flex items-center justify-between gap-3 pt-6 border-t">
+            {!isFirstStep && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={formState.prevStep}
+                disabled={formState.isSubmitting}
+              >
+                Back
+              </Button>
+            )}
+            <div className="flex-1" /> {/* Spacer */}
+            <Button
+              type="submit"
+              form="signup-form"
+              disabled={formState.isSubmitting || !formState.isCurrentStepValid}
+              className="ml-auto"
+            >
+              {formState.isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {isLastStep ? "Creating Account..." : "Loading..."}
+                </>
+              ) : (
+                isLastStep ? "Create Account" : "Continue"
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
-    </main>
+    </div>
   );
 }
