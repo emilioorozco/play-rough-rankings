@@ -2,16 +2,23 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, publicProcedure, organizerProcedure } from '../router-factory'
 import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPublicSelectWithPrefs } from '@/lib/utils/user'
-import { CreateTournamentEntrySchema, UpdateTournamentEntrySchema } from '@/lib/schemas'
+import {
+  CreateTournamentEntrySchema,
+  UpdateTournamentEntrySchema,
+  TournamentEntriesByTournamentQuerySchema,
+  TournamentEntriesByPlayerQuerySchema,
+  BulkCreateTournamentEntriesSchema
+} from '@/lib/schemas'
 
 export const tournamentEntriesRouter = router({
   // Get tournament entries for a tournament
   getByTournament: publicProcedure
-    .input(z.object({
-      tournamentId: z.string().uuid(),
-      includeDeckInfo: z.boolean().default(true),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(TournamentEntriesByTournamentQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      tournament: unknown;
+      entries: unknown[];
+      totalEntries: number;
+    }> => {
       // Verify tournament exists
       const tournament = await ctx.prisma.tournament.findUnique({
         where: { id: input.tournamentId },
@@ -79,13 +86,15 @@ export const tournamentEntriesRouter = router({
 
   // Get entries for a specific player
   getByPlayer: publicProcedure
-    .input(z.object({
-      playerId: z.string().uuid(),
-      gameId: z.string().uuid().optional(),
-      includeDeckInfo: z.boolean().default(true),
-      limit: z.number().int().min(1).max(100).default(20),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(TournamentEntriesByPlayerQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      player: {
+        id: string;
+        displayName: string;
+      };
+      entries: unknown[];
+      totalEntries: number;
+    }> => {
       // Verify player exists and check privacy
       const player = await ctx.prisma.player.findUnique({
         where: { id: input.playerId },
@@ -179,7 +188,7 @@ export const tournamentEntriesRouter = router({
   // Create tournament entry (organizers and admins)
   create: organizerProcedure
     .input(CreateTournamentEntrySchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<unknown> => {
       // Verify tournament exists
       const tournament = await ctx.prisma.tournament.findUnique({
         where: { id: input.tournamentId },
@@ -306,7 +315,7 @@ export const tournamentEntriesRouter = router({
       id: z.string().uuid(),
       data: UpdateTournamentEntrySchema,
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<unknown> => {
       // Verify entry exists
       const existingEntry = await ctx.prisma.tournamentEntry.findUnique({
         where: { id: input.id },
@@ -383,7 +392,10 @@ export const tournamentEntriesRouter = router({
     .input(z.object({
       id: z.string().uuid(),
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+    }> => {
       // Verify entry exists
       const existingEntry = await ctx.prisma.tournamentEntry.findUnique({
         where: { id: input.id },
@@ -408,20 +420,12 @@ export const tournamentEntriesRouter = router({
 
   // Bulk create tournament entries
   bulkCreate: organizerProcedure
-    .input(z.object({
-      tournamentId: z.string().uuid(),
-      entries: z.array(z.object({
-        playerId: z.string().uuid(),
-        deckId: z.string().uuid().optional(),
-        placement: z.number().int().min(1).optional(),
-        record: z.object({
-          wins: z.number().int().min(0).default(0),
-          losses: z.number().int().min(0).default(0),
-          draws: z.number().int().min(0).default(0),
-        }).optional(),
-      })).min(1).max(100),
-    }))
-    .mutation(async ({ ctx, input }) => {
+    .input(BulkCreateTournamentEntriesSchema)
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      entries: unknown[];
+    }> => {
       // Verify tournament exists
       const tournament = await ctx.prisma.tournament.findUnique({
         where: { id: input.tournamentId },

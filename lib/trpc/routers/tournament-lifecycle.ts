@@ -16,6 +16,7 @@ import { TournamentProcessor } from '@/lib/tournament/tournament-processor'
 import { RatingCalculator } from '@/lib/tournament/rating-calculator'
 import { AuditLogger } from '@/lib/tournament/audit-logger'
 import { canManageTournament } from '@/lib/tournament/authorization'
+import type { ProjectedRating, TournamentAuditLog } from '@/lib/tournament/types'
 
 /**
  * Tournament Lifecycle Router
@@ -41,7 +42,12 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      tournament: unknown;
+      matches: unknown[];
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -122,7 +128,14 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      tournament: unknown;
+      newMatches: unknown[];
+      currentRound: number;
+      tournamentEnded: boolean;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -218,7 +231,22 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      tournament: unknown;
+      finalStandings: unknown[];
+      ratingUpdates: unknown[];
+      stats: {
+        totalPlayers: number;
+        ratingChangesApplied: number;
+        winner: {
+          playerId?: string;
+          placement?: number;
+          name: string;
+        };
+      };
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -291,7 +319,7 @@ export const tournamentLifecycleRouter = router({
             ratingChangesApplied: result.ratingUpdates.length,
             winner: {
               playerId: winner?.playerId,
-              placement: winner?.placement,
+                placement: winner?.placement ?? undefined,
               name: winnerName
             }
           }
@@ -330,7 +358,11 @@ export const tournamentLifecycleRouter = router({
         reason: z.string().optional()
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      tournament: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -411,7 +443,11 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      tournament: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -495,7 +531,11 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      tournament: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -589,7 +629,11 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      matches: unknown[];
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -682,7 +726,11 @@ export const tournamentLifecycleRouter = router({
         }
       )
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      match: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -772,7 +820,10 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -869,7 +920,15 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      entry: unknown;
+      affectedMatches: unknown[];
+      stats: {
+        affectedMatchCount: number;
+      };
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -983,7 +1042,17 @@ export const tournamentLifecycleRouter = router({
         })
       })
     )
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<{
+      success: boolean;
+      tournamentId: string;
+      tournamentName: string;
+      tournamentStatus: string;
+      projectedRatings: ProjectedRating[];
+      stats: {
+        totalPlayers: number;
+        averageRatingChange: number;
+      };
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -1083,7 +1152,19 @@ export const tournamentLifecycleRouter = router({
         }).optional()
       })
     )
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<{
+      success: boolean;
+      tournamentId: string;
+      tournamentName: string;
+      auditTrail: TournamentAuditLog[];
+      stats: {
+        totalEntries: number;
+        dateRange: {
+          earliest: Date;
+          latest: Date;
+        } | null;
+      };
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',

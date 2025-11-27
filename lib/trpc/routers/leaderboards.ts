@@ -17,6 +17,24 @@ import type {
   TournamentWhereClause,
   SeasonalStatsUpdate
 } from '@/lib/types/backend'
+import type { PrismaClient } from '@prisma/client'
+import type {
+  ApiLeaderboardData,
+  ApiLeaderboardEntry,
+  ApiGame
+} from '@/lib/types/api'
+import {
+  TopPlayersQuerySchema,
+  FilteredLeaderboardQuerySchema,
+  HistoricalSeasonsQuerySchema,
+  AvailableSeasonsQuerySchema,
+  SeasonalCachedQuerySchema,
+  PlayerTrendsQuerySchema,
+  RefreshCacheQuerySchema,
+  BatchRefreshCacheQuerySchema,
+  RankingStatsQuerySchema,
+  PlayerDeckStatsQuerySchema
+} from '@/lib/schemas'
 
 // Note: Season utilities are imported from ranking-system.ts to avoid duplication
 
@@ -26,7 +44,7 @@ export const leaderboardsRouter = router({
     .input(LeaderboardQuerySchema.extend({
       season: z.string().optional(),
     }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<ApiLeaderboardData> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -85,7 +103,7 @@ export const leaderboardsRouter = router({
       })
 
       // Calculate additional metrics for each player
-      const leaderboard = playerStats.map((stat, index) => {
+      const leaderboard: ApiLeaderboardEntry[] = playerStats.map((stat, index) => {
         const seasonalStats = stat.seasonalStats as SeasonalStatsUpdate
         const metrics = calculatePerformanceMetrics(
           seasonalStats.wins || 0,
@@ -114,10 +132,17 @@ export const leaderboardsRouter = router({
       })
 
       return {
-        game,
+        game: {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        },
         season,
-        seasonStart,
-        seasonEnd,
+        seasonStart: seasonStart.toISOString(),
+        seasonEnd: seasonEnd.toISOString(),
         leaderboard,
         totalPlayers: leaderboard.length,
       }
@@ -125,12 +150,18 @@ export const leaderboardsRouter = router({
 
   // Get top players listing with configurable limit
   getTopPlayers: publicProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-      limit: z.number().int().min(10).max(50).default(25),
-      format: z.string().optional(),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(TopPlayersQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: ApiGame;
+      format?: string;
+      topPlayers: Array<ApiLeaderboardEntry & {
+        recentActivity: {
+          tournaments: Array<{ id: string; name: string; date: Date; format: string }>;
+          lastActive: Date | null;
+        };
+      }>;
+      totalShown: number;
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -266,7 +297,14 @@ export const leaderboardsRouter = router({
       })
 
       return {
-        game,
+        game: {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        },
         format: input.format,
         topPlayers: playersWithActivity,
         totalShown: playersWithActivity.length,
@@ -275,15 +313,28 @@ export const leaderboardsRouter = router({
 
   // Get leaderboard with filtering by game, format, and time period
   getFiltered: publicProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-      format: z.string().optional(),
-      startDate: z.date().optional(),
-      endDate: z.date().optional(),
-      limit: z.number().int().min(10).max(50).default(25),
-      minTournaments: z.number().int().min(0).default(1), // Minimum tournaments to be included
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(FilteredLeaderboardQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: ApiGame;
+      format?: string;
+      dateRange: {
+        start?: Date;
+        end?: Date;
+      };
+      leaderboard: Array<ApiLeaderboardEntry & {
+        periodStats: {
+          wins: number;
+          losses: number;
+          tournaments: number;
+          totalMatches: number;
+        };
+      }>;
+      totalPlayers: number;
+      qualificationCriteria?: {
+        minTournaments: number;
+        totalQualified: number;
+      };
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -490,7 +541,14 @@ export const leaderboardsRouter = router({
         }))
 
       return {
-        game,
+        game: {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        },
         format: input.format,
         dateRange: {
           start: input.startDate,
@@ -507,11 +565,24 @@ export const leaderboardsRouter = router({
 
   // Get historical season data
   getHistoricalSeasons: publicProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-      years: z.number().int().min(1).max(5).default(2), // How many years back to look
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(HistoricalSeasonsQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: ApiGame;
+      seasons: Array<{
+        season: string;
+        year: number;
+        quarter: string;
+        dateRange: { start: Date; end: Date };
+        tournamentCount: number;
+        playerCount: number;
+        topPlayer?: {
+          playerId: string;
+          displayName: string;
+          rating: number;
+        };
+      }>;
+      totalSeasons: number;
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -641,7 +712,14 @@ export const leaderboardsRouter = router({
       seasons.sort((a, b) => b.dateRange.start.getTime() - a.dateRange.start.getTime())
 
       return {
-        game,
+        game: {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        },
         seasons,
         totalSeasons: seasons.length,
       }
@@ -649,10 +727,16 @@ export const leaderboardsRouter = router({
 
   // Get available seasons for a game
   getAvailableSeasons: publicProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(AvailableSeasonsQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: ApiGame;
+      seasons: string[];
+      currentSeason: string;
+      dateRange?: {
+        earliest: Date;
+        latest: Date;
+      };
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -701,7 +785,14 @@ export const leaderboardsRouter = router({
       }
 
       return {
-        game,
+        game: {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        },
         seasons,
         currentSeason: getCurrentSeason(),
         dateRange: {
@@ -713,12 +804,8 @@ export const leaderboardsRouter = router({
 
   // Get cached seasonal rankings (optimized version)
   getSeasonalCached: publicProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-      season: z.string().optional(),
-      limit: z.number().int().min(10).max(50).default(25),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(SeasonalCachedQuerySchema)
+    .query(async ({ ctx, input }): Promise<ApiLeaderboardData> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -738,15 +825,70 @@ export const leaderboardsRouter = router({
       
       // Apply limit
       const limitedRankings = rankings.slice(0, input.limit)
+      const playerIds = [...new Set(limitedRankings.map(ranking => ranking.playerId))]
+
+      // Fetch player metadata required for API response fields
+      const leaderboardPlayers = playerIds.length > 0
+        ? await ctx.prisma.playerGameStats.findMany({
+            where: {
+              playerId: { in: playerIds },
+              gameId: input.gameId,
+            },
+            include: {
+              player: {
+                select: {
+                  id: true,
+                  user: { select: userPublicSelectMinimal },
+                },
+              },
+            },
+          })
+        : []
+
+      const playerMetadata = new Map(
+        leaderboardPlayers.map(playerStat => [playerStat.playerId, playerStat])
+      )
 
       const { start: seasonStart, end: seasonEnd } = getSeasonDateRange(season)
 
+      const leaderboard: ApiLeaderboardEntry[] = limitedRankings.map(entry => {
+        const playerStat = playerMetadata.get(entry.playerId)
+        return {
+          rank: entry.rank,
+          playerId: entry.playerId,
+          displayName: playerStat
+            ? getDisplayName(playerStat.player.user)
+            : 'Unknown Player',
+          currentRating: entry.currentRating,
+          seasonalStats: {
+            wins: entry.seasonalStats.wins,
+            losses: entry.seasonalStats.losses,
+            tournaments: entry.seasonalStats.tournaments,
+            points: entry.seasonalStats.points,
+          },
+          performance: {
+            winRate: entry.performance.winRate,
+            totalGames: entry.performance.totalGames,
+            winLossRatio: entry.performance.winLossRatio,
+          },
+          bestFinish: playerStat?.bestFinish ?? null,
+          totalEarnings: playerStat?.totalEarnings ?? 0,
+        }
+      })
+
       return {
-        game,
+        game: {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        },
         season,
-        seasonStart,
-        seasonEnd,
-        leaderboard: limitedRankings,
+        seasonStart: seasonStart.toISOString(),
+        seasonEnd: seasonEnd.toISOString(),
+        leaderboard,
         totalPlayers: rankings.length,
         cached: true,
       }
@@ -754,12 +896,15 @@ export const leaderboardsRouter = router({
 
   // Get performance trends for a player
   getPlayerTrends: publicProcedure
-    .input(z.object({
-      playerId: z.string().uuid(),
-      gameId: z.string().uuid(),
-      period: z.enum(['week', 'month', 'season']).default('month'),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(PlayerTrendsQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: ApiGame;
+      player: {
+        id: string;
+        displayName: string;
+      };
+      trends: unknown;
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -812,7 +957,14 @@ export const leaderboardsRouter = router({
       )
 
       return {
-        game,
+        game: {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        },
         player: {
           id: player.id,
           displayName: getDisplayName(player.user),
@@ -823,11 +975,13 @@ export const leaderboardsRouter = router({
 
   // Refresh rankings cache (admin only)
   refreshCache: protectedProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-      season: z.string().optional(),
-    }))
-    .mutation(async ({ ctx, input }) => {
+    .input(RefreshCacheQuerySchema)
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      rankingsCount: number;
+      season: string;
+    }> => {
       // TODO: Add admin role check when auth is fully implemented
       
       // Verify game exists
@@ -860,13 +1014,12 @@ export const leaderboardsRouter = router({
 
   // Batch refresh multiple game rankings (admin only)
   batchRefreshCache: protectedProcedure
-    .input(z.object({
-      updates: z.array(z.object({
-        gameId: z.string().uuid(),
-        season: z.string().optional(),
-      })).min(1).max(10),
-    }))
-    .mutation(async ({ ctx, input }) => {
+    .input(BatchRefreshCacheQuerySchema)
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      updates: Array<{ gameId: string; season?: string }>;
+    }> => {
       // TODO: Add admin role check when auth is fully implemented
 
       // Validate all games exist
@@ -894,10 +1047,36 @@ export const leaderboardsRouter = router({
 
   // Get ranking statistics and cache info
   getRankingStats: publicProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(RankingStatsQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: ApiGame;
+      season: string;
+      statistics: {
+        totalPlayers: number;
+        activePlayers: number;
+        averageRating: number;
+        topPerformers: Array<{
+          playerId: string;
+          rank: number;
+          rating: number;
+          winRate: number;
+          tournaments: number;
+        }>;
+        mostActive: Array<{
+          playerId: string;
+          totalGames: number;
+          tournaments: number;
+          winRate: number;
+        }>;
+        popularDecks: Array<{
+          deckId: string | null;
+          name: string;
+          archetype: string;
+          usage: number;
+        }>;
+      };
+      lastUpdated: Date;
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -990,7 +1169,14 @@ export const leaderboardsRouter = router({
       })
 
       return {
-        game,
+        game: {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        },
         season: currentSeason,
         statistics: {
           totalPlayers,
@@ -1006,12 +1192,32 @@ export const leaderboardsRouter = router({
 
   // Get player deck usage statistics
   getPlayerDeckStats: publicProcedure
-    .input(z.object({
-      playerId: z.string().uuid(),
-      gameId: z.string().uuid(),
-      season: z.string().optional(),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(PlayerDeckStatsQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: ApiGame;
+      player: {
+        id: string;
+        displayName: string;
+      };
+      season: string;
+      deckStats: Array<{
+        deckId: string;
+        deckName: string;
+        archetype: string;
+        format: string;
+        usage: number;
+        wins: number;
+        losses: number;
+        draws: number;
+        winRate: number;
+        tournaments: string[];
+        tournamentCount: number;
+        totalGames: number;
+        lastUsed: Date;
+      }>;
+      totalDecksUsed: number;
+      totalTournaments: number;
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -1154,7 +1360,7 @@ export const leaderboardsRouter = router({
           ...stats,
           winRate: Math.round(stats.winRate * 100) / 100,
           totalGames,
-          tournaments: stats.tournaments.length,
+          tournamentCount: stats.tournaments.length,
         }
       }).sort((a, b) => b.usage - a.usage)
 
@@ -1162,7 +1368,7 @@ export const leaderboardsRouter = router({
         game,
         player: {
           id: player.id,
-          displayName: player.user.firstName || player.user.name,
+          displayName: getDisplayName(player.user),
         },
         season,
         deckStats: playerDeckStats,
