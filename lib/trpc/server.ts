@@ -18,7 +18,6 @@ import type {
   ApiPlayerGameStats,
   ApiTournament,
   ApiPlayerSearchResult,
-  ApiLeaderboardData,
   ApiStoreInfo,
   ApiMatch,
   ApiTournamentListItem,
@@ -2138,6 +2137,35 @@ export const appRouter = router({
           tournament.entries || []
         );
 
+        if (!tournament.game || !tournament.store || !tournament.organizer) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Tournament is missing required related data",
+          });
+        }
+
+        const gameInfo: ApiTournament["game"] = {
+          id: tournament.game.id,
+          name: tournament.game.name,
+          shortName: tournament.game.shortName ?? tournament.game.name,
+        };
+
+        const storeInfo: ApiTournament["store"] = {
+          id: tournament.store.id,
+          name: tournament.store.name,
+          city: tournament.store.city ?? "",
+          state: tournament.store.state ?? "",
+          address: tournament.store.address ?? "",
+          contactEmail: tournament.store.contactEmail,
+          website: tournament.store.website,
+        };
+
+        const organizerInfo: ApiTournament["organizer"] = {
+          id: tournament.organizer.id,
+          name: tournament.organizer.name,
+          email: tournament.organizer.email ?? undefined,
+        };
+
         // Process participants with calculated data if requested
         let processedParticipants: Array<{
           id: string;
@@ -2225,14 +2253,9 @@ export const appRouter = router({
                 tier: participantCalculations.tier,
                 rating,
                 registrationDate: entry.registrationDate,
-<<<<<<< Updated upstream
-                deck: (entry as any).deck && (entry as any).player?.user?.userPreferences?.profileVisibility === "PUBLIC"
-                  ? (entry as any).deck
-=======
                 dropped: entry.dropped,
                 deck: entryWithPlayer.deck && entryWithPlayer.player?.user?.userPreferences?.profileVisibility === "PUBLIC"
                   ? entryWithPlayer.deck
->>>>>>> Stashed changes
                   : null,
               };
             })
@@ -2325,10 +2348,6 @@ export const appRouter = router({
         }
 
         return {
-<<<<<<< Updated upstream
-          ...tournament,
-          // Add calculated fields
-=======
           id: tournament.id,
           name: tournament.name,
           description: tournament.description,
@@ -2349,7 +2368,6 @@ export const appRouter = router({
           tournamentStructure: tournament.tournamentStructure,
           rules: tournament.rules,
           metadata: normalizeJsonObject(tournament.metadata),
->>>>>>> Stashed changes
           currentRound: tournamentCalculations.currentRound,
           completionPercentage: tournamentCalculations.completionPercentage,
           isLive: tournamentCalculations.isLive,
@@ -2364,6 +2382,9 @@ export const appRouter = router({
           // Add counts
           matchCount: tournament._count.matches,
           entryCount: tournament._count.entries,
+          game: gameInfo,
+          store: storeInfo,
+          organizer: organizerInfo,
           // Add processed data
           participants: input.includeParticipants ? processedParticipants : undefined,
           matches: processedMatches,
