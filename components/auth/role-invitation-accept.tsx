@@ -68,7 +68,7 @@ export function RoleInvitationAccept({ invitation, token }: RoleInvitationAccept
       setSuccessMessage(data?.message || 'Invitation accepted successfully! Redirecting to dashboard...')
       setErrorMessage(null)
       setTimeout(() => {
-        router.push('/dash' as any)
+        router.push('/' as any)
       }, 2000)
     },
     onError: (error) => {
