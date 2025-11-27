@@ -6,7 +6,7 @@ import {
 
 export const userPreferencesRouter = router({
   // Get current user's preferences
-  get: protectedProcedure.query(async ({ ctx }) => {
+  get: protectedProcedure.query(async ({ ctx }): Promise<unknown> => {
 
     // Get or create user preferences
     let preferences = await ctx.prisma.userPreferences.findUnique({
@@ -35,7 +35,11 @@ export const userPreferencesRouter = router({
   // Update user preferences
   update: protectedProcedure
     .input(UpdateUserPreferencesSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      preferences: unknown;
+    }> => {
 
       // Validate name display preference based on user data
       if (input.nameDisplayPreference) {
@@ -112,7 +116,11 @@ export const userPreferencesRouter = router({
     }),
 
   // Reset preferences to defaults
-  reset: protectedProcedure.mutation(async ({ ctx }) => {
+  reset: protectedProcedure.mutation(async ({ ctx }): Promise<{
+    success: boolean;
+    message: string;
+    preferences: unknown;
+  }> => {
     if (!ctx.user) {
       throw new TRPCError({
         code: "UNAUTHORIZED",
@@ -150,7 +158,22 @@ export const userPreferencesRouter = router({
   }),
 
   // Get name display options for the current user
-  getNameDisplayOptions: protectedProcedure.query(async ({ ctx }) => {
+  getNameDisplayOptions: protectedProcedure.query(async ({ ctx }): Promise<{
+    options: Array<{
+      value: string;
+      label: string;
+      displayValue: string;
+      available: boolean;
+      isDefault: boolean;
+    }>;
+    currentUser: {
+      name: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      email: string;
+      displayName: string | null;
+    };
+  }> => {
     if (!ctx.user) {
       throw new TRPCError({
         code: "UNAUTHORIZED",

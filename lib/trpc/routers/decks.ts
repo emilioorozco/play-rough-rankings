@@ -5,7 +5,10 @@ import {
   CreateDeckSchema,
   UpdateDeckSchema,
   DeckStatsQuerySchema,
-  DeckUsageQuerySchema
+  DeckUsageQuerySchema,
+  DeckListQuerySchema,
+  DeckByIdQuerySchema,
+  DeckArchetypesQuerySchema
 } from '@/lib/schemas'
 import type {
   DateFilterClause,
@@ -17,14 +20,12 @@ import { getPublicDisplayName, userPublicSelectWithPrefs } from '@/lib/utils/use
 export const decksRouter = router({
   // List all decks for a game
   list: publicProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-      format: z.string().optional(),
-      archetype: z.string().optional(),
-      includeInactive: z.boolean().default(false),
-      limit: z.number().int().min(1).max(100).default(50),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(DeckListQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: unknown;
+      decks: Array<unknown & { usageCount: number }>;
+      totalDecks: number;
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -80,11 +81,22 @@ export const decksRouter = router({
 
   // Get deck by ID with usage statistics
   getById: publicProcedure
-    .input(z.object({
-      id: z.string().uuid(),
-      includeStats: z.boolean().default(true),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(DeckByIdQuerySchema)
+    .query(async ({ ctx, input }): Promise<unknown & {
+      usageCount: number;
+      stats: {
+        totalUsage: number;
+        totalTournaments: number;
+        uniquePlayers: number;
+        winRate: number;
+        totalGames: number;
+        record: {
+          wins: number;
+          losses: number;
+          draws: number;
+        };
+      } | null;
+    }> => {
       const deck = await ctx.prisma.deck.findUnique({
         where: { id: input.id },
         include: {
@@ -173,7 +185,7 @@ export const decksRouter = router({
   // Create a new deck (organizers and admins)
   create: organizerProcedure
     .input(CreateDeckSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<unknown> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -218,7 +230,7 @@ export const decksRouter = router({
       id: z.string().uuid(),
       data: UpdateDeckSchema,
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<unknown> => {
       // Verify deck exists
       const existingDeck = await ctx.prisma.deck.findUnique({
         where: { id: input.id },
@@ -264,7 +276,17 @@ export const decksRouter = router({
   // Get deck statistics and usage trends
   getStats: publicProcedure
     .input(DeckStatsQuerySchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<{
+      game: unknown;
+      format?: string;
+      dateRange: {
+        start?: Date;
+        end?: Date;
+      };
+      deckStats: Array<DeckStatsResult>;
+      totalDecks: number;
+      totalEntries: number;
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
@@ -387,7 +409,11 @@ export const decksRouter = router({
   // Get deck usage by specific players
   getUsage: publicProcedure
     .input(DeckUsageQuerySchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<{
+      deck: unknown;
+      usage: unknown[];
+      totalUsage: number;
+    }> => {
       // Verify deck exists
       const deck = await ctx.prisma.deck.findUnique({
         where: { id: input.deckId },
@@ -466,13 +492,23 @@ export const decksRouter = router({
 
   // Get popular archetypes for a game/format
   getArchetypes: publicProcedure
-    .input(z.object({
-      gameId: z.string().uuid(),
-      format: z.string().optional(),
-      season: z.string().optional(),
-      limit: z.number().int().min(1).max(50).default(20),
-    }))
-    .query(async ({ ctx, input }) => {
+    .input(DeckArchetypesQuerySchema)
+    .query(async ({ ctx, input }): Promise<{
+      game: unknown;
+      format?: string;
+      season?: string;
+      archetypes: Array<{
+        archetype: string;
+        usage: number;
+        uniqueDecks: number;
+        wins: number;
+        losses: number;
+        draws: number;
+        winRate: number;
+        totalGames: number;
+      }>;
+      totalArchetypes: number;
+    }> => {
       // Verify game exists
       const game = await ctx.prisma.game.findUnique({
         where: { id: input.gameId },
