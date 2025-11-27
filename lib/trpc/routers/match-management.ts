@@ -47,7 +47,14 @@ export const matchManagementRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      match: unknown;
+      requiresConfirmation: boolean;
+      disputed: boolean;
+      dispute?: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -215,7 +222,11 @@ export const matchManagementRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      match: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -357,7 +368,11 @@ export const matchManagementRouter = router({
         reason: z.string().optional()
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      match: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -468,7 +483,11 @@ export const matchManagementRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      match: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -581,7 +600,11 @@ export const matchManagementRouter = router({
         })
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<{
+      success: boolean;
+      message: string;
+      match: unknown;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -701,7 +724,11 @@ export const matchManagementRouter = router({
         })
       })
     )
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<{
+      success: boolean;
+      disputes: unknown[];
+      count: number;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',

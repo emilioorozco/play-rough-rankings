@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import type { Prisma } from "@prisma/client";
 import { prisma, basePrismaClient } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
@@ -11,7 +12,16 @@ import {
 import type {
   DateFilterClause,
 } from "@/lib/types/backend";
-import type { ApiTournamentListResponse } from "@/lib/types/api";
+import type {
+  ApiTournamentListResponse,
+  ApiGame,
+  ApiPlayerGameStats,
+  ApiTournament,
+  ApiPlayerSearchResult,
+  ApiStoreInfo,
+  ApiMatch,
+  ApiTournamentListItem,
+} from "@/lib/types/api";
 import { getActiveGamesAsJSON, getGameOrThrow } from "@/lib/games";
 import { getDisplayName, getPublicDisplayName, userPublicSelectMinimal, userPublicSelectWithPrefs } from "@/lib/utils/user";
 
@@ -62,6 +72,23 @@ const PUBLIC_PROCEDURE_PATHS = new Set([
   'tournamentEntries.getByTournament',
   'tournamentEntries.getByPlayer',
 ])
+
+const normalizeJsonObject = (value: unknown): Record<string, unknown> | null => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+};
+
+const runInteractiveTransaction = async <T>(
+  client: typeof prisma,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> => {
+  const transactional = client.$transaction.bind(client) as unknown as (
+    fn: (tx: Prisma.TransactionClient) => Promise<T>
+  ) => Promise<T>;
+  return transactional(fn);
+};
 
 /**
  * Extract procedure paths from tRPC request URL
@@ -117,11 +144,13 @@ export const createTRPCContext = async (opts?: {
       
       if (sessionData?.session && sessionData?.user) {
         session = sessionData.session;
+        // Better Auth user object may not have role, so we safely extract it
+        const userWithRole = sessionData.user as Record<string, unknown>;
         user = {
           id: sessionData.user.id,
           email: sessionData.user.email,
           name: sessionData.user.name || undefined,
-          role: (sessionData.user as any).role || 'player',
+          role: (typeof userWithRole.role === 'string' ? userWithRole.role : 'player') as 'player' | 'organizer' | 'admin',
         };
       }
     } catch (error) {
@@ -161,7 +190,7 @@ import { emailMetricsRouter } from "./routers/email-metrics";
 // Main app router with basic structure
 export const appRouter = router({
   // Health check endpoint
-  health: publicProcedure.query(() => {
+  health: publicProcedure.query((): { status: string; timestamp: string; version: string } => {
     return {
       status: "ok",
       timestamp: new Date().toISOString(),
@@ -186,7 +215,7 @@ export const appRouter = router({
           email: z.string().email('Invalid email address'),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{ success: boolean; message: string }> => {
         const { 
           handleEmailError, 
           logEmailOperation 
@@ -226,6 +255,7 @@ export const appRouter = router({
           
           // Convert email errors to tRPC errors
           handleEmailError(error, 'verification');
+          throw error;
         }
       }),
 
@@ -243,7 +273,7 @@ export const appRouter = router({
           token: z.string().min(1, 'Token is required'),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{ success: boolean; message: string; alreadyVerified: boolean }> => {
         const { 
           handleEmailError, 
           logEmailOperation 
@@ -290,14 +320,22 @@ export const appRouter = router({
               : SUCCESS_MESSAGES.EMAIL_VERIFIED,
             alreadyVerified: alreadyVerified,
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Handle errors with proper conversion to tRPC errors
           if (error instanceof TRPCError) {
             throw error;
           }
 
           // Better Auth may return specific error messages
-          const errorMessage = error?.message || error?.statusText || 'Failed to verify email';
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : typeof error === 'object' &&
+                  error !== null &&
+                  'statusText' in error &&
+                  typeof (error as { statusText?: string }).statusText === 'string'
+                ? (error as { statusText: string }).statusText
+                : 'Failed to verify email';
           
           // Convert to tRPC error with appropriate code
           if (errorMessage.includes('expired') || errorMessage.includes('invalid')) {
@@ -309,6 +347,7 @@ export const appRouter = router({
 
           // Convert other email errors to tRPC errors
           handleEmailError(error, 'verification');
+          throw error;
         }
       }),
 
@@ -327,7 +366,7 @@ export const appRouter = router({
           email: z.string().email('Invalid email address'),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{ success: boolean; message: string }> => {
         const { 
           handleEmailError, 
           logEmailOperation 
@@ -367,6 +406,7 @@ export const appRouter = router({
           
           // Convert email errors to tRPC errors
           handleEmailError(error, 'password_reset');
+          throw error;
         }
       }),
 
@@ -386,7 +426,7 @@ export const appRouter = router({
           password: z.string().min(8, 'Password must be at least 8 characters long'),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{ success: boolean; message: string }> => {
         const { 
           handleEmailError, 
           logEmailOperation 
@@ -426,14 +466,22 @@ export const appRouter = router({
             success: true,
             message: SUCCESS_MESSAGES.PASSWORD_RESET_SUCCESS,
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Handle errors with proper conversion to tRPC errors
           if (error instanceof TRPCError) {
             throw error;
           }
 
           // Better Auth may return specific error messages
-          const errorMessage = error?.message || error?.statusText || 'Failed to reset password';
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : typeof error === 'object' &&
+                  error !== null &&
+                  'statusText' in error &&
+                  typeof (error as { statusText?: string }).statusText === 'string'
+                ? (error as { statusText: string }).statusText
+                : 'Failed to reset password';
           
           // Convert to tRPC error with appropriate code
           if (errorMessage.includes('expired') || errorMessage.includes('invalid')) {
@@ -445,6 +493,7 @@ export const appRouter = router({
 
           // Convert other email errors to tRPC errors
           handleEmailError(error, 'password_reset');
+          throw error;
         }
       }),
 
@@ -465,7 +514,17 @@ export const appRouter = router({
           role: z.enum(['organizer', 'admin']),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{
+        success: boolean;
+        message: string;
+        invitation: {
+          id: string;
+          email: string;
+          role: string;
+          expiresAt: Date;
+          createdAt: Date;
+        };
+      }> => {
         const { 
           handleEmailError, 
           logEmailOperation 
@@ -620,6 +679,7 @@ export const appRouter = router({
           
           // Convert email errors to tRPC errors
           handleEmailError(error, 'invitation');
+          throw error;
         }
       }),
 
@@ -638,7 +698,22 @@ export const appRouter = router({
           token: z.string().min(1, 'Token is required'),
         })
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<{
+        success: boolean;
+        invitation: {
+          id: string;
+          email: string;
+          role: string;
+          invitedBy: {
+            name: string;
+            email: string;
+          };
+          expiresAt: Date;
+          createdAt: Date;
+          isExpired: boolean;
+          isAccepted: boolean;
+        };
+      }> => {
         const { handleEmailError } = await import('@/lib/email/error-handler');
         const { INVITATION_ERROR_MESSAGES } = await import('@/lib/email/error-messages');
         
@@ -700,6 +775,7 @@ export const appRouter = router({
           
           // Convert email errors to tRPC errors
           handleEmailError(error, 'invitation');
+          throw error;
         }
       }),
 
@@ -720,7 +796,7 @@ export const appRouter = router({
           token: z.string().min(1, 'Token is required'),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{ success: boolean; message: string; role: string }> => {
         const { 
           handleEmailError, 
           logEmailOperation 
@@ -868,6 +944,7 @@ export const appRouter = router({
           
           // Convert email errors to tRPC errors
           handleEmailError(error, 'invitation');
+          throw error;
         }
       }),
 
@@ -879,7 +956,20 @@ export const appRouter = router({
      * 
      * Requirements: 6.1, 6.2
      */
-    listRoleInvitations: adminProcedure.query(async ({ ctx }) => {
+    listRoleInvitations: adminProcedure.query(async ({ ctx }): Promise<Array<{
+      id: string;
+      email: string;
+      role: string;
+      invitedBy: {
+        name: string;
+        email: string;
+      };
+      acceptedAt: Date | null;
+      expiresAt: Date;
+      createdAt: Date;
+      isExpired: boolean;
+      isAccepted: boolean;
+    }>> => {
       try {
         const invitations = await ctx.prisma.roleInvitation.findMany({
           orderBy: { createdAt: 'desc' },
@@ -936,7 +1026,18 @@ export const appRouter = router({
           lastName: z.string().min(1).max(100).optional(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{
+        success: boolean;
+        message: string;
+        user: {
+          id: string;
+          name: string | null;
+          email: string;
+          role: string;
+          createdAt: Date;
+          updatedAt: Date;
+        };
+      }> => {
         if (!ctx.user) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
@@ -965,7 +1066,14 @@ export const appRouter = router({
       }),
 
     // Get current user profile
-    getProfile: protectedProcedure.query(async ({ ctx }) => {
+    getProfile: protectedProcedure.query(async ({ ctx }): Promise<{
+      id: string;
+      name: string | null;
+      email: string;
+      role: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -996,7 +1104,11 @@ export const appRouter = router({
     }),
 
     // Ensure Player record exists for current user (backup for auth callback failures)
-    ensurePlayerExists: protectedProcedure.mutation(async ({ ctx }) => {
+    ensurePlayerExists: protectedProcedure.mutation(async ({ ctx }): Promise<{
+      success: boolean;
+      message: string;
+      playerId: string;
+    }> => {
       if (!ctx.user) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -1042,7 +1154,17 @@ export const appRouter = router({
     }),
 
     // List all users (admin only)
-    list: adminProcedure.query(async ({ ctx }) => {
+    list: adminProcedure.query(async ({ ctx }): Promise<Array<{
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+      name: string | null;
+      role: string;
+      emailVerified: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    }>> => {
       try {
         const users = await ctx.prisma.user.findMany({
           orderBy: { createdAt: 'desc' },
@@ -1079,7 +1201,7 @@ export const appRouter = router({
           includeInactive: z.boolean().default(false),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<Array<ApiGame & { formats: string[]; metadata: Record<string, unknown>; tournamentCount: number; playerCount: number }>> => {
         const where = input.includeInactive ? {} : { isActive: true };
 
         const dbGames = await ctx.prisma.game.findMany({
@@ -1110,6 +1232,8 @@ export const appRouter = router({
             metadata: gameLogic?.metadata || {},
             tournamentCount: game._count.tournaments,
             playerCount: game._count.playerGameStats,
+            createdAt: game.createdAt,
+            updatedAt: game.updatedAt,
           };
         });
       }),
@@ -1121,7 +1245,7 @@ export const appRouter = router({
           id: z.string().uuid(),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<ApiGame & { formats: string[]; metadata: Record<string, unknown>; tournamentCount: number; playerCount: number }> => {
         const game = await ctx.prisma.game.findUnique({
           where: { id: input.id },
           include: {
@@ -1153,6 +1277,8 @@ export const appRouter = router({
           metadata: gameLogic?.metadata || {},
           tournamentCount: game._count.tournaments,
           playerCount: game._count.playerGameStats,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
         };
       }),
 
@@ -1164,7 +1290,7 @@ export const appRouter = router({
           shortName: z.string().min(1).max(10),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<ApiGame> => {
         // Check if game with same name already exists
         const existingGame = await ctx.prisma.game.findFirst({
           where: { name: input.name },
@@ -1195,7 +1321,14 @@ export const appRouter = router({
           },
         });
 
-        return game;
+        return {
+          id: game.id,
+          name: game.name,
+          shortName: game.shortName,
+          isActive: game.isActive,
+          createdAt: game.createdAt,
+          updatedAt: game.updatedAt,
+        };
       }),
 
     // Update game (admin only)
@@ -1207,7 +1340,7 @@ export const appRouter = router({
           isActive: z.boolean().optional(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<ApiGame> => {
         // Verify game exists
         const existingGame = await ctx.prisma.game.findUnique({
           where: { id: input.id },
@@ -1226,7 +1359,14 @@ export const appRouter = router({
           data: updateData,
         });
 
-        return updatedGame;
+        return {
+          id: updatedGame.id,
+          name: updatedGame.name,
+          shortName: updatedGame.shortName,
+          isActive: updatedGame.isActive,
+          createdAt: updatedGame.createdAt,
+          updatedAt: updatedGame.updatedAt,
+        };
       }),
 
     // Toggle game active status (admin only)
@@ -1236,7 +1376,7 @@ export const appRouter = router({
           id: z.string().uuid(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<ApiGame> => {
         const game = await ctx.prisma.game.findUnique({
           where: { id: input.id },
         });
@@ -1253,7 +1393,14 @@ export const appRouter = router({
           data: { isActive: !game.isActive },
         });
 
-        return updatedGame;
+        return {
+          id: updatedGame.id,
+          name: updatedGame.name,
+          shortName: updatedGame.shortName,
+          isActive: updatedGame.isActive,
+          createdAt: updatedGame.createdAt,
+          updatedAt: updatedGame.updatedAt,
+        };
       }),
 
     // Get game statistics (public)
@@ -1263,7 +1410,21 @@ export const appRouter = router({
           id: z.string().uuid(),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<{
+        game: ApiGame;
+        stats: {
+          totalPlayers: number;
+          totalTournaments: number;
+          activeTournaments: number;
+          completedTournaments: number;
+          topPlayers: Array<{
+            playerId: string;
+            displayName: string;
+            rating: number;
+            seasonalStats: unknown;
+          }>;
+        };
+      }> => {
         const game = await ctx.prisma.game.findUnique({
           where: { id: input.id },
         });
@@ -1317,7 +1478,14 @@ export const appRouter = router({
         ]);
 
         return {
-          game,
+          game: {
+            id: game.id,
+            name: game.name,
+            shortName: game.shortName,
+            isActive: game.isActive,
+            createdAt: game.createdAt,
+            updatedAt: game.updatedAt,
+          },
           stats: {
             totalPlayers,
             totalTournaments,
@@ -1343,7 +1511,34 @@ export const appRouter = router({
           playerId: z.string().uuid().optional(),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<{
+        id: string;
+        userId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        metadata: unknown;
+        user: {
+          name: string | null;
+          firstName: string | null;
+          lastName: string | null;
+          role: string;
+          email: string;
+          userPreferences: unknown;
+        };
+        gameStats: Array<{
+          id: string;
+          playerId: string;
+          gameId: string;
+          currentRating: number;
+          seasonalStats: unknown;
+          bestFinish: number | null;
+          totalEarnings: number;
+          metadata: unknown;
+          createdAt: Date;
+          updatedAt: Date;
+          game: ApiGame;
+        }>;
+      }> => {
         const targetPlayerId = input.playerId;
 
         // If no playerId provided, this would get current user's profile (requires auth)
@@ -1394,10 +1589,29 @@ export const appRouter = router({
             firstName: player.user.firstName,
             lastName: player.user.lastName,
             role: player.user.role,
-            // Hide email for public profiles
+            email: player.user.email,
+            userPreferences: player.user.userPreferences,
           },
-          // Hide external player IDs for public profiles
-          externalPlayerIds: undefined,
+          gameStats: player.gameStats.map(stat => ({
+            id: stat.id,
+            playerId: stat.playerId,
+            gameId: stat.gameId,
+            currentRating: stat.currentRating,
+            seasonalStats: stat.seasonalStats,
+            bestFinish: stat.bestFinish,
+            totalEarnings: stat.totalEarnings,
+            metadata: stat.metadata,
+            createdAt: stat.createdAt,
+            updatedAt: stat.updatedAt,
+            game: {
+              id: stat.game.id,
+              name: stat.game.name,
+              shortName: stat.game.shortName,
+              isActive: stat.game.isActive,
+              createdAt: stat.game.createdAt,
+              updatedAt: stat.game.updatedAt,
+            },
+          })),
         };
 
         return profileData;
@@ -1411,7 +1625,7 @@ export const appRouter = router({
           metadata: z.record(z.string(), z.unknown()).optional(),
         }),
       )
-      .mutation(async () => {
+      .mutation(async (): Promise<never> => {
         // For now, return not implemented since auth is not fully set up
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
@@ -1428,7 +1642,7 @@ export const appRouter = router({
           gameId: z.string().uuid(),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<ApiPlayerGameStats> => {
         const targetPlayerId = input.playerId;
 
         // If no playerId provided, this would get current user's stats (requires auth)
@@ -1497,9 +1711,17 @@ export const appRouter = router({
         if (!gameStats) {
           // Return default stats if player hasn't played this game
           return {
+            id: `${targetPlayerId}-${input.gameId}`,
             playerId: targetPlayerId,
             gameId: input.gameId,
-            game,
+            game: {
+              id: game.id,
+              name: game.name,
+              shortName: game.shortName,
+              isActive: game.isActive,
+              createdAt: game.createdAt,
+              updatedAt: game.updatedAt,
+            },
             currentRating: 1200,
             seasonalStats: {
               wins: 0,
@@ -1510,10 +1732,31 @@ export const appRouter = router({
             bestFinish: null,
             totalEarnings: 0,
             metadata: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
           };
         }
 
-        return gameStats;
+        return {
+          id: gameStats.id,
+          playerId: gameStats.playerId,
+          gameId: gameStats.gameId,
+          game: {
+            id: gameStats.game.id,
+            name: gameStats.game.name,
+            shortName: gameStats.game.shortName,
+            isActive: gameStats.game.isActive,
+            createdAt: gameStats.game.createdAt,
+            updatedAt: gameStats.game.updatedAt,
+          },
+          currentRating: gameStats.currentRating,
+          seasonalStats: gameStats.seasonalStats as ApiPlayerGameStats['seasonalStats'],
+          bestFinish: gameStats.bestFinish,
+          totalEarnings: gameStats.totalEarnings,
+          metadata: normalizeJsonObject(gameStats.metadata),
+          createdAt: gameStats.createdAt,
+          updatedAt: gameStats.updatedAt,
+        };
       }),
 
     // Search for players
@@ -1525,7 +1768,7 @@ export const appRouter = router({
           limit: z.number().int().min(1).max(50).default(10),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<Array<ApiPlayerSearchResult>> => {
         const whereClause: Record<string, unknown> = {
           user: {
             userPreferences: {
@@ -1593,7 +1836,26 @@ export const appRouter = router({
           displayName: getDisplayName(player.user),
           userName: player.user.name,
           role: player.user.role,
-          gameStats: player.gameStats,
+          gameStats: player.gameStats.map(stat => ({
+            id: stat.id,
+            playerId: stat.playerId,
+            gameId: stat.gameId,
+            game: {
+              id: stat.game.id,
+              name: stat.game.name,
+              shortName: stat.game.shortName,
+              isActive: stat.game.isActive,
+              createdAt: stat.game.createdAt,
+              updatedAt: stat.game.updatedAt,
+            },
+            currentRating: stat.currentRating,
+            seasonalStats: stat.seasonalStats as ApiPlayerGameStats['seasonalStats'],
+            bestFinish: stat.bestFinish,
+            totalEarnings: stat.totalEarnings,
+          metadata: normalizeJsonObject(stat.metadata),
+            createdAt: stat.createdAt,
+            updatedAt: stat.updatedAt,
+          })),
           createdAt: player.createdAt,
         }));
       }),
@@ -1606,7 +1868,7 @@ export const appRouter = router({
           externalId: z.string().min(1).max(50),
         }),
       )
-      .mutation(async () => {
+      .mutation(async (): Promise<never> => {
         // For now, return not implemented since auth is not fully set up
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
@@ -1622,7 +1884,7 @@ export const appRouter = router({
           gameId: z.string().uuid(),
         }),
       )
-      .mutation(async () => {
+      .mutation(async (): Promise<never> => {
         // For now, return not implemented since auth is not fully set up
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
@@ -1734,7 +1996,7 @@ export const appRouter = router({
           includeParticipants: z.boolean().default(false),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<ApiTournament> => {
         const tournament = await ctx.prisma.tournament.findUnique({
           where: { id: input.id },
           include: {
@@ -1875,6 +2137,35 @@ export const appRouter = router({
           tournament.entries || []
         );
 
+        if (!tournament.game || !tournament.store || !tournament.organizer) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Tournament is missing required related data",
+          });
+        }
+
+        const gameInfo: ApiTournament["game"] = {
+          id: tournament.game.id,
+          name: tournament.game.name,
+          shortName: tournament.game.shortName ?? tournament.game.name,
+        };
+
+        const storeInfo: ApiTournament["store"] = {
+          id: tournament.store.id,
+          name: tournament.store.name,
+          city: tournament.store.city ?? "",
+          state: tournament.store.state ?? "",
+          address: tournament.store.address ?? "",
+          contactEmail: tournament.store.contactEmail,
+          website: tournament.store.website,
+        };
+
+        const organizerInfo: ApiTournament["organizer"] = {
+          id: tournament.organizer.id,
+          name: tournament.organizer.name,
+          email: tournament.organizer.email ?? undefined,
+        };
+
         // Process participants with calculated data if requested
         let processedParticipants: Array<{
           id: string;
@@ -1914,8 +2205,11 @@ export const appRouter = router({
             playerGameStats.map(stat => [stat.playerId, stat.currentRating])
           );
 
+          // Type the entry based on the Prisma query result
+          type TournamentEntryWithRelations = typeof tournament.entries extends Array<infer T> ? T : never;
+          
           processedParticipants = await Promise.all(
-            tournament.entries.map(async (entry: any) => {
+            tournament.entries.map(async (entry: TournamentEntryWithRelations) => {
               const rating = ratingMap.get(entry.playerId) || 1200;
               const participantCalculations = calculateParticipantData(
                 entry.playerId,
@@ -1925,10 +2219,33 @@ export const appRouter = router({
                 rating
               );
 
+              // Type guard for entry with player relation
+              const entryWithPlayer = entry as TournamentEntryWithRelations & {
+                player?: {
+                  id: string;
+                  user?: {
+                    name: string | null;
+                    firstName: string | null;
+                    lastName: string | null;
+                    userPreferences?: {
+                      profileVisibility: string;
+                    } | null;
+                  };
+                };
+                deck?: {
+                  id: string;
+                  name: string;
+                  archetype: string;
+                  format: string;
+                } | null;
+              };
+
               return {
-                id: (entry as any).player?.id,
-                displayName: getPublicDisplayName((entry as any).player?.user),
-                isPublic: (entry as any).player?.user?.userPreferences?.profileVisibility === "PUBLIC",
+                id: entryWithPlayer.player?.id ?? '',
+                displayName: entryWithPlayer.player?.user 
+                  ? getPublicDisplayName(entryWithPlayer.player.user)
+                  : 'Unknown Player',
+                isPublic: entryWithPlayer.player?.user?.userPreferences?.profileVisibility === "PUBLIC",
                 seed: entry.seed || undefined,
                 wins: participantCalculations.wins,
                 losses: participantCalculations.losses,
@@ -1936,8 +2253,9 @@ export const appRouter = router({
                 tier: participantCalculations.tier,
                 rating,
                 registrationDate: entry.registrationDate,
-                deck: (entry as any).deck && (entry as any).player?.user?.userPreferences?.profileVisibility === "PUBLIC"
-                  ? (entry as any).deck
+                dropped: entry.dropped,
+                deck: entryWithPlayer.deck && entryWithPlayer.player?.user?.userPreferences?.profileVisibility === "PUBLIC"
+                  ? entryWithPlayer.deck
                   : null,
               };
             })
@@ -1945,37 +2263,111 @@ export const appRouter = router({
         }
 
         // Process matches if included
-        let processedMatches:
-          | Array<{
-              [key: string]: unknown;
-              player1: { displayName: string; [key: string]: unknown };
-              player2: { displayName: string; [key: string]: unknown };
-              winner: { displayName: string; [key: string]: unknown } | null;
-            }>
-          | undefined = undefined;
+        let processedMatches: ApiMatch[] | undefined;
         if (input.includeMatches && tournament.matches) {
-          processedMatches = tournament.matches.map((match: any) => ({
-            ...match,
-            player1: {
-              ...match.player1,
-              displayName: getPublicDisplayName(match.player1?.user),
-            },
-            player2: {
-              ...match.player2,
-              displayName: getPublicDisplayName(match.player2?.user),
-            },
-            winner: match.winner
-              ? {
-                  ...match.winner,
-                  displayName: getPublicDisplayName(match.winner?.user),
-                }
-              : null,
-          }));
+          // Type the match based on the Prisma query result
+          type MatchWithRelations = typeof tournament.matches extends Array<infer T> ? T : never;
+          
+          processedMatches = tournament.matches.map((match: MatchWithRelations) => {
+            // Type guard for match with player relations
+            const matchWithPlayers = match as MatchWithRelations & {
+              player1?: {
+                id: string;
+                user?: {
+                  name: string | null;
+                  firstName: string | null;
+                  lastName: string | null;
+                  userPreferences?: {
+                    profileVisibility: string;
+                  } | null;
+                };
+              };
+              player2?: {
+                id: string;
+                user?: {
+                  name: string | null;
+                  firstName: string | null;
+                  lastName: string | null;
+                  userPreferences?: {
+                    profileVisibility: string;
+                  } | null;
+                };
+              };
+              winner?: {
+                id: string;
+                user?: {
+                  name: string | null;
+                  firstName: string | null;
+                  lastName: string | null;
+                  userPreferences?: {
+                    profileVisibility: string;
+                  } | null;
+                };
+              } | null;
+            };
+
+            const getDisplay = (
+              player:
+                | {
+                    user?: {
+                      name: string | null;
+                      firstName: string | null;
+                      lastName: string | null;
+                      userPreferences?: {
+                        profileVisibility: string;
+                      } | null;
+                    };
+                  }
+                | undefined,
+              fallback: string,
+            ): string => {
+              return player?.user ? getPublicDisplayName(player.user) : fallback;
+            };
+
+            return {
+              id: match.id,
+              round: match.round,
+              table: match.table,
+              status: match.status,
+              player1: {
+                id: matchWithPlayers.player1?.id ?? match.player1Id,
+                displayName: getDisplay(matchWithPlayers.player1, "Unknown Player"),
+              },
+              player2: {
+                id: matchWithPlayers.player2?.id ?? match.player2Id,
+                displayName: getDisplay(matchWithPlayers.player2, "Unknown Player"),
+              },
+              winner: matchWithPlayers.winner
+                ? {
+                    id: matchWithPlayers.winner.id,
+                    displayName: getDisplay(matchWithPlayers.winner, "Unknown Player"),
+                  }
+                : null,
+            };
+          });
         }
 
         return {
-          ...tournament,
-          // Add calculated fields
+          id: tournament.id,
+          name: tournament.name,
+          description: tournament.description,
+          createdAt: tournament.createdAt,
+          updatedAt: tournament.updatedAt,
+          date: tournament.date,
+          format: tournament.format,
+          status: tournament.status,
+          maxPlayers: tournament.maxPlayers,
+          registrationDeadline: tournament.registrationDeadline,
+          entryFee: tournament.entryFee,
+          prizePool: tournament.prizePool,
+          gameId: tournament.gameId,
+          storeId: tournament.storeId,
+          organizerId: tournament.organizerId,
+          totalRounds: tournament.totalRounds,
+          tournamentLevel: tournament.tournamentLevel,
+          tournamentStructure: tournament.tournamentStructure,
+          rules: tournament.rules,
+          metadata: normalizeJsonObject(tournament.metadata),
           currentRound: tournamentCalculations.currentRound,
           completionPercentage: tournamentCalculations.completionPercentage,
           isLive: tournamentCalculations.isLive,
@@ -1990,6 +2382,9 @@ export const appRouter = router({
           // Add counts
           matchCount: tournament._count.matches,
           entryCount: tournament._count.entries,
+          game: gameInfo,
+          store: storeInfo,
+          organizer: organizerInfo,
           // Add processed data
           participants: input.includeParticipants ? processedParticipants : undefined,
           matches: processedMatches,
@@ -2010,7 +2405,11 @@ export const appRouter = router({
           agreesToConduct: z.boolean().optional(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{
+        success: boolean;
+        message: string;
+        entry: unknown;
+      }> => {
         if (!ctx.user) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
@@ -2232,7 +2631,7 @@ export const appRouter = router({
           tournamentId: z.string().uuid(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{ success: boolean; message: string }> => {
         if (!ctx.user) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
@@ -2307,7 +2706,20 @@ export const appRouter = router({
           tournamentId: z.string().uuid(),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<{
+        isRegistered: boolean;
+        canRegister: boolean;
+        reason: string | null;
+        entry: unknown;
+        tournament: {
+          id: string;
+          name: string;
+          status: string;
+          maxPlayers: number | null;
+          currentPlayers: number;
+          registrationDeadline: Date | null;
+        };
+      }> => {
         if (!ctx.user) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
@@ -2326,6 +2738,14 @@ export const appRouter = router({
             canRegister: false,
             reason: "Player profile not found",
             entry: null,
+            tournament: {
+              id: input.tournamentId,
+              name: "",
+              status: "",
+              maxPlayers: null,
+              currentPlayers: 0,
+              registrationDeadline: null,
+            },
           };
         }
 
@@ -2398,7 +2818,7 @@ export const appRouter = router({
     // Create a new tournament (organizers and admins only)
     create: organizerProcedure
       .input(CreateTournamentSchema)
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<ApiTournament> => {
         // Verify game exists and is active
         const game = await ctx.prisma.game.findUnique({
           where: { id: input.gameId },
@@ -2513,7 +2933,46 @@ export const appRouter = router({
           },
         });
 
-        return tournament;
+        return {
+          id: tournament.id,
+          name: tournament.name,
+          description: tournament.description,
+          date: tournament.date,
+          format: tournament.format,
+          status: tournament.status,
+          maxPlayers: tournament.maxPlayers,
+          registrationDeadline: tournament.registrationDeadline,
+          entryFee: tournament.entryFee,
+          prizePool: tournament.prizePool,
+          gameId: tournament.gameId,
+          storeId: tournament.storeId,
+          organizerId: tournament.organizerId,
+          totalRounds: tournament.totalRounds,
+          tournamentLevel: tournament.tournamentLevel,
+          tournamentStructure: tournament.tournamentStructure,
+          rules: tournament.rules,
+          metadata: normalizeJsonObject(tournament.metadata),
+          game: {
+            id: tournament.game.id,
+            name: tournament.game.name,
+            shortName: tournament.game.shortName,
+          },
+          store: {
+            id: tournament.store.id,
+            name: tournament.store.name,
+            city: tournament.store.city,
+            state: tournament.store.state,
+            address: tournament.store.address,
+            contactEmail: tournament.store.contactEmail,
+            website: tournament.store.website,
+          },
+          organizer: {
+            id: tournament.organizer.id,
+            name: tournament.organizer.name,
+            email: tournament.organizer.email,
+          },
+          matchCount: 0,
+        };
       }),
 
     // Update tournament status (organizers and admins only)
@@ -2524,7 +2983,7 @@ export const appRouter = router({
           status: z.enum(["UPCOMING", "ACTIVE", "COMPLETED"]),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<ApiTournament> => {
         // Verify tournament exists
         const existingTournament = await ctx.prisma.tournament.findUnique({
           where: { id: input.id },
@@ -2582,7 +3041,46 @@ export const appRouter = router({
           },
         });
 
-        return updatedTournament;
+        return {
+          id: updatedTournament.id,
+          name: updatedTournament.name,
+          description: updatedTournament.description,
+          date: updatedTournament.date,
+          format: updatedTournament.format,
+          status: updatedTournament.status,
+          maxPlayers: updatedTournament.maxPlayers,
+          registrationDeadline: updatedTournament.registrationDeadline,
+          entryFee: updatedTournament.entryFee,
+          prizePool: updatedTournament.prizePool,
+          gameId: updatedTournament.gameId,
+          storeId: updatedTournament.storeId,
+          organizerId: updatedTournament.organizerId,
+          totalRounds: updatedTournament.totalRounds,
+          tournamentLevel: updatedTournament.tournamentLevel,
+          tournamentStructure: updatedTournament.tournamentStructure,
+          rules: updatedTournament.rules,
+          metadata: normalizeJsonObject(updatedTournament.metadata),
+          game: {
+            id: updatedTournament.game.id,
+            name: updatedTournament.game.name,
+            shortName: updatedTournament.game.shortName,
+          },
+          store: {
+            id: updatedTournament.store.id,
+            name: updatedTournament.store.name,
+            city: updatedTournament.store.city,
+            state: updatedTournament.store.state,
+            address: updatedTournament.store.address,
+            contactEmail: updatedTournament.store.contactEmail,
+            website: updatedTournament.store.website,
+          },
+          organizer: {
+            id: updatedTournament.organizer.id,
+            name: updatedTournament.organizer.name,
+            email: updatedTournament.organizer.email,
+          },
+          matchCount: 0,
+        };
       }),
 
     // Update tournament details (organizer and admins only)
@@ -2593,7 +3091,7 @@ export const appRouter = router({
           data: UpdateTournamentSchema,
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<ApiTournament> => {
         // Verify tournament exists
         const existingTournament = await ctx.prisma.tournament.findUnique({
           where: { id: input.id },
@@ -2683,7 +3181,46 @@ export const appRouter = router({
           },
         });
 
-        return updatedTournament;
+        return {
+          id: updatedTournament.id,
+          name: updatedTournament.name,
+          description: updatedTournament.description,
+          date: updatedTournament.date,
+          format: updatedTournament.format,
+          status: updatedTournament.status,
+          maxPlayers: updatedTournament.maxPlayers,
+          registrationDeadline: updatedTournament.registrationDeadline,
+          entryFee: updatedTournament.entryFee,
+          prizePool: updatedTournament.prizePool,
+          gameId: updatedTournament.gameId,
+          storeId: updatedTournament.storeId,
+          organizerId: updatedTournament.organizerId,
+          totalRounds: updatedTournament.totalRounds,
+          tournamentLevel: updatedTournament.tournamentLevel,
+          tournamentStructure: updatedTournament.tournamentStructure,
+          rules: updatedTournament.rules,
+          metadata: normalizeJsonObject(updatedTournament.metadata),
+          game: {
+            id: updatedTournament.game.id,
+            name: updatedTournament.game.name,
+            shortName: updatedTournament.game.shortName,
+          },
+          store: {
+            id: updatedTournament.store.id,
+            name: updatedTournament.store.name,
+            city: updatedTournament.store.city,
+            state: updatedTournament.store.state,
+            address: updatedTournament.store.address,
+            contactEmail: updatedTournament.store.contactEmail,
+            website: updatedTournament.store.website,
+          },
+          organizer: {
+            id: updatedTournament.organizer.id,
+            name: updatedTournament.organizer.name,
+            email: updatedTournament.organizer.email,
+          },
+          matchCount: 0,
+        };
       }),
 
     // Get upcoming tournaments (public, useful for homepage)
@@ -2696,7 +3233,7 @@ export const appRouter = router({
           limit: z.number().int().min(1).max(50).default(10),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<Array<ApiTournamentListItem>> => {
         const where: Record<string, unknown> = {
           status: "UPCOMING",
           date: {
@@ -2743,7 +3280,40 @@ export const appRouter = router({
           },
         });
 
-        return tournaments;
+        return tournaments.map(t => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          date: t.date,
+          format: t.format,
+          status: t.status,
+          maxPlayers: t.maxPlayers,
+          registrationDeadline: t.registrationDeadline,
+          entryFee: t.entryFee,
+          prizePool: t.prizePool,
+          tournamentLevel: t.tournamentLevel,
+          game: {
+            id: t.game.id,
+            name: t.game.name,
+            shortName: t.game.shortName,
+          },
+          store: {
+            id: t.store.id,
+            name: t.store.name,
+            city: t.store.city,
+            state: t.store.state,
+            address: '',
+            contactEmail: null,
+            website: null,
+          },
+          organizer: {
+            id: t.organizer.id,
+            name: t.organizer.name,
+            email: t.organizer.email,
+          },
+          matchCount: 0,
+          entryCount: 0,
+        }));
       }),
 
     // TODO: These routes need to be updated to use the new MatchProcessor class
@@ -2803,7 +3373,11 @@ export const appRouter = router({
           offset: z.number().int().min(0).default(0),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<{
+        stores: Array<ApiStoreInfo & { tournamentCount: number }>;
+        total: number;
+        hasMore: boolean;
+      }> => {
         const where: Record<string, unknown> = {};
 
         if (!input.includeInactive) {
@@ -2843,7 +3417,13 @@ export const appRouter = router({
 
         return {
           stores: stores.map((store) => ({
-            ...store,
+            id: store.id,
+            name: store.name,
+            city: store.city,
+            state: store.state,
+            address: store.address,
+            contactEmail: store.contactEmail,
+            website: store.website,
             tournamentCount: store._count.tournaments,
           })),
           total,
@@ -2854,7 +3434,7 @@ export const appRouter = router({
     // Create a new store (admin only)
     create: adminProcedure
       .input(CreateStoreSchema)
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<ApiStoreInfo> => {
         // Check for duplicate store name in same city/state
         const existingStore = await ctx.prisma.store.findFirst({
           where: {
@@ -2884,7 +3464,15 @@ export const appRouter = router({
           },
         });
 
-        return store;
+        return {
+          id: store.id,
+          name: store.name,
+          city: store.city,
+          state: store.state,
+          address: store.address,
+          contactEmail: store.contactEmail,
+          website: store.website,
+        };
       }),
   }),
 
@@ -2897,7 +3485,11 @@ export const appRouter = router({
           id: z.string().uuid(),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<unknown & {
+        player1: { displayName: string };
+        player2: { displayName: string };
+        winner: { displayName: string } | null;
+      }> => {
         const match = await ctx.prisma.match.findUnique({
           where: { id: input.id },
           include: {
@@ -3008,7 +3600,7 @@ export const appRouter = router({
           table: z.number().int().min(1).optional(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<unknown> => {
         // Verify tournament exists
         const tournament = await ctx.prisma.tournament.findUnique({
           where: { id: input.tournamentId },
@@ -3120,7 +3712,7 @@ export const appRouter = router({
           status: z.enum(["PENDING", "ACTIVE", "COMPLETED"]).optional(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<unknown> => {
         const existingMatch = await ctx.prisma.match.findUnique({
           where: { id: input.id },
           include: {
@@ -3204,7 +3796,10 @@ export const appRouter = router({
           id: z.string().uuid(),
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{
+        success: boolean;
+        message: string;
+      }> => {
         const existingMatch = await ctx.prisma.match.findUnique({
           where: { id: input.id },
           include: {
@@ -3244,7 +3839,11 @@ export const appRouter = router({
           status: z.enum(["PENDING", "ACTIVE", "COMPLETED"]).optional(),
         }),
       )
-      .query(async ({ ctx, input }) => {
+      .query(async ({ ctx, input }): Promise<Array<unknown & {
+        player1: { displayName: string };
+        player2: { displayName: string };
+        winner: { displayName: string } | null;
+      }>> => {
         const where: Record<string, unknown> = {
           tournamentId: input.tournamentId,
         };
@@ -3357,7 +3956,21 @@ export const appRouter = router({
           fileSize: z.number().max(10 * 1024 * 1024), // 10MB max
         }),
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+          playersProcessed: number;
+          matchesCreated: number;
+          tournamentUpdated: boolean;
+        };
+        fileType: string;
+        parsedData: {
+          tournament: unknown;
+          playerCount: number;
+          matchCount: number;
+        };
+      }> => {
         // Import the parsing functions
         const { parseTournamentFile, validateTournamentData } = await import(
           "@/lib/upload/parsers"
@@ -3432,13 +4045,13 @@ export const appRouter = router({
           }
 
           // Process the tournament data in a transaction
-          const result = await ctx.prisma.$transaction(async (tx) => {
+          const result = await runInteractiveTransaction(ctx.prisma, async (tx: Prisma.TransactionClient) => {
             const processedPlayers: Array<{
               playerId: string;
               externalPlayerId: string;
               playerName: string;
             }> = [];
-            const processedMatches: Array<Record<string, unknown>> = [];
+            let matchesCreated = 0;
 
             // Process players - create or link to existing players
             for (const playerData of tournamentData.players) {
@@ -3520,7 +4133,7 @@ export const appRouter = router({
                 });
               }
 
-              const match = await tx.match.create({
+              await tx.match.create({
                 data: {
                   tournamentId: input.tournamentId,
                   player1Id,
@@ -3532,11 +4145,11 @@ export const appRouter = router({
                 },
               });
 
-              processedMatches.push(match);
+              matchesCreated += 1;
             }
 
             // Update tournament status if it was uploaded with results
-            if (processedMatches.length > 0) {
+            if (matchesCreated > 0) {
               await tx.tournament.update({
                 where: { id: input.tournamentId },
                 data: {
@@ -3556,7 +4169,7 @@ export const appRouter = router({
 
             return {
               playersProcessed: processedPlayers.length,
-              matchesCreated: processedMatches.length,
+              matchesCreated,
               tournamentUpdated: true,
             };
           });
@@ -3595,7 +4208,18 @@ export const appRouter = router({
           fileSize: z.number().max(10 * 1024 * 1024), // 10MB max
         }),
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input }): Promise<{
+        success: boolean;
+        message: string;
+        fileType: string;
+        data: {
+          tournament: unknown;
+          playerCount: number;
+          matchCount: number;
+          players: unknown[];
+          matches: unknown[];
+        };
+      }> => {
         const { parseTournamentFile, validateTournamentData } = await import(
           "@/lib/upload/parsers"
         );

@@ -4,6 +4,27 @@ import { useEffect, useCallback, useRef } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { useQueryClient } from '@tanstack/react-query'
 
+type MatchWithStatus = {
+  id: string
+  status: string
+}
+
+type TournamentWithLiveFlag = {
+  isLive?: boolean | null
+}
+
+function hasIdAndStatus<T extends Record<string, unknown>>(
+  match: T | null | undefined
+): match is T & MatchWithStatus {
+  if (!match || typeof match !== 'object') return false
+  const candidate = match as Record<string, unknown>
+  return typeof candidate.id === 'string' && typeof candidate.status === 'string'
+}
+
+function hasLiveFlag(value: unknown): value is TournamentWithLiveFlag {
+  return typeof value === 'object' && value !== null && 'isLive' in value
+}
+
 /**
  * Hook for real-time tournament updates using polling
  * Provides automatic refetching of tournament data when changes occur
@@ -189,10 +210,8 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
   useEffect(() => {
     if (!matches) return
 
-    // Extract match IDs with explicit typing to avoid deep type inference
-    // Use type assertion to help TypeScript with complex tRPC types
-    const matchesArray = matches as Array<{ id: string; status: string }>
-    const completedMatchIds = matchesArray
+    const completedMatchIds = matches
+      .filter(hasIdAndStatus)
       .filter(m => m.status === 'COMPLETED')
       .map(m => m.id)
     
@@ -251,7 +270,10 @@ export function useLiveTournamentIndicator(tournamentId: string | null) {
     }
   )
 
-  const isLive = tournament?.status === 'ACTIVE' && tournament?.isLive
+  const isLive =
+    tournament?.status === 'ACTIVE' &&
+    hasLiveFlag(tournament) &&
+    Boolean(tournament.isLive)
 
   return {
     isLive,

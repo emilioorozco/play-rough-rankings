@@ -1,5 +1,34 @@
 import { z } from "zod";
 
+/**
+ * Zod Schema Definitions
+ * 
+ * This file contains all Zod validation schemas used throughout the application.
+ * Schemas are organized by domain and exported for use in:
+ * - tRPC procedure input validation
+ * - Form validation
+ * - API request/response validation
+ * 
+ * **Schema Organization:**
+ * - Core entity schemas (Game, Player, Tournament, etc.)
+ * - Create/Update schemas (derived from core schemas)
+ * - Query schemas (for filtering and pagination)
+ * - Form schemas (moved to lib/validation/schemas.ts)
+ * 
+ * **Type Inference:**
+ * - All schema types are exported via `z.infer<typeof SchemaName>`
+ * - Type exports are in `lib/types/validation.ts` for centralized access
+ * - tRPC automatically infers input types from Zod schemas
+ * 
+ * **Best Practices:**
+ * - Extract reusable schemas from inline definitions
+ * - Use `.omit()`, `.partial()`, `.pick()` to derive related schemas
+ * - Keep simple single-field schemas inline in procedures
+ * - Document complex schemas with JSDoc comments
+ * 
+ * @see lib/types/validation.ts - TypeScript types inferred from these schemas
+ */
+
 // ============================================================================
 // CORE VALIDATION SCHEMAS
 // ============================================================================
@@ -395,6 +424,138 @@ export const DeckUsageQuerySchema = z.object({
 });
 
 // ============================================================================
+// LEADERBOARD QUERY SCHEMAS
+// ============================================================================
+
+// Top players query schema
+export const TopPlayersQuerySchema = z.object({
+  gameId: z.string().uuid(),
+  limit: z.number().int().min(10).max(50).default(25),
+  format: z.string().optional(),
+});
+
+// Filtered leaderboard query schema
+export const FilteredLeaderboardQuerySchema = z.object({
+  gameId: z.string().uuid(),
+  format: z.string().optional(),
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+  limit: z.number().int().min(10).max(50).default(25),
+  minTournaments: z.number().int().min(0).default(1),
+});
+
+// Historical seasons query schema
+export const HistoricalSeasonsQuerySchema = z.object({
+  gameId: z.string().uuid(),
+  years: z.number().int().min(1).max(5).default(2),
+});
+
+// Available seasons query schema
+export const AvailableSeasonsQuerySchema = z.object({
+  gameId: z.string().uuid(),
+});
+
+// Seasonal cached query schema
+export const SeasonalCachedQuerySchema = z.object({
+  gameId: z.string().uuid(),
+  season: z.string().optional(),
+  limit: z.number().int().min(10).max(50).default(25),
+});
+
+// Player trends query schema
+export const PlayerTrendsQuerySchema = z.object({
+  playerId: z.string().uuid(),
+  gameId: z.string().uuid(),
+  period: z.enum(['week', 'month', 'season']).default('month'),
+});
+
+// Refresh cache query schema
+export const RefreshCacheQuerySchema = z.object({
+  gameId: z.string().uuid(),
+  season: z.string().optional(),
+});
+
+// Batch refresh cache query schema
+export const BatchRefreshCacheQuerySchema = z.object({
+  updates: z.array(z.object({
+    gameId: z.string().uuid(),
+    season: z.string().optional(),
+  })).min(1).max(10),
+});
+
+// Ranking stats query schema
+export const RankingStatsQuerySchema = z.object({
+  gameId: z.string().uuid(),
+});
+
+// Player deck stats query schema
+export const PlayerDeckStatsQuerySchema = z.object({
+  playerId: z.string().uuid(),
+  gameId: z.string().uuid(),
+  season: z.string().optional(),
+});
+
+// ============================================================================
+// TOURNAMENT ENTRIES QUERY SCHEMAS
+// ============================================================================
+
+// Tournament entries by tournament query schema
+export const TournamentEntriesByTournamentQuerySchema = z.object({
+  tournamentId: z.string().uuid(),
+  includeDeckInfo: z.boolean().default(true),
+});
+
+// Tournament entries by player query schema
+export const TournamentEntriesByPlayerQuerySchema = z.object({
+  playerId: z.string().uuid(),
+  gameId: z.string().uuid().optional(),
+  includeDeckInfo: z.boolean().default(true),
+  limit: z.number().int().min(1).max(100).default(20),
+});
+
+// Bulk create tournament entries schema
+export const BulkCreateTournamentEntriesSchema = z.object({
+  tournamentId: z.string().uuid(),
+  entries: z.array(z.object({
+    playerId: z.string().uuid(),
+    deckId: z.string().uuid().optional(),
+    placement: z.number().int().min(1).optional(),
+    record: z.object({
+      wins: z.number().int().min(0).default(0),
+      losses: z.number().int().min(0).default(0),
+      draws: z.number().int().min(0).default(0),
+    }).optional(),
+  })).min(1).max(100),
+});
+
+// ============================================================================
+// DECKS QUERY SCHEMAS
+// ============================================================================
+
+// Deck list query schema
+export const DeckListQuerySchema = z.object({
+  gameId: z.string().uuid(),
+  format: z.string().optional(),
+  archetype: z.string().optional(),
+  includeInactive: z.boolean().default(false),
+  limit: z.number().int().min(1).max(100).default(50),
+});
+
+// Deck by ID query schema
+export const DeckByIdQuerySchema = z.object({
+  id: z.string().uuid(),
+  includeStats: z.boolean().default(true),
+});
+
+// Deck archetypes query schema
+export const DeckArchetypesQuerySchema = z.object({
+  gameId: z.string().uuid(),
+  format: z.string().optional(),
+  season: z.string().optional(),
+  limit: z.number().int().min(1).max(50).default(20),
+});
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
@@ -441,3 +602,25 @@ export type TournamentListQuery = z.infer<typeof TournamentListQuerySchema>;
 export type DeckStatsQuery = z.infer<typeof DeckStatsQuerySchema>;
 export type DeckUsageQuery = z.infer<typeof DeckUsageQuerySchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+// Leaderboard query types
+export type TopPlayersQuery = z.infer<typeof TopPlayersQuerySchema>;
+export type FilteredLeaderboardQuery = z.infer<typeof FilteredLeaderboardQuerySchema>;
+export type HistoricalSeasonsQuery = z.infer<typeof HistoricalSeasonsQuerySchema>;
+export type AvailableSeasonsQuery = z.infer<typeof AvailableSeasonsQuerySchema>;
+export type SeasonalCachedQuery = z.infer<typeof SeasonalCachedQuerySchema>;
+export type PlayerTrendsQuery = z.infer<typeof PlayerTrendsQuerySchema>;
+export type RefreshCacheQuery = z.infer<typeof RefreshCacheQuerySchema>;
+export type BatchRefreshCacheQuery = z.infer<typeof BatchRefreshCacheQuerySchema>;
+export type RankingStatsQuery = z.infer<typeof RankingStatsQuerySchema>;
+export type PlayerDeckStatsQuery = z.infer<typeof PlayerDeckStatsQuerySchema>;
+
+// Tournament entries query types
+export type TournamentEntriesByTournamentQuery = z.infer<typeof TournamentEntriesByTournamentQuerySchema>;
+export type TournamentEntriesByPlayerQuery = z.infer<typeof TournamentEntriesByPlayerQuerySchema>;
+export type BulkCreateTournamentEntries = z.infer<typeof BulkCreateTournamentEntriesSchema>;
+
+// Decks query types
+export type DeckListQuery = z.infer<typeof DeckListQuerySchema>;
+export type DeckByIdQuery = z.infer<typeof DeckByIdQuerySchema>;
+export type DeckArchetypesQuery = z.infer<typeof DeckArchetypesQuerySchema>;

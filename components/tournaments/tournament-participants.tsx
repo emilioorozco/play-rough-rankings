@@ -72,22 +72,10 @@ export function TournamentParticipants({ tournament, isOrganizer: _isOrganizer, 
 
   const participants = tournament.participants || []
 
-  // Get tournament entries to check dropped status
-  const tournamentQuery = trpc.tournaments.getById.useQuery({
-    id: tournament.id,
-    includeParticipants: true
-  })
-
-  const entries = tournamentQuery.data?.entries || []
-
-  // Create a map of player ID to entry for quick lookup
-  const entryMap = new Map(entries.map((entry: any) => [entry.playerId, entry]))
-
   const filteredParticipants = participants
     .filter(participant => {
       const matchesSearch = participant.displayName.toLowerCase().includes(searchTerm.toLowerCase())
-      const entry = entryMap.get(participant.id)
-      const isDropped = entry?.dropped || false
+      const isDropped = participant.dropped || false
       
       // Filter by status
       let matchesFilter = true
@@ -232,8 +220,7 @@ export function TournamentParticipants({ tournament, isOrganizer: _isOrganizer, 
             </TableHeader>
             <TableBody>
               {filteredParticipants.map((participant, index) => {
-                const entry = entryMap.get(participant.id)
-                const isDropped = entry?.dropped || false
+                const isDropped = participant.dropped || false
                 const StatusIcon = getStatusIcon(isDropped)
                 
                 return (
