@@ -60,10 +60,11 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
 
   // Check if current user is in a match
   const isPlayerInMatch = (match: any) => {
-    return currentUser && (
-      match.player1?.id === currentUser.id || 
-      match.player2?.id === currentUser.id
-    )
+    if (!currentUser) return false
+    // Check user IDs, not player IDs
+    const player1UserId = match.player1?.user?.id
+    const player2UserId = match.player2?.user?.id
+    return player1UserId === currentUser.id || player2UserId === currentUser.id
   }
 
   // Handle match click
@@ -177,10 +178,17 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
 
         {/* Matches Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
-          {currentRoundMatches.map((match) => {
+          {currentRoundMatches.map((match, index) => {
             const matchIsBye = isBye(match)
             const canInteract = !matchIsBye && (canManage || isPlayerInMatch(match))
             const isCompleted = match.status === 'COMPLETED'
+            // Show friendly match number for non-admins, ID for admins/organizers
+            // Prefer table number if available, otherwise use index-based numbering
+            const matchLabel = canManage 
+              ? `Match ${match.id.slice(0, 8)}...` 
+              : match.table 
+                ? `Match ${match.table}` 
+                : `Match ${index + 1}`
             
             return (
               <Card 
@@ -195,7 +203,7 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">Match {match.id}</span>
+                      <span className="font-medium text-sm">{matchLabel}</span>
                       {matchIsBye && (
                         <Badge variant="secondary" className="text-xs">BYE</Badge>
                       )}

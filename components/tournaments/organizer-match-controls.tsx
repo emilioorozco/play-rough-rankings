@@ -94,13 +94,13 @@ export function OrganizerMatchControls({
   const isInProgress = match.status === 'IN_PROGRESS'
 
   // Get player names
-  const player1Name = match.player1.user.firstName
+  const player1Name = match.player1?.user?.firstName
     ? `${match.player1.user.firstName} ${match.player1.user.lastName || ''}`.trim()
-    : match.player1.user.name || 'Player 1'
+    : match.player1?.user?.name || 'Player 1'
   
-  const player2Name = match.player2.user.firstName
+  const player2Name = match.player2?.user?.firstName
     ? `${match.player2.user.firstName} ${match.player2.user.lastName || ''}`.trim()
-    : match.player2.user.name || 'Player 2'
+    : match.player2?.user?.name || 'Player 2'
 
   // tRPC mutations
   const overrideMutation = trpc.matchManagement.organizerSubmitResult.useMutation({

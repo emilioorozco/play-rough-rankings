@@ -68,8 +68,8 @@ export function MatchSubmissionForm({
   const [errorMessage, setErrorMessage] = useState<string>('')
 
   // Determine if current user is in this match by checking user IDs
-  const isPlayer1 = currentUser?.id === match.player1.user.id
-  const isPlayer2 = currentUser?.id === match.player2.user.id
+  const isPlayer1 = currentUser?.id === match.player1?.user?.id
+  const isPlayer2 = currentUser?.id === match.player2?.user?.id
   const isInMatch = isPlayer1 || isPlayer2
 
   // Check if either player is dropped by querying tournament entries
@@ -87,13 +87,13 @@ export function MatchSubmissionForm({
   const isEitherPlayerDropped = isPlayer1Dropped || isPlayer2Dropped
 
   // Get player names
-  const player1Name = match.player1.user.firstName
+  const player1Name = match.player1?.user?.firstName
     ? `${match.player1.user.firstName} ${match.player1.user.lastName || ''}`.trim()
-    : match.player1.user.name || 'Player 1'
+    : match.player1?.user?.name || 'Player 1'
   
-  const player2Name = match.player2.user.firstName
+  const player2Name = match.player2?.user?.firstName
     ? `${match.player2.user.firstName} ${match.player2.user.lastName || ''}`.trim()
-    : match.player2.user.name || 'Player 2'
+    : match.player2?.user?.name || 'Player 2'
 
   // Check if there's a pending submission
   const hasPendingSubmission = match.status === 'IN_PROGRESS'
