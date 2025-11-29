@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Share2 } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { useSession } from '@/components/auth/session-provider'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { TournamentHeroSection } from '@/components/tournaments/tournament-hero-section'
-import { TournamentQuickInfo } from '@/components/tournaments/tournament-quick-info'
 import { TournamentTabs } from '@/components/tournaments/tournament-tabs'
 import { TournamentManagementPanel } from '@/components/tournaments/tournament-management-panel'
 import { LiveTournamentIndicator } from '@/components/tournaments/live-tournament-indicator'
@@ -275,11 +274,12 @@ export default function TournamentDetailsPage() {
   // Check if user is organizer or can manage
   const isOrganizer = user?.id === safeTournament.organizer?.id
   const canManage = canManageTournament(safeTournament.organizer?.id)
+  const isActive = safeTournament.status === 'ACTIVE'
 
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 pt-2 pb-6">
-        {/* Breadcrumb */}
+        {/* Breadcrumb / Header */}
         <div className="flex items-center justify-between gap-4 mb-2">
           <div className="flex items-center gap-4">
             <Button
@@ -296,12 +296,14 @@ export default function TournamentDetailsPage() {
             </span>
           </div>
           
-          {/* Tournament Status Indicators */}
+          {/* Right-side controls: Live Indicator + Actions */}
           <div className="flex items-center gap-2">
+            {isActive && (
+              <Button variant="outline" size="sm">
+                <Share2 className="h-4 w-4" />
+              </Button>
+            )}
             <LiveTournamentIndicator tournamentId={tournamentId} />
-            <Badge variant={getStatusVariant(safeTournament.status) as any} className="text-xs">
-              {safeTournament.status}
-            </Badge>
           </div>
         </div>
 
@@ -312,11 +314,6 @@ export default function TournamentDetailsPage() {
           canManage={canManage}
           isRegistered={isRegistered}
           currentUser={user}
-        />
-
-        {/* Quick Info */}
-        <TournamentQuickInfo
-          tournament={safeTournament as any}
         />
 
         {/* Management Panel - Only visible to organizers and admins */}

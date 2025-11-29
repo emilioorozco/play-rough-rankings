@@ -6,6 +6,7 @@ import { TournamentBrackets } from './tournament-brackets'
 import { TournamentParticipants } from './tournament-participants'
 import { TournamentResults } from './tournament-results'
 import { TournamentDiscussion } from './tournament-discussion'
+import { ProjectedRatingsDisplay } from './projected-ratings-display'
 import type { ApiTournament } from '@/lib/types/api'
 import { useTab } from '@/stores/ui-store'
 import { useTournamentStore } from '@/stores/tournament-store'
@@ -153,6 +154,12 @@ export function TournamentTabs({
       </TabsContent>
 
       <TabsContent value="results" className="space-y-6">
+        {tournament.status === 'ACTIVE' && (
+          <ProjectedRatingsDisplay 
+            tournamentId={tournament.id}
+            participants={tournament.participants || []}
+          />
+        )}
         <TournamentResults 
           tournament={tournament}
         />
