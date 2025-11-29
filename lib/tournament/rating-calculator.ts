@@ -96,7 +96,7 @@ export class RatingCalculator {
     // Get completed matches count for cache validation
     const completedMatchCount = tournament.matches.length
 
-    // Fetch all entries with their current game stats
+    // Fetch all entries with their current game stats and user information
     const entries = await this.prisma.tournamentEntry.findMany({
       where: { tournamentId },
       include: {
@@ -105,6 +105,19 @@ export class RatingCalculator {
             gameStats: {
               where: {
                 gameId: tournament.gameId
+              }
+            },
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                name: true,
+                userPreferences: {
+                  select: {
+                    profileVisibility: true
+                  }
+                }
               }
             }
           }
@@ -142,71 +155,81 @@ export class RatingCalculator {
 
     // Calculate projected ratings for each player
     const projectedRatings: ProjectedRating[] = []
+    const DEFAULT_STARTING_RATING = 1200
 
     for (const entry of entries) {
       const playerId = entry.playerId
       const gameStats = entry.player.gameStats[0]
 
-      if (!gameStats) {
-        // Player has no stats for this game yet, skip
-        continue
-      }
-
-      const currentRating = gameStats.currentRating
+      // Use default starting rating if player has no stats for this game yet
+      // This allows us to calculate projections even for new players
+      const currentRating = gameStats?.currentRating ?? DEFAULT_STARTING_RATING
 
       // Find all matches involving this player
       const playerMatches = completedMatches.filter(
         match => match.player1Id === playerId || match.player2Id === playerId
       )
 
+      // Skip if player has no completed matches
+      if (playerMatches.length === 0) {
+        continue
+      }
+
       // Calculate cumulative rating change from all matches
       let projectedRating = currentRating
       let totalRatingChange = 0
+      let matchesWithValidOpponents = 0
 
       for (const match of playerMatches) {
         const isPlayer1 = match.player1Id === playerId
+        const opponentId = isPlayer1 ? match.player2Id : match.player1Id
         const opponentStats = isPlayer1 
           ? match.player2.gameStats[0]
           : match.player1.gameStats[0]
 
-        if (!opponentStats) {
-          continue
-        }
-
-        const opponentRating = opponentStats.currentRating
+        // Use default rating if opponent has no stats
+        const opponentRating = opponentStats?.currentRating ?? DEFAULT_STARTING_RATING
 
         // Get games played for K-factor calculation
-        const seasonalStats = gameStats.seasonalStats as any
+        const seasonalStats = gameStats?.seasonalStats as any
         const gamesPlayed = seasonalStats?.totalGames || 0
 
-        const opponentSeasonalStats = opponentStats.seasonalStats as any
+        const opponentSeasonalStats = opponentStats?.seasonalStats as any
         const opponentGamesPlayed = opponentSeasonalStats?.totalGames || 0
 
         // Calculate rating change for this match
+        // Always pass match.player1Id and match.player2Id in that order, with corresponding ratings
         const tournamentLevel = (tournament.tournamentLevel || 'LOCAL') as 'LOCAL' | 'REGIONAL' | 'NATIONAL' | 'INTERNATIONAL'
 
         const ratingChanges = calculateMatchRatingChanges(
-          isPlayer1 ? currentRating : opponentRating,
-          isPlayer1 ? opponentRating : currentRating,
+          isPlayer1 ? currentRating : opponentRating,  // player1Rating (match's player1)
+          isPlayer1 ? opponentRating : currentRating,  // player2Rating (match's player2)
           match.winnerId,
-          isPlayer1 ? playerId : match.player2Id,
-          isPlayer1 ? match.player2Id : playerId,
-          isPlayer1 ? gamesPlayed : opponentGamesPlayed,
-          isPlayer1 ? opponentGamesPlayed : gamesPlayed,
+          match.player1Id,  // Always pass match's actual player1Id
+          match.player2Id,  // Always pass match's actual player2Id
+          isPlayer1 ? gamesPlayed : opponentGamesPlayed,     // player1GamesPlayed
+          isPlayer1 ? opponentGamesPlayed : gamesPlayed,     // player2GamesPlayed
           tournamentLevel
         )
 
         // Add the rating change to the projection
+        // Extract the rating change for the current player
         const ratingChange = isPlayer1 
           ? ratingChanges.player1RatingChange 
           : ratingChanges.player2RatingChange
 
         totalRatingChange += ratingChange
         projectedRating += ratingChange
+        matchesWithValidOpponents++
+      }
+
+      // Only include players who have at least one match with a calculable rating change
+      if (matchesWithValidOpponents === 0) {
+        continue
       }
 
       // Determine confidence level based on matches played
-      const matchesConsidered = playerMatches.length
+      const matchesConsidered = matchesWithValidOpponents
       const confidence = this.calculateConfidence(matchesConsidered)
 
       projectedRatings.push({

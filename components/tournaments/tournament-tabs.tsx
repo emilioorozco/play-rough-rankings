@@ -6,8 +6,10 @@ import { TournamentBrackets } from './tournament-brackets'
 import { TournamentParticipants } from './tournament-participants'
 import { TournamentResults } from './tournament-results'
 import { TournamentDiscussion } from './tournament-discussion'
+import { ProjectedRatingsDisplay } from './projected-ratings-display'
 import type { ApiTournament } from '@/lib/types/api'
 import { useTab } from '@/stores/ui-store'
+import { useTournamentStore } from '@/stores/tournament-store'
 import * as React from 'react'
 
 interface TournamentTabsProps {
@@ -36,6 +38,7 @@ export function TournamentTabs({
   onUpdate
 }: TournamentTabsProps) {
   const { activeTab, setActiveTab } = useTab('tournamentDetails')
+  const setSelectedRound = useTournamentStore((state) => state.setSelectedRound)
   const mobileScrollRef = React.useRef<HTMLDivElement | null>(null)
   const anchorRef = React.useRef<HTMLDivElement | null>(null)
 
@@ -43,6 +46,22 @@ export function TournamentTabs({
   if (!activeTab) {
     setActiveTab('overview')
   }
+
+  // Calculate current active round (highest round number from matches)
+  const currentActiveRound = React.useMemo(() => {
+    if (!tournament.matches || tournament.matches.length === 0) {
+      return 1
+    }
+    const rounds = tournament.matches.map(m => m.round)
+    return Math.max(...rounds)
+  }, [tournament.matches])
+
+  // When brackets tab becomes active, set the selected round to the current active round
+  React.useEffect(() => {
+    if (activeTab === 'brackets') {
+      setSelectedRound(tournament.id, currentActiveRound)
+    }
+  }, [activeTab, tournament.id, currentActiveRound, setSelectedRound])
 
   React.useEffect(() => {
     const container = mobileScrollRef.current
@@ -135,6 +154,12 @@ export function TournamentTabs({
       </TabsContent>
 
       <TabsContent value="results" className="space-y-6">
+        {tournament.status === 'ACTIVE' && (
+          <ProjectedRatingsDisplay 
+            tournamentId={tournament.id}
+            participants={tournament.participants || []}
+          />
+        )}
         <TournamentResults 
           tournament={tournament}
         />
