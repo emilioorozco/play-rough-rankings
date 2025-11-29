@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useFilter } from '@/hooks/stores'
-import { Search, Filter, MoreVertical, UserCheck, Trophy, Medal, Award, UserX } from 'lucide-react'
+import { Search, MoreVertical, UserCheck, Trophy, Medal, Award, UserX } from 'lucide-react'
 import { trpc } from '@/lib/trpc/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { 
   Table, 
   TableBody, 
@@ -88,8 +95,42 @@ export function TournamentParticipants({ tournament, isOrganizer: _isOrganizer, 
       return matchesSearch && matchesFilter
     })
     .sort((a, b) => {
-      // For now, just sort by display name since we don't have detailed stats
-      return a.displayName.localeCompare(b.displayName)
+      const aDropped = a.dropped || false
+      const bDropped = b.dropped || false
+      
+      // Always sort dropped players to the bottom
+      if (aDropped && !bDropped) {
+        return 1 // a goes after b
+      }
+      if (!aDropped && bDropped) {
+        return -1 // a goes before b
+      }
+      
+      // Both are dropped or both are active - apply normal sort
+      if (sortBy === 'wins') {
+        // Sort by wins (descending), then by losses (ascending)
+        const aWins = a.wins ?? 0
+        const bWins = b.wins ?? 0
+        if (aWins !== bWins) {
+          return bWins - aWins
+        }
+        const aLosses = a.losses ?? 0
+        const bLosses = b.losses ?? 0
+        return aLosses - bLosses
+      } else if (sortBy === 'rating') {
+        // Sort by rating (descending)
+        const aRating = a.rating ?? 0
+        const bRating = b.rating ?? 0
+        return bRating - aRating
+      } else {
+        // Sort by seed (ascending), then by display name
+        const aSeed = a.seed ?? Infinity
+        const bSeed = b.seed ?? Infinity
+        if (aSeed !== bSeed) {
+          return aSeed - bSeed
+        }
+        return a.displayName.localeCompare(b.displayName)
+      }
     })
 
   // Handle player drop
@@ -146,180 +187,289 @@ export function TournamentParticipants({ tournament, isOrganizer: _isOrganizer, 
   return (
     <Card className="dark:bg-muted dark:text-foreground border-border">
       <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <CardTitle>Tournament Participants</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              {filteredParticipants.length} of {participants.length} participants
-            </p>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-              <Input
-                placeholder="Search participants..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full sm:w-64"
-              />
-            </div>
-            
-            <div className="flex gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Filter className="h-4 w-4 mr-2" />
-                    Status
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => setFilterStatus('all')}>
-                    All Participants
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setFilterStatus('active')}>
-                    Active Only
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setFilterStatus('dropped')}>
-                    Dropped Only
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    Sort by {sortBy}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => setSortBy('seed')}>
-                    Sort by Name
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSortBy('wins')}>
-                    Sort by Rating
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
+        <div>
+          <CardTitle>Tournament Participants</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            {filteredParticipants.length} of {participants.length} participants
+          </p>
         </div>
       </CardHeader>
+      <div className="px-6 pb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+          <div className="relative sm:col-span-2">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+            <Input
+              placeholder="Search participants..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 w-full"
+            />
+          </div>
+          
+          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as 'all' | 'active' | 'dropped')}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="dropped">Dropped</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'seed' | 'wins' | 'rating')}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="seed">Seed</SelectItem>
+              <SelectItem value="wins">Wins</SelectItem>
+              <SelectItem value="rating">Rating</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <CardContent>
-        <div className="rounded-md border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">#</TableHead>
-                <TableHead>Player</TableHead>
-                <TableHead>Record</TableHead>
-                <TableHead>Rating</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredParticipants.map((participant, index) => {
-                const isDropped = participant.dropped || false
-                const StatusIcon = getStatusIcon(isDropped)
-                
-                return (
-                  <TableRow 
-                    key={participant.id}
-                    className={`${isCurrentUser(participant.id) ? 'bg-primary/5' : ''} ${isDropped ? 'opacity-60' : ''}`}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="w-8 h-8 p-0 flex items-center justify-center">
-                          {index + 1}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs">
-                            {participant.displayName.split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-medium ${isCurrentUser(participant.id) ? 'text-primary' : 'text-foreground'} ${isDropped ? 'line-through' : ''}`}>
-                              {participant.displayName}
-                            </span>
-                            {isCurrentUser(participant.id) && (
-                              <Badge variant="secondary" className="text-xs">You</Badge>
-                            )}
-                            {isDropped && (
-                              <Badge variant="destructive" className="text-xs">Dropped</Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-sm text-muted-foreground">Player</span>
-                            {getTierIcon()}
+        {/* Desktop Table View */}
+        <div className="hidden md:block rounded-md border border-border overflow-hidden">
+          <div className="relative overflow-x-auto">
+            {/* Scroll indicator gradient */}
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none z-10" />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">#</TableHead>
+                  <TableHead>Player</TableHead>
+                  <TableHead>Record</TableHead>
+                  <TableHead>Rating</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredParticipants.map((participant, index) => {
+                  const isDropped = participant.dropped || false
+                  const StatusIcon = getStatusIcon(isDropped)
+                  
+                  return (
+                    <TableRow 
+                      key={participant.id}
+                      className={`${isCurrentUser(participant.id) ? 'bg-primary/5' : ''} ${isDropped ? 'opacity-60' : ''}`}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="w-8 h-8 p-0 flex items-center justify-center">
+                            {index + 1}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="text-xs">
+                              {participant.displayName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium ${isCurrentUser(participant.id) ? 'text-primary' : 'text-foreground'} ${isDropped ? 'line-through' : ''}`}>
+                                {participant.displayName}
+                              </span>
+                              {isCurrentUser(participant.id) && (
+                                <Badge variant="secondary" className="text-xs">You</Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm">
-                          N/A
-                        </span>
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <span className="font-mono">N/A</span>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <Badge 
-                        variant={getStatusColor(isDropped) as any}
-                        className="text-xs"
-                      >
-                        <StatusIcon className="h-3 w-3 mr-1" />
-                        {getStatusLabel(isDropped)}
+                      </TableCell>
+                      
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">
+                            {participant.wins !== undefined && participant.losses !== undefined
+                              ? `(${participant.wins}-${participant.losses}-${(participant as any).draws ?? 0})`
+                              : 'N/A'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getTierIcon(participant.rating)}
+                          <span>
+                            {participant.rating !== undefined && participant.rating !== null
+                              ? participant.rating
+                              : 'N/A'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Badge 
+                          variant={getStatusColor(isDropped) as any}
+                          className="text-xs"
+                        >
+                          <StatusIcon className="h-3 w-3 mr-1" />
+                          {getStatusLabel(isDropped)}
+                        </Badge>
+                      </TableCell>
+                      
+                      <TableCell>
+                        {(canManage || isCurrentUser(participant.id)) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>View Profile</DropdownMenuItem>
+                              {canManage && (
+                                <>
+                                  <DropdownMenuItem>Send Message</DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
+                              {!isDropped && canDropPlayer(participant.id) && (
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => handleDropPlayer(participant.id, participant.displayName)}
+                                  disabled={dropPlayerMutation.isPending}
+                                >
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Drop from Tournament
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {filteredParticipants.map((participant, index) => {
+            const isDropped = participant.dropped || false
+            const StatusIcon = getStatusIcon(isDropped)
+            
+            return (
+              <div
+                key={participant.id}
+                className={`rounded-lg border border-border p-4 ${
+                  isCurrentUser(participant.id) ? 'bg-primary/5 border-primary/20' : 'bg-card'
+                } ${isDropped ? 'opacity-60' : ''}`}
+              >
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 items-center">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {(canManage || isCurrentUser(participant.id)) ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Badge 
+                            variant="outline" 
+                            className="w-8 h-8 p-0 flex items-center justify-center shrink-0 cursor-pointer hover:bg-muted sm:cursor-default sm:hover:bg-transparent"
+                          >
+                            {index + 1}
+                          </Badge>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" sideOffset={0} style={{ bottom: '100%', marginBottom: '8px' }}>
+                          <DropdownMenuItem>View Profile</DropdownMenuItem>
+                          {canManage && (
+                            <>
+                              <DropdownMenuItem>Send Message</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          {!isDropped && canDropPlayer(participant.id) && (
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDropPlayer(participant.id, participant.displayName)}
+                              disabled={dropPlayerMutation.isPending}
+                            >
+                              <UserX className="h-4 w-4 mr-2" />
+                              Drop from Tournament
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <Badge variant="outline" className="w-8 h-8 p-0 flex items-center justify-center shrink-0">
+                        {index + 1}
                       </Badge>
-                    </TableCell>
-                    
-                    <TableCell>
-                      {(canManage || isCurrentUser(participant.id)) && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>View Profile</DropdownMenuItem>
-                            {canManage && (
-                              <>
-                                <DropdownMenuItem>Send Message</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                              </>
-                            )}
-                            {!isDropped && canDropPlayer(participant.id) && (
-                              <DropdownMenuItem 
-                                className="text-destructive"
-                                onClick={() => handleDropPlayer(participant.id, participant.displayName)}
-                                disabled={dropPlayerMutation.isPending}
-                              >
-                                <UserX className="h-4 w-4 mr-2" />
-                                Drop from Tournament
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                    )}
+                    <span className={`font-medium text-sm ${isCurrentUser(participant.id) ? 'text-primary' : 'text-foreground'} ${isDropped ? 'line-through' : ''} truncate`}>
+                      {participant.displayName}
+                    </span>
+                    {isCurrentUser(participant.id) && (
+                      <Badge variant="secondary" className="text-xs shrink-0">You</Badge>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Record</div>
+                    <div className="font-medium text-sm whitespace-nowrap">
+                      {participant.wins !== undefined && participant.losses !== undefined
+                        ? `(${participant.wins}-${participant.losses}-${(participant as any).draws ?? 0})`
+                        : 'N/A'}
+                    </div>
+                  </div>
+                  <div className="hidden md:block min-w-0">
+                    <div className="text-xs text-muted-foreground">Rating</div>
+                    <div className="flex items-center gap-1.5 font-medium text-sm">
+                      {getTierIcon(participant.rating)}
+                      <span>
+                        {participant.rating !== undefined && participant.rating !== null
+                          ? participant.rating
+                          : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-2 shrink-0">
+                    {(canManage || isCurrentUser(participant.id)) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="shrink-0 h-8 w-8 p-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" sideOffset={0} style={{ bottom: '100%', marginBottom: '8px' }}>
+                          <DropdownMenuItem>View Profile</DropdownMenuItem>
+                          {canManage && (
+                            <>
+                              <DropdownMenuItem>Send Message</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          {!isDropped && canDropPlayer(participant.id) && (
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDropPlayer(participant.id, participant.displayName)}
+                              disabled={dropPlayerMutation.isPending}
+                            >
+                              <UserX className="h-4 w-4 mr-2" />
+                              Drop from Tournament
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    <Badge 
+                      variant={getStatusColor(isDropped) as any}
+                      className="text-xs"
+                    >
+                      <StatusIcon className="h-3 w-3 mr-1" />
+                      {getStatusLabel(isDropped)}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
         
         {filteredParticipants.length === 0 && (
