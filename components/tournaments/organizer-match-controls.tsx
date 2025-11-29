@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FormField, FormSelect, FormTextarea } from '@/components/ui/form-components'
+import { FormField, FormSelect, FormTextarea, ModalForm } from '@/components/ui/form-components'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Modal } from '@/components/ui/modal'
@@ -94,13 +93,21 @@ export function OrganizerMatchControls({
   const isInProgress = match.status === 'IN_PROGRESS'
 
   // Get player names
-  const player1Name = match.player1?.user?.firstName
-    ? `${match.player1.user.firstName} ${match.player1.user.lastName || ''}`.trim()
-    : match.player1?.user?.name || 'Player 1'
+  // Match the more robust naming logic from the player submission modal:
+  // prefer explicit user first/last name, then user.name, then API-level displayName, then fallback
+  const player1Name =
+    (match.player1?.user?.firstName
+      ? `${match.player1.user.firstName} ${match.player1.user.lastName || ''}`.trim()
+      : match.player1?.user?.name) ||
+    (match as any).player1?.displayName ||
+    'Player 1'
   
-  const player2Name = match.player2?.user?.firstName
-    ? `${match.player2.user.firstName} ${match.player2.user.lastName || ''}`.trim()
-    : match.player2?.user?.name || 'Player 2'
+  const player2Name =
+    (match.player2?.user?.firstName
+      ? `${match.player2.user.firstName} ${match.player2.user.lastName || ''}`.trim()
+      : match.player2?.user?.name) ||
+    (match as any).player2?.displayName ||
+    'Player 2'
 
   // tRPC mutations
   const overrideMutation = trpc.matchManagement.organizerSubmitResult.useMutation({
@@ -231,17 +238,24 @@ export function OrganizerMatchControls({
 
   return (
     <>
-      <Card className={className}>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />
-            <CardTitle>Organizer Controls</CardTitle>
+      <ModalForm
+        className={className}
+        onSubmit={(e) => {
+          // No primary form submission from this view – actions open their own flows
+          e.preventDefault()
+        }}
+      >
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <h2 className="text-base font-semibold">Organizer Controls</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Manage match results and resolve disputes.
+            </p>
           </div>
-          <CardDescription>
-            Manage match results and resolve disputes
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+
           {/* Match Status */}
           <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
             <div>
@@ -254,11 +268,12 @@ export function OrganizerMatchControls({
               variant={
                 isCompleted ? 'default' : 
                 isDisputed ? 'destructive' : 
-                isInProgress ? 'secondary' : 
+                isPending ? 'success' : // Match ready - shown as "Live" (green)
+                isInProgress ? 'outline' : // Waiting for confirmation - shown as "PENDING"
                 'outline'
               }
             >
-              {match.status}
+              {match.status === 'PENDING' ? 'Live' : match.status === 'IN_PROGRESS' ? 'PENDING' : match.status}
             </Badge>
           </div>
 
@@ -376,8 +391,8 @@ export function OrganizerMatchControls({
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </ModalForm>
 
       {/* Override Result Modal */}
       <Modal
@@ -388,7 +403,6 @@ export function OrganizerMatchControls({
           setErrorMessage('')
         }}
         title="Override Match Result"
-        description="Submit the correct match result as organizer"
         size="md"
         onSubmit={handleOverride}
         onCancel={() => {
