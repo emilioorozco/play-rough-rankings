@@ -39,6 +39,7 @@ export const auth = betterAuth({
   trustedOrigins: [
     process.env.BETTER_AUTH_URL!,
     process.env.NEXT_PUBLIC_APP_URL,
+    "http://192.168.86.47:3000",
     "https://appleid.apple.com",
   ].filter(Boolean) as string[],
   emailAndPassword: {
