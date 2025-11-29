@@ -198,7 +198,11 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
                 } ${
                   canInteract && !isCompleted ? 'cursor-pointer hover:border-primary transition-colors' : ''
                 }`}
-                onClick={() => canInteract && handleMatchClick(match)}
+                onClick={() => {
+                  if (canInteract && !isCompleted) {
+                    handleMatchClick(match)
+                  }
+                }}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,6 +22,7 @@ interface MatchSubmissionFormProps {
     player1Score: number | null
     player2Score: number | null
     table: number | null
+    playerSubmissions?: any
     player1: {
       id: string
       user: {
@@ -66,6 +67,7 @@ export function MatchSubmissionForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string>('')
   const [errorMessage, setErrorMessage] = useState<string>('')
+  const [showDifferentResultForm, setShowDifferentResultForm] = useState(false)
 
   // Determine if current user is in this match by checking user IDs
   const isPlayer1 = currentUser?.id === match.player1?.user?.id
@@ -100,6 +102,53 @@ export function MatchSubmissionForm({
   const isDisputed = match.status === 'DISPUTED'
   const isCompleted = match.status === 'COMPLETED'
 
+  // Parse playerSubmissions to find who submitted first
+  // playerSubmissions structure: { submissions: { [playerId]: { submittedBy, winnerId, player1Score, player2Score, ... } } }
+  const playerSubmissions = match.playerSubmissions as any
+  const submissions = useMemo(() => playerSubmissions?.submissions || {}, [playerSubmissions])
+  
+  // Debug logging
+  React.useEffect(() => {
+    if (hasPendingSubmission) {
+      console.log('=== Match Submission Debug ===')
+      console.log('Match status:', match.status)
+      console.log('PlayerSubmissions:', playerSubmissions)
+      console.log('Submissions object:', submissions)
+      console.log('Match player1Id:', match.player1Id)
+      console.log('Match player2Id:', match.player2Id)
+      console.log('Current user isPlayer1:', isPlayer1)
+      console.log('Current user isPlayer2:', isPlayer2)
+      console.log('Match scores:', { player1Score: match.player1Score, player2Score: match.player2Score, winnerId: match.winnerId })
+    }
+  }, [hasPendingSubmission, playerSubmissions, submissions, match, isPlayer1, isPlayer2])
+  
+  // Find the first submission (when pending, there's only one submission)
+  const submissionKeys = Object.keys(submissions)
+  const firstSubmissionKey = submissionKeys[0]
+  const firstSubmission = firstSubmissionKey ? submissions[firstSubmissionKey] : null
+  
+  console.log('First submission key:', firstSubmissionKey)
+  console.log('First submission data:', firstSubmission)
+  
+  const submittedByPlayerId = firstSubmission?.submittedBy
+  const submittedScores = firstSubmission ? {
+    player1Score: firstSubmission.player1Score,
+    player2Score: firstSubmission.player2Score,
+    winnerId: firstSubmission.winnerId,
+  } : null
+
+  console.log('Submitted by player ID:', submittedByPlayerId)
+  console.log('Submitted scores:', submittedScores)
+
+  // Determine if current user is the one who submitted
+  const currentPlayerId = isPlayer1 ? match.player1Id : match.player2Id
+  const isSubmitter = submittedByPlayerId === currentPlayerId
+  const isConfirmer = !isSubmitter && hasPendingSubmission
+  
+  console.log('Current player ID:', currentPlayerId)
+  console.log('Is submitter:', isSubmitter)
+  console.log('Is confirmer:', isConfirmer)
+
   // Submit result mutation
   const submitMutation = trpc.matchManagement.submitResult.useMutation({
     onMutate: () => {
@@ -116,6 +165,10 @@ export function MatchSubmissionForm({
         setWinnerId('')
         setPlayer1Score('0')
         setPlayer2Score('0')
+        setShowDifferentResultForm(false)
+      } else if (data.disputed) {
+        // If dispute created, reset the form view
+        setShowDifferentResultForm(false)
       }
       
       if (onSuccess) {
@@ -331,7 +384,76 @@ export function MatchSubmissionForm({
   }
 
   // Show pending confirmation status
-  if (hasPendingSubmission) {
+  if (hasPendingSubmission && !showDifferentResultForm) {
+    // Use submitted scores if available, otherwise fall back to match scores
+    // Log what we're using for display
+    console.log('Display scores - submittedScores:', submittedScores, 'match scores:', { 
+      player1Score: match.player1Score, 
+      player2Score: match.player2Score, 
+      winnerId: match.winnerId 
+    })
+    
+    const displayPlayer1Score = submittedScores?.player1Score ?? match.player1Score ?? 0
+    const displayPlayer2Score = submittedScores?.player2Score ?? match.player2Score ?? 0
+    const displayWinnerId = submittedScores?.winnerId ?? match.winnerId
+    
+    console.log('Final display values:', { displayPlayer1Score, displayPlayer2Score, displayWinnerId })
+
+    if (isSubmitter) {
+      // Show waiting message for the submitter
+      return (
+        <Card className={className}>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-yellow-600" />
+              <CardTitle>Waiting for Confirmation</CardTitle>
+            </div>
+            <CardDescription>
+              You have submitted the match result. Waiting for your opponent to confirm.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Your submitted result:
+                </p>
+                
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="text-center p-3 bg-background rounded-lg border">
+                    <div className="text-sm text-muted-foreground mb-1">{player1Name}</div>
+                    <div className="text-2xl font-bold">{displayPlayer1Score}</div>
+                  </div>
+                  <div className="text-center p-3 bg-background rounded-lg border">
+                    <div className="text-sm text-muted-foreground mb-1">{player2Name}</div>
+                    <div className="text-2xl font-bold">{displayPlayer2Score}</div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                  <span className="text-sm font-medium">Winner:</span>
+                  <span className="font-semibold">
+                    {displayWinnerId === match.player1Id ? player1Name : 
+                     displayWinnerId === match.player2Id ? player2Name : 
+                     'Draw'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="text-sm text-muted-foreground text-center">
+                  Your opponent will be notified to review and confirm this result.
+                </p>
+              </div>
+
+              <FormStatus success={successMessage} error={errorMessage} />
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    // Show confirmation screen for the confirmer
     return (
       <Card className={className}>
         <CardHeader>
@@ -340,7 +462,7 @@ export function MatchSubmissionForm({
             <CardTitle>Pending Confirmation</CardTitle>
           </div>
           <CardDescription>
-            Match result has been submitted and is waiting for opponent confirmation
+            Your opponent has submitted the match result. Please review and confirm:
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -353,19 +475,19 @@ export function MatchSubmissionForm({
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="text-center p-3 bg-background rounded-lg border">
                   <div className="text-sm text-muted-foreground mb-1">{player1Name}</div>
-                  <div className="text-2xl font-bold">{match.player1Score ?? 0}</div>
+                  <div className="text-2xl font-bold">{displayPlayer1Score}</div>
                 </div>
                 <div className="text-center p-3 bg-background rounded-lg border">
                   <div className="text-sm text-muted-foreground mb-1">{player2Name}</div>
-                  <div className="text-2xl font-bold">{match.player2Score ?? 0}</div>
+                  <div className="text-2xl font-bold">{displayPlayer2Score}</div>
                 </div>
               </div>
               
               <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
                 <span className="text-sm font-medium">Winner:</span>
                 <span className="font-semibold">
-                  {match.winnerId === match.player1Id ? player1Name : 
-                   match.winnerId === match.player2Id ? player2Name : 
+                  {displayWinnerId === match.player1Id ? player1Name : 
+                   displayWinnerId === match.player2Id ? player2Name : 
                    'Draw'}
                 </span>
               </div>
@@ -393,10 +515,13 @@ export function MatchSubmissionForm({
               <Button
                 variant="outline"
                 onClick={() => {
-                  // Allow submitting different result which will create dispute
+                  // Switch to submission form to allow submitting different result
+                  setShowDifferentResultForm(true)
                   setWinnerId('')
                   setPlayer1Score('0')
                   setPlayer2Score('0')
+                  setErrorMessage('')
+                  setSuccessMessage('')
                 }}
                 disabled={isSubmitting}
               >
@@ -417,10 +542,17 @@ export function MatchSubmissionForm({
       <CardHeader>
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5" />
-          <CardTitle>Submit Match Result</CardTitle>
+          <CardTitle>
+            {showDifferentResultForm ? 'Submit Different Result' : 'Submit Match Result'}
+          </CardTitle>
         </div>
         <CardDescription>
           Round {match.round} {match.table ? `• Table ${match.table}` : ''}
+          {showDifferentResultForm && (
+            <span className="block mt-1 text-yellow-600 dark:text-yellow-500">
+              This will create a dispute if it differs from your opponent&apos;s submission.
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -500,12 +632,44 @@ export function MatchSubmissionForm({
           </div>
 
           {/* Info Message */}
-          <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
+          <div className={`p-3 rounded-lg border ${
+            showDifferentResultForm 
+              ? 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900' 
+              : 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900'
+          }`}>
             <p className="text-sm text-muted-foreground">
-              After you submit, your opponent will need to confirm the result. If they disagree,
-              the match will be flagged for organizer review.
+              {showDifferentResultForm ? (
+                <>
+                  Submitting a different result will create a dispute. The tournament organizer will review both submissions and make a final decision.
+                </>
+              ) : (
+                <>
+                  After you submit, your opponent will need to confirm the result. If they disagree,
+                  the match will be flagged for organizer review.
+                </>
+              )}
             </p>
           </div>
+
+          {/* Back button if showing different result form */}
+          {showDifferentResultForm && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowDifferentResultForm(false)
+                setWinnerId('')
+                setPlayer1Score('0')
+                setPlayer2Score('0')
+                setErrorMessage('')
+                setSuccessMessage('')
+              }}
+              disabled={isSubmitting}
+              className="w-full"
+            >
+              Cancel - Go Back to Confirmation
+            </Button>
+          )}
 
           {/* Submit Button */}
           <Button
@@ -519,7 +683,7 @@ export function MatchSubmissionForm({
                 Submitting...
               </>
             ) : (
-              'Submit Result'
+              showDifferentResultForm ? 'Submit Different Result' : 'Submit Result'
             )}
           </Button>
 
