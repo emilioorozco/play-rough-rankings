@@ -16,6 +16,7 @@ export {
 } from "./table"
 export { StatsCard } from "./stats-card"
 export { Progress } from "./progress"
+export { MultiStepProgress } from "./multi-step-progress"
 export { Skeleton } from "./skeleton"
 export {
   LoadingSpinner,

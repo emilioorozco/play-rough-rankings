@@ -2018,6 +2018,7 @@ export const appRouter = router({
                         id: true,
                         user: {
                           select: {
+                            id: true,
                             name: true,
                             firstName: true,
                             lastName: true,
@@ -2035,6 +2036,7 @@ export const appRouter = router({
                         id: true,
                         user: {
                           select: {
+                            id: true,
                             name: true,
                             firstName: true,
                             lastName: true,
@@ -2052,6 +2054,7 @@ export const appRouter = router({
                         id: true,
                         user: {
                           select: {
+                            id: true,
                             name: true,
                             firstName: true,
                             lastName: true,
@@ -2274,6 +2277,7 @@ export const appRouter = router({
               player1?: {
                 id: string;
                 user?: {
+                  id: string;
                   name: string | null;
                   firstName: string | null;
                   lastName: string | null;
@@ -2285,6 +2289,7 @@ export const appRouter = router({
               player2?: {
                 id: string;
                 user?: {
+                  id: string;
                   name: string | null;
                   firstName: string | null;
                   lastName: string | null;
@@ -2296,6 +2301,7 @@ export const appRouter = router({
               winner?: {
                 id: string;
                 user?: {
+                  id: string;
                   name: string | null;
                   firstName: string | null;
                   lastName: string | null;
@@ -2329,18 +2335,33 @@ export const appRouter = router({
               round: match.round,
               table: match.table,
               status: match.status,
+              player1Id: match.player1Id,
+              player2Id: match.player2Id,
+              winnerId: match.winnerId,
+              player1Score: match.player1Score,
+              player2Score: match.player2Score,
+              playerSubmissions: match.playerSubmissions,
               player1: {
                 id: matchWithPlayers.player1?.id ?? match.player1Id,
                 displayName: getDisplay(matchWithPlayers.player1, "Unknown Player"),
+                user: matchWithPlayers.player1?.user?.id ? {
+                  id: matchWithPlayers.player1.user.id,
+                } : undefined,
               },
               player2: {
                 id: matchWithPlayers.player2?.id ?? match.player2Id,
                 displayName: getDisplay(matchWithPlayers.player2, "Unknown Player"),
+                user: matchWithPlayers.player2?.user?.id ? {
+                  id: matchWithPlayers.player2.user.id,
+                } : undefined,
               },
               winner: matchWithPlayers.winner
                 ? {
                     id: matchWithPlayers.winner.id,
                     displayName: getDisplay(matchWithPlayers.winner, "Unknown Player"),
+                    user: matchWithPlayers.winner.user?.id ? {
+                      id: matchWithPlayers.winner.user.id,
+                    } : undefined,
                   }
                 : null,
             };

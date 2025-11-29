@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, ReactNode } from "react";
 import { Modal } from "./modal";
 
 interface ConfirmationModalProps {
@@ -9,6 +9,7 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
   title: string;
   message: string;
+  children?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "default" | "destructive";
@@ -25,6 +26,7 @@ export function ConfirmationModal({
   onConfirm,
   title,
   message,
+  children,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   variant = "default",
@@ -90,11 +92,13 @@ export function ConfirmationModal({
       showCancel={true}
       submitVariant={variant}
     >
-      {message && (
-        <p className="text-sm text-muted-foreground">
-          {message}
-        </p>
-      )}
+      {children
+        ? children
+        : message && (
+            <p className="text-sm text-muted-foreground whitespace-pre-line">
+              {message}
+            </p>
+          )}
     </Modal>
   );
 }

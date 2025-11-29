@@ -31,6 +31,11 @@ interface ProjectedRatingsDisplayProps {
   tournamentId: string
   /** Optional callback when ratings are updated */
   onRatingsUpdate?: (ratings: ProjectedRating[]) => void
+  /** Tournament participants for displaying player names */
+  participants?: Array<{
+    id: string
+    displayName?: string
+  }>
 }
 
 /**
@@ -44,7 +49,8 @@ interface ProjectedRatingsDisplayProps {
  */
 export function ProjectedRatingsDisplay({ 
   tournamentId,
-  onRatingsUpdate 
+  onRatingsUpdate,
+  participants = []
 }: ProjectedRatingsDisplayProps) {
   const [sortBy, setSortBy] = useState<'rating' | 'change' | 'confidence'>('rating')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
@@ -109,8 +115,64 @@ export function ProjectedRatingsDisplay({
   }
 
   const projectedRatings = data?.projectedRatings || []
+  const stats = data?.stats
+
+  // Determine why there are no rating projections
+  const getEmptyStateMessage = () => {
+    const tournamentStatus = data?.tournamentStatus
+    const completedMatches = stats?.completedMatches ?? 0
+    const totalMatches = stats?.totalMatches ?? 0
+    const totalEntries = stats?.totalEntries ?? 0
+
+    // Tournament hasn't started
+    if (tournamentStatus === 'UPCOMING') {
+      return {
+        title: "No rating projections available",
+        description: "This tournament hasn't started yet. Rating projections will be available once matches begin and are completed."
+      }
+    }
+
+    // Tournament is completed or cancelled
+    if (tournamentStatus === 'COMPLETED' || tournamentStatus === 'CANCELLED') {
+      return {
+        title: "No rating projections available",
+        description: completedMatches === 0 
+          ? "This tournament has no completed matches. Ratings cannot be calculated without match results."
+          : "Final ratings have been applied. Projected ratings are no longer displayed for completed tournaments."
+      }
+    }
+
+    // No completed matches yet
+    if (completedMatches === 0) {
+      if (totalMatches === 0) {
+        return {
+          title: "No rating projections available",
+          description: "No matches have been created yet. Once matches are created and completed, rating projections will appear here."
+        }
+      }
+      return {
+        title: "No rating projections available",
+        description: `There are ${totalMatches} match${totalMatches === 1 ? '' : 'es'} in progress, but none have been completed yet. Rating projections will appear once matches are completed.`
+      }
+    }
+
+    // Matches completed but no ratings calculated
+    if (totalEntries === 0) {
+      return {
+        title: "No rating projections available",
+        description: "There are no registered participants in this tournament yet."
+      }
+    }
+
+    // This should rarely happen now since we use default ratings, but keep as fallback
+    return {
+      title: "No rating projections available",
+      description: `There ${completedMatches === 1 ? 'is' : 'are'} ${completedMatches} completed match${completedMatches === 1 ? '' : 'es'}, but rating projections could not be calculated. Please ensure matches have been properly completed with winners.`
+    }
+  }
 
   if (projectedRatings.length === 0) {
+    const emptyMessage = getEmptyStateMessage()
     return (
       <Card className="dark:bg-muted dark:text-foreground border-border">
         <CardHeader>
@@ -118,8 +180,8 @@ export function ProjectedRatingsDisplay({
         </CardHeader>
         <CardContent>
           <EmptyState
-            title="No rating projections available"
-            description="Rating projections will appear once matches are completed."
+            title={emptyMessage.title}
+            description={emptyMessage.description}
           />
         </CardContent>
       </Card>
@@ -174,58 +236,135 @@ export function ProjectedRatingsDisplay({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">#</TableHead>
-                <TableHead>Player</TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => toggleSort('rating')}
-                >
-                  <div className="flex items-center gap-1">
-                    Current → Projected
-                    {sortBy === 'rating' && (
-                      <span className="text-xs">{sortOrder === 'desc' ? '↓' : '↑'}</span>
-                    )}
+        {/* Desktop Table View */}
+        <div className="hidden md:block rounded-md border border-border overflow-hidden">
+          <div className="relative overflow-x-auto">
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none z-10" />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">#</TableHead>
+                  <TableHead>Player</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => toggleSort('rating')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Current → Projected
+                      {sortBy === 'rating' && (
+                        <span className="text-xs">{sortOrder === 'desc' ? '↓' : '↑'}</span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => toggleSort('confidence')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Confidence
+                      {sortBy === 'confidence' && (
+                        <span className="text-xs">{sortOrder === 'desc' ? '↓' : '↑'}</span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead>Matches</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedRatings.map((rating, index) => {
+                  const participant = participants.find(p => p.id === rating.playerId)
+                  return (
+                    <ProjectedRatingRow 
+                      key={rating.playerId}
+                      rating={rating}
+                      rank={index + 1}
+                      playerName={participant?.displayName}
+                    />
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {sortedRatings.map((rating, index) => {
+            const participant = participants.find(p => p.id === rating.playerId)
+            const playerName = participant?.displayName || `Player ${rating.playerId.slice(0, 8)}`
+            const isIncrease = rating.ratingChange > 0
+            const isDecrease = rating.ratingChange < 0
+            const isNoChange = rating.ratingChange === 0
+
+            const getConfidenceBadge = () => {
+              switch (rating.confidence) {
+                case 'HIGH':
+                  return { variant: 'default' as const, icon: <CheckCircle2 className="h-3 w-3" />, label: 'High' }
+                case 'MEDIUM':
+                  return { variant: 'secondary' as const, icon: <AlertCircle className="h-3 w-3" />, label: 'Medium' }
+                case 'LOW':
+                  return { variant: 'outline' as const, icon: <HelpCircle className="h-3 w-3" />, label: 'Low' }
+              }
+            }
+
+            const confidenceBadge = getConfidenceBadge()
+            const changeDisplay = isIncrease 
+              ? { icon: <TrendingUp className="h-4 w-4" />, color: 'text-success', sign: '+' }
+              : isDecrease 
+              ? { icon: <TrendingDown className="h-4 w-4" />, color: 'text-destructive', sign: '' }
+              : { icon: <Minus className="h-4 w-4" />, color: 'text-muted-foreground', sign: '' }
+
+            return (
+              <div
+                key={rating.playerId}
+                className="rounded-lg border border-border p-4 bg-card"
+              >
+                <div className="flex flex-col sm:grid sm:grid-cols-3 gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant="outline" className="w-8 h-8 p-0 flex items-center justify-center shrink-0">
+                      {index + 1}
+                    </Badge>
+                    <span className="font-medium text-sm text-foreground truncate">
+                      {playerName}
+                    </span>
                   </div>
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => toggleSort('change')}
-                >
-                  <div className="flex items-center gap-1">
-                    Change
-                    {sortBy === 'change' && (
-                      <span className="text-xs">{sortOrder === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                  <div className="min-w-0">
+                    <div className="text-xs text-muted-foreground">Rating</div>
+                    <div className="flex items-center gap-1.5 font-medium text-sm">
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {rating.currentRating}
+                      </span>
+                      <span className={cn(changeDisplay.color)}>
+                        {changeDisplay.icon}
+                      </span>
+                      <span className={cn(
+                        "font-mono text-xs font-semibold",
+                        isIncrease && "text-success",
+                        isDecrease && "text-destructive",
+                        isNoChange && "text-muted-foreground"
+                      )}>
+                        {rating.projectedRating}
+                      </span>
+                    </div>
                   </div>
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => toggleSort('confidence')}
-                >
-                  <div className="flex items-center gap-1">
-                    Confidence
-                    {sortBy === 'confidence' && (
-                      <span className="text-xs">{sortOrder === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                  <div className="grid grid-cols-1 sm:grid-cols-[auto_auto] gap-2 items-start">
+                    <div className="hidden sm:block min-w-0 shrink-0">
+                      <div className="text-xs text-muted-foreground">Confidence</div>
+                      <Badge variant={confidenceBadge.variant} className="text-xs">
+                        {confidenceBadge.icon}
+                        <span className="ml-1">{confidenceBadge.label}</span>
+                      </Badge>
+                    </div>
+                    <div className="flex items-center">
+                      <Badge variant="outline" className="text-xs shrink-0 whitespace-nowrap">
+                        {rating.matchesConsidered}{'\u00A0'}{rating.matchesConsidered === 1 ? 'match' : 'matches'}
+                      </Badge>
+                    </div>
                   </div>
-                </TableHead>
-                <TableHead>Matches</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedRatings.map((rating, index) => (
-                <ProjectedRatingRow 
-                  key={rating.playerId}
-                  rating={rating}
-                  rank={index + 1}
-                />
-              ))}
-            </TableBody>
-          </Table>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </CardContent>
     </Card>
@@ -237,10 +376,12 @@ export function ProjectedRatingsDisplay({
  */
 function ProjectedRatingRow({ 
   rating, 
-  rank 
+  rank,
+  playerName
 }: { 
   rating: ProjectedRating
-  rank: number 
+  rank: number
+  playerName?: string
 }) {
   const isIncrease = rating.ratingChange > 0
   const isDecrease = rating.ratingChange < 0
@@ -312,15 +453,15 @@ function ProjectedRatingRow({
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="text-xs">
-              P{rank}
+              {playerName 
+                ? playerName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                : `P${rank}`
+              }
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
             <span className="font-medium text-foreground">
-              Player {rating.playerId.slice(0, 8)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              ID: {rating.playerId.slice(0, 8)}
+              {playerName || `Player ${rating.playerId.slice(0, 8)}`}
             </span>
           </div>
         </div>
@@ -331,7 +472,11 @@ function ProjectedRatingRow({
           <span className="font-mono text-sm text-muted-foreground">
             {rating.currentRating}
           </span>
-          <span className="text-muted-foreground">→</span>
+          <span className={cn(
+            changeDisplay.color
+          )}>
+            {changeDisplay.icon}
+          </span>
           <span className={cn(
             "font-mono text-sm font-semibold",
             isIncrease && "text-success",
@@ -339,23 +484,6 @@ function ProjectedRatingRow({
             isNoChange && "text-muted-foreground"
           )}>
             {rating.projectedRating}
-          </span>
-        </div>
-      </TableCell>
-      
-      <TableCell>
-        <div className={cn(
-          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md",
-          changeDisplay.bgColor
-        )}>
-          <span className={changeDisplay.color}>
-            {changeDisplay.icon}
-          </span>
-          <span className={cn(
-            "font-mono text-sm font-semibold",
-            changeDisplay.color
-          )}>
-            {changeDisplay.sign}{rating.ratingChange}
           </span>
         </div>
       </TableCell>
