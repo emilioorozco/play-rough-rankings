@@ -915,9 +915,10 @@ export const tournamentLifecycleRouter = router({
         tournamentId: z.string().uuid({
           message: 'Invalid tournament ID format'
         }),
+        // When omitted, the current authenticated user's player record will be used
         playerId: z.string().uuid({
           message: 'Invalid player ID format'
-        })
+        }).optional()
       })
     )
     .mutation(async ({ ctx, input }): Promise<{
@@ -954,21 +955,38 @@ export const tournamentLifecycleRouter = router({
         })
       }
 
-      // Get the player record for the user
-      const player = await ctx.prisma.player.findUnique({
-        where: { id: input.playerId },
-        select: {
-          id: true,
-          userId: true,
-          user: {
+      // Resolve the target player:
+      // - If playerId is provided, use that specific player
+      // - Otherwise, use the current authenticated user's player record
+      const player = input.playerId
+        ? await ctx.prisma.player.findUnique({
+            where: { id: input.playerId },
             select: {
-              firstName: true,
-              lastName: true,
-              name: true
+              id: true,
+              userId: true,
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  name: true
+                }
+              }
             }
-          }
-        }
-      })
+          })
+        : await ctx.prisma.player.findUnique({
+            where: { userId: ctx.user.id },
+            select: {
+              id: true,
+              userId: true,
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  name: true
+                }
+              }
+            }
+          })
 
       if (!player) {
         throw new TRPCError({
@@ -994,7 +1012,7 @@ export const tournamentLifecycleRouter = router({
       try {
         const result = await processor.dropPlayer(
           input.tournamentId,
-          input.playerId
+          player.id
         )
 
         const playerName = player.user.firstName 
@@ -1051,6 +1069,9 @@ export const tournamentLifecycleRouter = router({
       stats: {
         totalPlayers: number;
         averageRatingChange: number;
+        completedMatches: number;
+        totalMatches: number;
+        totalEntries: number;
       };
     }> => {
       if (!ctx.user) {
@@ -1060,7 +1081,7 @@ export const tournamentLifecycleRouter = router({
         })
       }
 
-      // Verify tournament exists
+      // Verify tournament exists and get match statistics
       const tournament = await ctx.prisma.tournament.findUnique({
         where: { id: input.tournamentId },
         select: {
@@ -1077,6 +1098,21 @@ export const tournamentLifecycleRouter = router({
           message: 'Tournament not found'
         })
       }
+
+      // Get match statistics for diagnostic purposes
+      const matchCounts = await ctx.prisma.match.groupBy({
+        by: ['status'],
+        where: { tournamentId: input.tournamentId },
+        _count: { id: true }
+      })
+
+      const completedMatches = matchCounts.find(m => m.status === 'COMPLETED')?._count.id || 0
+      const totalMatches = matchCounts.reduce((sum, m) => sum + m._count.id, 0)
+
+      // Get entry count to check if players have game stats
+      const entryCount = await ctx.prisma.tournamentEntry.count({
+        where: { tournamentId: input.tournamentId, dropped: false }
+      })
 
       // Initialize RatingCalculator and get projected ratings
       const ratingCalculator = new RatingCalculator(ctx.prisma as any)
@@ -1096,7 +1132,10 @@ export const tournamentLifecycleRouter = router({
             totalPlayers: projectedRatings.length,
             averageRatingChange: projectedRatings.length > 0
               ? projectedRatings.reduce((sum, p) => sum + p.ratingChange, 0) / projectedRatings.length
-              : 0
+              : 0,
+            completedMatches,
+            totalMatches,
+            totalEntries: entryCount
           }
         }
       } catch (error) {

@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Maximize2, Edit } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Edit } from 'lucide-react'
 import { MatchSubmissionForm } from '@/components/tournaments/match-submission-form'
 import { OrganizerMatchControls } from '@/components/tournaments/organizer-match-controls'
 import { Modal } from '@/components/ui/modal'
 import { useTournamentStore } from '@/stores/tournament-store'
 import type { ApiTournament } from '@/lib/types/api'
+import { cn } from '@/lib/utils'
 
 interface TournamentBracketsProps {
   tournament: ApiTournament
@@ -26,6 +27,8 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
   const [selectedMatch, setSelectedMatch] = useState<any | null>(null)
   const [showSubmissionModal, setShowSubmissionModal] = useState(false)
   const [showOrganizerModal, setShowOrganizerModal] = useState(false)
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | 'none'>('none')
+  const previousRoundRef = useRef<number | null>(null)
 
   // Get selected round from Zustand store - using selector to subscribe to changes
   const storedRound = useTournamentStore((state) => state.selectedRoundCache[tournament.id])
@@ -42,16 +45,36 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
 
   const rounds = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b)
   
-  // Get selected round from store or default to first round
-  const currentRound = storedRound || rounds[0] || 1
+  // Get selected round from store or default to latest round
+  const latestRound = rounds.length > 0 ? rounds[rounds.length - 1] : 1
+  const currentRound = storedRound || latestRound
   const currentRoundMatches = matchesByRound[currentRound] || []
 
-  // Initialize selected round in store if not set
+  // Track round changes for slide direction (mimics multi-step modal transitions)
+  useEffect(() => {
+    const previousRound = previousRoundRef.current
+
+    if (previousRound !== null && previousRound !== currentRound) {
+      // Going up in rounds -> slide left, going down -> slide right
+      setSlideDirection(currentRound > previousRound ? 'left' : 'right')
+
+      const timer = setTimeout(() => {
+        setSlideDirection('none')
+      }, 300) // Match modal animation duration
+
+      return () => clearTimeout(timer)
+    }
+
+    // Always update previous round after handling current change
+    previousRoundRef.current = currentRound
+  }, [currentRound])
+
+  // Initialize selected round in store if not set (default to latest round)
   useEffect(() => {
     if (!storedRound && rounds.length > 0) {
-      setSelectedRound(tournament.id, rounds[0])
+      setSelectedRound(tournament.id, latestRound)
     }
-  }, [tournament.id, storedRound, rounds, setSelectedRound])
+  }, [tournament.id, storedRound, rounds, latestRound, setSelectedRound])
 
   // Check if a match is a bye (same player on both sides)
   const isBye = (match: any) => {
@@ -60,10 +83,11 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
 
   // Check if current user is in a match
   const isPlayerInMatch = (match: any) => {
-    return currentUser && (
-      match.player1?.id === currentUser.id || 
-      match.player2?.id === currentUser.id
-    )
+    if (!currentUser) return false
+    // Check user IDs, not player IDs
+    const player1UserId = match.player1?.user?.id
+    const player2UserId = match.player2?.user?.id
+    return player1UserId === currentUser.id || player2UserId === currentUser.id
   }
 
   // Handle match click
@@ -83,8 +107,8 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
   const getMatchStatusColor = (status: string) => {
     switch (status) {
       case 'COMPLETED': return 'success'
-      case 'IN_PROGRESS': return 'warning'
-      case 'PENDING': return 'outline'
+      case 'IN_PROGRESS': return 'outline' // Waiting for confirmation - shown as "PENDING"
+      case 'PENDING': return 'success' // Match ready - shown as "Live" (green)
       default: return 'outline'
     }
   }
@@ -117,70 +141,50 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
     <Card className="dark:bg-muted dark:text-foreground border-border">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle>Tournament Bracket</CardTitle>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Maximize2 className="h-4 w-4" />
-          </Button>
-        </div>
+        <Badge variant="outline">
+          {currentRoundMatches.length} matches
+        </Badge>
       </CardHeader>
       <CardContent>
-        {/* Round Navigation */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={currentRound <= 1}
-              onClick={() => {
-                const currentIndex = rounds.indexOf(currentRound)
-                if (currentIndex > 0) {
-                  setSelectedRound(tournament.id, rounds[currentIndex - 1])
-                }
-              }}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            
-            <div className="flex gap-1">
+        {/* Round Navigation - horizontally scrollable like tabs */}
+        <div className="mb-6 -mx-4 px-4">
+          <div className="overflow-x-auto no-scrollbar">
+            <div className="inline-flex gap-2 min-w-max">
               {rounds.map((round) => (
                 <Button
                   key={round}
                   variant={round === currentRound ? "default" : "outline"}
                   size="sm"
-                  className="min-w-fit"
+                  className="whitespace-nowrap"
                   onClick={() => setSelectedRound(tournament.id, round)}
                 >
                   Round {round}
                 </Button>
               ))}
             </div>
-            
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={currentRound >= rounds.length}
-              onClick={() => {
-                const currentIndex = rounds.indexOf(currentRound)
-                if (currentIndex < rounds.length - 1) {
-                  setSelectedRound(tournament.id, rounds[currentIndex + 1])
-                }
-              }}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
           </div>
-          
-          <Badge variant="outline">
-            {currentRoundMatches.length} matches
-          </Badge>
         </div>
 
-        {/* Matches Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
-          {currentRoundMatches.map((match) => {
+        {/* Matches Grid with multi-modal style transitions */}
+        <div
+          className={cn(
+            "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto overflow-x-hidden",
+            slideDirection === 'left' && 'animate-slide-left',
+            slideDirection === 'right' && 'animate-slide-right'
+          )}
+          key={currentRound}
+        >
+          {currentRoundMatches.map((match, index) => {
             const matchIsBye = isBye(match)
             const canInteract = !matchIsBye && (canManage || isPlayerInMatch(match))
             const isCompleted = match.status === 'COMPLETED'
+            // Show friendly match number for non-admins, ID for admins/organizers
+            // Prefer table number if available, otherwise use index-based numbering
+            const matchLabel = canManage 
+              ? `Match ${match.id.slice(0, 8)}...` 
+              : match.table 
+                ? `Match ${match.table}` 
+                : `Match ${index + 1}`
             
             return (
               <Card 
@@ -190,12 +194,16 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
                 } ${
                   canInteract && !isCompleted ? 'cursor-pointer hover:border-primary transition-colors' : ''
                 }`}
-                onClick={() => canInteract && handleMatchClick(match)}
+                onClick={() => {
+                  if (canInteract && !isCompleted) {
+                    handleMatchClick(match)
+                  }
+                }}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">Match {match.id}</span>
+                      <span className="font-medium text-sm">{matchLabel}</span>
                       {matchIsBye && (
                         <Badge variant="secondary" className="text-xs">BYE</Badge>
                       )}
@@ -207,7 +215,7 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
                       variant={getMatchStatusColor(match.status) as any}
                       className="text-xs"
                     >
-                      {match.status === 'IN_PROGRESS' ? 'Live' : match.status}
+                      {match.status === 'PENDING' ? 'Live' : match.status === 'IN_PROGRESS' ? 'PENDING' : match.status}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -265,6 +273,7 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
           setSelectedMatch(null)
         }}
         title="Submit Match Result"
+        size="sm"
       >
         {selectedMatch && (
           <MatchSubmissionForm
@@ -275,6 +284,10 @@ export function TournamentBrackets({ tournament, canManage = false, currentUser 
               setSelectedMatch(null)
               // Trigger refetch in parent component
               window.location.reload()
+            }}
+            onCancel={() => {
+              setShowSubmissionModal(false)
+              setSelectedMatch(null)
             }}
           />
         )}

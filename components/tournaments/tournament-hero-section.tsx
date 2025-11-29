@@ -2,12 +2,9 @@
 
 import { useEffect, useMemo } from 'react'
 import {
-  Trophy,
   UserPlus,
   UserMinus,
   Settings,
-  Share2,
-  Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -84,7 +81,7 @@ export function TournamentHeroSection({
   // Computed registration status - use store state (primary), fallback to prop
   const effectiveIsRegistered = storeRegistrationStatus?.isRegistered ?? isRegistered
 
-  // Withdraw mutation
+  // Withdraw mutation (for upcoming tournaments)
   const withdrawMutation = trpc.tournaments.unregister.useMutation({
     onSuccess: () => {
       setInteraction('isWithdrawing', false)
@@ -109,6 +106,33 @@ export function TournamentHeroSection({
       setInteraction('isWithdrawing', false)
       setInteraction('withdrawSuccess', false)
       // Error will be displayed in the modal via error prop
+    },
+  })
+
+  // Drop mutation (for active tournaments)
+  const dropMutation = trpc.tournamentLifecycle.dropPlayer.useMutation({
+    onSuccess: () => {
+      setInteraction('isWithdrawing', false)
+      setInteraction('withdrawSuccess', true)
+
+      // For active tournaments, player cannot re-register after dropping
+      setRegistrationStatus(tournament.id, {
+        isRegistered: false,
+        canRegister: false,
+        canWithdraw: false,
+        isFull: false,
+        participantCount: safeTournament.participants?.length || 0,
+        maxPlayers: tournament.maxPlayers || undefined,
+      })
+      invalidateTournament(tournament.id)
+
+      // Invalidate tRPC queries to trigger refetch
+      utils.tournaments.getRegistrationStatus.invalidate({ tournamentId: tournament.id })
+      utils.tournaments.getById.invalidate({ id: tournament.id })
+    },
+    onError: () => {
+      setInteraction('isWithdrawing', false)
+      setInteraction('withdrawSuccess', false)
     },
   })
 
@@ -146,10 +170,31 @@ export function TournamentHeroSection({
     }
     
     if (effectiveIsRegistered) {
-      handleWithdraw()
+      // If tournament is active, this should behave as a "Drop" action
+      if (tournament.status === 'ACTIVE') {
+        handleDrop()
+      } else {
+        handleWithdraw()
+      }
     } else {
       registrationModal.open({ tournamentId: tournament.id })
     }
+  }
+
+  const handleDrop = () => {
+    confirmationModal.openWithdraw({
+      title: "Are you sure you want to drop?",
+      message:
+        "This will:\n\n" +
+        "• Remove you from future pairings\n\n" +
+        "• Forfeit any pending matches\n\n" +
+        "• Update tournament standings\n\n\n" +
+        "This action cannot be undone.",
+      confirmLabel: "Drop",
+      cancelLabel: "Cancel",
+      variant: "destructive",
+      onConfirm: confirmDrop,
+    })
   }
 
   const handleWithdraw = () => {
@@ -174,6 +219,18 @@ export function TournamentHeroSection({
     }
   }
 
+  const confirmDrop = async () => {
+    setInteraction('isWithdrawing', true)
+    try {
+      // playerId is optional in the backend; omitting it will drop the current user
+      await dropMutation.mutateAsync({
+        tournamentId: tournament.id,
+      } as any)
+    } catch {
+      // Error handling is handled in the mutation's onError callback
+    }
+  }
+
 
   const handleManagementSuccess = () => {
     managementModal.close()
@@ -186,7 +243,6 @@ export function TournamentHeroSection({
   }
 
   const isActive = tournament.status === 'ACTIVE'
-  const isCompleted = tournament.status === 'COMPLETED'
   const participantsCount = safeTournament.participantCount ?? safeTournament.participants?.length ?? 0
 
   const registrationState = useMemo(
@@ -227,23 +283,34 @@ export function TournamentHeroSection({
       <div className="mb-8">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-6">
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              {getLevelBadge()}
-            </div>
-
             <h1 className="text-4xl font-bold text-foreground mb-2 font-heading">
               {tournament.name}
             </h1>
-            <p className="text-xl text-muted-foreground mb-4">
-              {tournament.game.name}
-            </p>
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <p className="text-xl text-muted-foreground">
+                {tournament.game.name}
+              </p>
+              <div className="flex items-center gap-2">
+                {getLevelBadge()}
+                {tournament.format && (
+                  <Badge
+                    variant="outline"
+                    className="dark:bg-accent dark:text-white dark:border-transparent text-xs"
+                  >
+                    {tournament.format.charAt(0).toUpperCase() +
+                      tournament.format.slice(1).toLowerCase()}
+                  </Badge>
+                )}
+                {isActive && (
+                  <Badge variant="success" className="text-xs">
+                    ACTIVE
+                  </Badge>
+                )}
+              </div>
+            </div>
 
             {isActive && (
               <div className="flex items-center gap-4 mb-4">
-                <div className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-primary" />
-                  <span className="font-medium">Tournament in Progress</span>
-                </div>
                 <div className="flex-1 max-w-xs">
                   <Progress value={75} className="h-2" />
                   <span className="text-xs text-muted-foreground">75% Complete</span>
@@ -264,12 +331,12 @@ export function TournamentHeroSection({
                   {isWithdrawing ? (
                     <>
                       <div className="w-4 h-4 border-2 border-destructive-foreground border-t-transparent rounded-full animate-spin mr-2" />
-                      Withdrawing...
+                      {tournament.status === 'ACTIVE' ? 'Dropping...' : 'Withdrawing...'}
                     </>
                   ) : effectiveIsRegistered ? (
                     <>
                       <UserMinus className="h-4 w-4 mr-2" />
-                      Withdraw
+                      {tournament.status === 'ACTIVE' ? 'Drop' : 'Withdraw'}
                     </>
                   ) : registrationState.isLateRegistration ? (
                     <>
@@ -307,14 +374,6 @@ export function TournamentHeroSection({
               </Button>
             )}
 
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <Share2 className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </div>
       </div>
@@ -327,7 +386,7 @@ export function TournamentHeroSection({
 
       {/* Management Modal */}
       <TournamentManagement
-        isOpen={managementModal.isOpen && isOrganizer}
+        isOpen={managementModal.isOpen && canManage}
         onClose={managementModal.close}
         tournament={tournament}
         onUpdate={handleManagementSuccess}
@@ -354,7 +413,24 @@ export function TournamentHeroSection({
         error={withdrawMutation.error?.message}
         success={withdrawSuccess ? "Successfully withdrew from tournament!" : undefined}
         autoCloseDelay={withdrawSuccess ? 3 : 0}
-      />
+      >
+        {confirmationModal.config?.title === 'Are you sure you want to drop?' ? (
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <div>
+              <p className="mb-1">This will:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Remove you from future pairings</li>
+                <li>Forfeit any pending matches</li>
+                <li>Update tournament standings</li>
+              </ul>
+            </div>
+
+            <p className="font-medium text-foreground text-center">
+              This action cannot be undone.
+            </p>
+          </div>
+        ) : undefined}
+      </ConfirmationModal>
     </>
   )
 }

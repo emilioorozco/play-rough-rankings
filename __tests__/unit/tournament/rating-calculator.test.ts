@@ -21,7 +21,7 @@ describe('RatingCalculator', () => {
   })
 
   describe('calculateProjectedRatings', () => {
-    it('should calculate projected ratings for all tournament participants', async () => {
+    it('should calculate projected ratings for all tournament participants with completed matches', async () => {
       const tournamentId = 'tournament-123'
       const gameId = 'game-123'
 
@@ -59,8 +59,20 @@ describe('RatingCalculator', () => {
         },
       ])
 
-      // Mock completed matches - no matches yet for initial test
-      mockPrisma.match.findMany.mockResolvedValue([])
+      // Mock completed matches - player-1 vs player-2
+      mockPrisma.match.findMany.mockResolvedValue([
+        {
+          player1Id: 'player-1',
+          player2Id: 'player-2',
+          winnerId: 'player-1',
+          player1: {
+            gameStats: [{ currentRating: 1200, seasonalStats: { totalGames: 10 } }],
+          },
+          player2: {
+            gameStats: [{ currentRating: 1300, seasonalStats: { totalGames: 15 } }],
+          },
+        },
+      ])
 
       const result = await ratingCalculator.calculateProjectedRatings(tournamentId)
 
@@ -172,7 +184,7 @@ describe('RatingCalculator', () => {
       expect(result[0].matchesConsidered).toBe(5)
     })
 
-    it('should skip players without game stats', async () => {
+    it('should skip players without completed matches', async () => {
       const tournamentId = 'tournament-123'
       const gameId = 'game-123'
 
@@ -187,7 +199,12 @@ describe('RatingCalculator', () => {
         {
           playerId: 'player-1',
           player: {
-            gameStats: [], // No stats
+            gameStats: [
+              {
+                currentRating: 1200,
+                seasonalStats: { totalGames: 10 },
+              },
+            ],
           },
         },
         {
@@ -203,11 +220,24 @@ describe('RatingCalculator', () => {
         },
       ])
 
-      mockPrisma.match.findMany.mockResolvedValue([])
+      // Only player-2 has completed a match
+      mockPrisma.match.findMany.mockResolvedValue([
+        {
+          player1Id: 'player-2',
+          player2Id: 'player-3',
+          winnerId: 'player-2',
+          player1: {
+            gameStats: [{ currentRating: 1300, seasonalStats: { totalGames: 15 } }],
+          },
+          player2: {
+            gameStats: [{ currentRating: 1250, seasonalStats: { totalGames: 12 } }],
+          },
+        },
+      ])
 
       const result = await ratingCalculator.calculateProjectedRatings(tournamentId)
 
-      // Should only include player-2
+      // Should only include player-2 (has completed matches)
       expect(result).toHaveLength(1)
       expect(result[0].playerId).toBe('player-2')
     })
@@ -251,7 +281,7 @@ describe('RatingCalculator', () => {
   })
 
   describe('applyRatingChanges', () => {
-    it('should apply rating changes to all players', async () => {
+    it('should apply rating changes to all players with completed matches', async () => {
       const tournamentId = 'tournament-123'
       const gameId = 'game-123'
 
@@ -279,7 +309,20 @@ describe('RatingCalculator', () => {
         },
       ])
 
-      mockPrisma.match.findMany.mockResolvedValue([])
+      // Add a completed match for player-1
+      mockPrisma.match.findMany.mockResolvedValue([
+        {
+          player1Id: 'player-1',
+          player2Id: 'player-2',
+          winnerId: 'player-1',
+          player1: {
+            gameStats: [{ currentRating: 1200, seasonalStats: { totalGames: 10 } }],
+          },
+          player2: {
+            gameStats: [{ currentRating: 1300, seasonalStats: { totalGames: 15 } }],
+          },
+        },
+      ])
 
       // Mock transaction
       mockPrisma.$transaction.mockImplementation(async (callback: any) => {

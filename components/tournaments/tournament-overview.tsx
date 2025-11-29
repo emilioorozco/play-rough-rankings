@@ -1,16 +1,14 @@
 'use client'
 
-import { Eye } from 'lucide-react'
+import { Calendar, MapPin, Users, DollarSign, Eye } from 'lucide-react'
 import { StatusMessage } from '@/components/ui/status-message'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { ProjectedRatingsDisplay } from '@/components/tournaments/projected-ratings-display'
 import { getDisplayName, getDisplayInitials } from '@/lib/utils/name-display'
 import type { ApiTournament } from '@/lib/types/api'
+import { formatDate, formatDateTime } from '@/lib/utils/date-formatting'
 import { getTournamentRegistrationState } from '@/lib/utils/registration-state'
 
 interface TournamentOverviewProps {
@@ -44,7 +42,7 @@ export function TournamentOverview({
 }: TournamentOverviewProps) {
   const participantCount = tournament.participants?.length || 0
   const maxParticipants = tournament.maxPlayers || 0
-  const registrationProgress = maxParticipants > 0 ? (participantCount / maxParticipants) * 100 : 0
+  const tournamentDate = new Date(tournament.date)
   const registrationState = getTournamentRegistrationState({
     status: tournament.status,
     tournamentStructure: tournament.tournamentStructure,
@@ -76,10 +74,60 @@ export function TournamentOverview({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
-        {/* Tournament Description */}
+        {/* Tournament Description + Quick Facts */}
         <Card className="dark:bg-muted dark:text-foreground">
           <CardHeader>
-            <CardTitle className="text-primary">Tournament Description</CardTitle>
+            <CardTitle className="text-primary">Tournament Details</CardTitle>
+            <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-muted-foreground">
+              <div className="flex items-start gap-2">
+                <Calendar className="h-4 w-4 mt-1" />
+                <div>
+                  <p className="font-medium text-card-foreground">
+                    {formatDate(tournamentDate)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDateTime(tournamentDate)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 mt-1" />
+                <div>
+                  <p className="font-medium text-card-foreground">
+                    {tournament.store?.name}
+                  </p>
+                  {tournament.store?.city && tournament.store?.state && (
+                    <p className="text-xs text-muted-foreground">
+                      {tournament.store.city}, {tournament.store.state}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Users className="h-4 w-4 mt-1" />
+                <div>
+                  <p className="font-medium text-card-foreground">
+                    {participantCount}/{maxParticipants || '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {registrationState.label}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <DollarSign className="h-4 w-4 mt-1" />
+                <div>
+                  <p className="font-medium text-card-foreground">
+                    {typeof tournament.prizePool === 'number'
+                      ? `$${tournament.prizePool}`
+                      : '$0'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Prize Pool
+                  </p>
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground dark:text-foreground leading-relaxed whitespace-pre-wrap">
@@ -87,11 +135,6 @@ export function TournamentOverview({
             </p>
           </CardContent>
         </Card>
-
-        {/* Projected Ratings - Show for active tournaments */}
-        {(tournament.status === 'ACTIVE' || tournament.status === 'COMPLETED') && (
-          <ProjectedRatingsDisplay tournamentId={tournament.id} />
-        )}
 
         {/* Rules & Format */}
         <Card className="dark:bg-muted dark:text-foreground">
@@ -101,9 +144,9 @@ export function TournamentOverview({
           <CardContent className="space-y-4">
             <div>
               <h4 className="font-medium mb-2 dark:text-foreground">Tournament Format</h4>
-              <Badge variant="outline" className="dark:bg-accent dark:text-white dark:border-transparent">
+              <p className="text-sm text-muted-foreground dark:text-foreground">
                 {tournament.format}
-              </Badge>
+              </p>
             </div>
             
             <Separator />
@@ -146,34 +189,6 @@ export function TournamentOverview({
               <Eye className="h-4 w-4 mr-2" />
               View Profile
             </Button>
-          </CardContent>
-        </Card>
-
-        {/* Registration Status */}
-        <Card className="dark:bg-muted dark:text-foreground">
-          <CardHeader>
-            <CardTitle className="text-primary">Registration Status</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Participants</span>
-              <span className="font-medium dark:text-foreground">
-                {participantCount}/{maxParticipants}
-              </span>
-            </div>
-            <Progress 
-              value={registrationProgress} 
-              className="h-2"
-            />
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>Registration Status:</p>
-              <p className="font-medium dark:text-foreground">
-                {registrationState.label}
-              </p>
-              {registrationState.reason && (
-                <p>{registrationState.reason}</p>
-              )}
-            </div>
           </CardContent>
         </Card>
       </div>

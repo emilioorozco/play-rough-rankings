@@ -235,6 +235,18 @@
   *:focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2;
   }
+
+  /* Hide number input spinners for all browsers */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Firefox */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
 }
 
 /* Component styles */

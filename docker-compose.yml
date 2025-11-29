@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: play-rough-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: play_rough_rankings
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persist data between container restarts
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+
