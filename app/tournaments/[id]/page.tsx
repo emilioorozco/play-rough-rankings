@@ -13,8 +13,8 @@ import { TournamentHeroSection } from '@/components/tournaments/tournament-hero-
 import { TournamentTabs } from '@/components/tournaments/tournament-tabs'
 import { TournamentManagementPanel } from '@/components/tournaments/tournament-management-panel'
 import { LiveTournamentIndicator } from '@/components/tournaments/live-tournament-indicator'
-import { useTournamentStore } from '@/stores/tournament-store'
 import { useTab } from '@/stores/ui-store'
+import type { ApiTournament } from '@/lib/types/api'
 import { usePermissions } from '@/stores/auth-store'
 import {
   useTournamentRealtime,
@@ -68,61 +68,23 @@ export default function TournamentDetailsPage() {
     { enabled: !!user && !isAuthLoading }
   )
 
-  // Get tournament store state and actions separately (stable selectors)
-  const storeTournament = useTournamentStore(state => state.currentTournament)
-  const setCurrentTournament = useTournamentStore(state => state.setCurrentTournament)
-  const setCurrentTournamentId = useTournamentStore(state => state.setCurrentTournamentId)
+  const isRegistered = Boolean(registrationStatusQuery.data?.isRegistered)
 
-  // Get registration status from tournament store (primary) and tRPC query (fallback)
-  const storeRegistrationStatus = useTournamentStore(state => 
-    state.getRegistrationStatus(tournamentId)
-  )
-  const setRegistrationStatus = useTournamentStore(state => state.setRegistrationStatus)
-  const isRegistered = storeRegistrationStatus?.isRegistered ?? registrationStatusQuery.data?.isRegistered ?? false
+  const tournamentData = tournamentQuery.data as ApiTournament | undefined
+  const safeTournament: ApiTournament | null = tournamentData
+    ? {
+        ...tournamentData,
+        participants: tournamentData.participants ?? [],
+        matches: tournamentData.matches ?? [],
+      }
+    : null
 
-  // Sync tournament data when query completes
-  // Extract IDs to avoid deep type instantiation from tRPC query data
-  const queryTournamentId = tournamentQuery.data?.id
-  const storeTournamentId = storeTournament?.id
-  
-  React.useEffect(() => {
-    const data = tournamentQuery.data
-    if (data && queryTournamentId !== storeTournamentId) {
-      setCurrentTournament(data as any)
-      setCurrentTournamentId(tournamentId)
+  const refetchTournamentDetail = React.useCallback(() => {
+    void tournamentQuery.refetch()
+    if (user) {
+      void registrationStatusQuery.refetch()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryTournamentId, storeTournamentId, tournamentId, setCurrentTournament, setCurrentTournamentId])
-
-  // Sync registration status when query completes
-  const hasRegistrationData = !!registrationStatusQuery.data
-  const hasStoredStatus = !!storeRegistrationStatus
-  
-  React.useEffect(() => {
-    const data = registrationStatusQuery.data
-    if (hasRegistrationData && !hasStoredStatus && data) {
-      setRegistrationStatus(tournamentId, {
-        isRegistered: !!data.isRegistered,
-        canRegister: !!data.canRegister,
-        canWithdraw: false,
-        isFull: false,
-        participantCount: 0,
-        maxPlayers: undefined,
-        registrationDeadline: undefined,
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasRegistrationData, hasStoredStatus, tournamentId, setRegistrationStatus])
-
-  // Use TRPC data as primary source, fallback to store (avoid deep type instantiation at union)
-  const tournament = (tournamentQuery.data as any) ?? storeTournament
-  
-  // Ensure tournament has required properties to prevent undefined errors
-  const safeTournament = tournament ? {
-    ...(tournament as any),
-    participants: (tournament as any).participants || [],
-    matches: (tournament as any).matches || [],
-  } : null
+  }, [tournamentQuery, registrationStatusQuery, user])
   const isTournamentLoading = tournamentQuery.isLoading
   const tournamentError = tournamentQuery.error?.message
   const isRegistrationLoading =
@@ -137,8 +99,11 @@ export default function TournamentDetailsPage() {
     { enabled: !!user }
   )
 
-  // Use user preferences data for rendering
-  const userPreferencesData = userPreferencesQuery.data
+  const userPreferencesData = userPreferencesQuery.data as
+    | {
+        nameDisplayPreference: 'FIRST_NAME' | 'FIRST_LAST_NAME' | 'DISPLAY_NAME' | 'OPT_OUT'
+      }
+    | undefined
 
   // Set default tab if none is selected
   React.useEffect(() => {
@@ -325,39 +290,33 @@ export default function TournamentDetailsPage() {
 
         {/* Hero Section */}
         <TournamentHeroSection
-          tournament={safeTournament as any}
+          tournament={safeTournament}
           isOrganizer={isOrganizer}
           canManage={canManage}
           isRegistered={isRegistered}
           currentUser={user}
+          onRegistrationChange={refetchTournamentDetail}
         />
 
         {/* Management Panel - Only visible to organizers and admins */}
         {canManage && (
           <div className="mb-6">
             <TournamentManagementPanel
-              tournament={safeTournament as any}
-              onUpdate={() => {
-                tournamentQuery.refetch()
-              }}
+              tournament={safeTournament}
+              onUpdate={refetchTournamentDetail}
             />
           </div>
         )}
 
         {/* Tabs */}
         <TournamentTabs
-          tournament={safeTournament as any}
+          tournament={safeTournament}
           isOrganizer={isOrganizer}
           isRegistered={isRegistered}
           currentUser={user}
-          userPreferences={userPreferencesData as any}
+          userPreferences={userPreferencesData}
           canManage={canManage}
-          onUpdate={() => {
-            tournamentQuery.refetch()
-            if (user) {
-              registrationStatusQuery.refetch()
-            }
-          }}
+          onUpdate={refetchTournamentDetail}
         />
       </div>
     </div>
