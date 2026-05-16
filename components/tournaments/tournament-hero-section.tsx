@@ -338,6 +338,11 @@ export function TournamentHeroSection({
                       <UserMinus className="h-4 w-4 mr-2" />
                       {tournament.status === 'ACTIVE' ? 'Drop' : 'Withdraw'}
                     </>
+                  ) : !currentUser && registrationState.canRegister ? (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Sign in to Register
+                    </>
                   ) : registrationState.isLateRegistration ? (
                     <>
                       <UserPlus className="h-4 w-4 mr-2" />

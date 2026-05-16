@@ -38,7 +38,7 @@ const getStatusVariant = (status: string) => {
 export default function TournamentDetailsPage() {
   const params = useParams()
   const router = useRouter()
-  const { user } = useSession()
+  const { user, isLoading: isAuthLoading } = useSession()
   const { toast } = useToast()
   const tournamentId = params.id as string
   const { canManageTournament } = usePermissions()
@@ -62,10 +62,10 @@ export default function TournamentDetailsPage() {
     }
   )
 
-  // Fetch registration status with TRPC
+  // Registration status is user-specific; only fetch when session is resolved and authenticated
   const registrationStatusQuery = trpc.tournaments.getRegistrationStatus.useQuery(
     { tournamentId },
-    { enabled: !!user }
+    { enabled: !!user && !isAuthLoading }
   )
 
   // Get tournament store state and actions separately (stable selectors)
@@ -125,8 +125,8 @@ export default function TournamentDetailsPage() {
   } : null
   const isTournamentLoading = tournamentQuery.isLoading
   const tournamentError = tournamentQuery.error?.message
-  const isRegistrationLoading = registrationStatusQuery.isLoading
-  const registrationError = registrationStatusQuery.error?.message
+  const isRegistrationLoading =
+    !!user && !isAuthLoading && registrationStatusQuery.isLoading
 
   // Use UI Store for active tab
   const { activeTab, setActiveTab } = useTab('tournamentDetails')
@@ -215,7 +215,7 @@ export default function TournamentDetailsPage() {
     )
   }
 
-  if (tournamentError || registrationError) {
+  if (tournamentError) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 pt-2 pb-6">
@@ -238,11 +238,10 @@ export default function TournamentDetailsPage() {
                   Error Loading Tournament
                 </h2>
                 <p className="text-muted-foreground mb-4">
-                  {tournamentError || registrationError}
+                  {tournamentError}
                 </p>
                 <Button onClick={() => {
                   tournamentQuery.refetch()
-                  registrationStatusQuery.refetch()
                 }}>
                   Try Again
                 </Button>
@@ -355,7 +354,9 @@ export default function TournamentDetailsPage() {
           canManage={canManage}
           onUpdate={() => {
             tournamentQuery.refetch()
-            registrationStatusQuery.refetch()
+            if (user) {
+              registrationStatusQuery.refetch()
+            }
           }}
         />
       </div>
