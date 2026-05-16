@@ -20,7 +20,6 @@ import {
   useConfirmationModal, 
   useInteractions 
 } from '@/stores/ui-store'
-import { useTournamentStore } from '@/stores/tournament-store'
 import { getTournamentRegistrationState } from '@/lib/utils/registration-state'
 
 interface TournamentHeroSectionProps {
@@ -28,6 +27,7 @@ interface TournamentHeroSectionProps {
   isOrganizer: boolean
   canManage: boolean
   isRegistered: boolean
+  onRegistrationChange?: () => void
   currentUser?: {
     id: string
     role: string
@@ -43,6 +43,7 @@ export function TournamentHeroSection({
   isOrganizer,
   canManage,
   isRegistered,
+  onRegistrationChange,
   currentUser,
 }: TournamentHeroSectionProps) {
   // Ensure tournament has required properties to prevent undefined errors
@@ -67,40 +68,20 @@ export function TournamentHeroSection({
   } = useInteractions()
   
 
-  // Use Tournament Store for state management
-  const { setRegistrationStatus, invalidateTournament } = useTournamentStore()
-  
-  // Get registration status from tournament store
-  const storeRegistrationStatus = useTournamentStore(state => 
-    state.getRegistrationStatus(tournament.id)
-  )
-  
-  // Get tRPC utils for query invalidation
   const utils = trpc.useUtils()
-  
-  // Computed registration status - use store state (primary), fallback to prop
-  const effectiveIsRegistered = storeRegistrationStatus?.isRegistered ?? isRegistered
+
+  const invalidateRegistrationQueries = () => {
+    void utils.tournaments.getRegistrationStatus.invalidate({ tournamentId: tournament.id })
+    void utils.tournaments.getById.invalidate({ id: tournament.id })
+    onRegistrationChange?.()
+  }
 
   // Withdraw mutation (for upcoming tournaments)
   const withdrawMutation = trpc.tournaments.unregister.useMutation({
     onSuccess: () => {
       setInteraction('isWithdrawing', false)
       setInteraction('withdrawSuccess', true)
-      
-      // Update tournament store state
-      setRegistrationStatus(tournament.id, {
-        isRegistered: false,
-        canRegister: true,
-        canWithdraw: false,
-        isFull: false,
-        participantCount: safeTournament.participants?.length || 0,
-        maxPlayers: tournament.maxPlayers || undefined,
-      })
-      invalidateTournament(tournament.id)
-      
-      // Invalidate tRPC queries to trigger refetch
-      utils.tournaments.getRegistrationStatus.invalidate({ tournamentId: tournament.id })
-      utils.tournaments.getById.invalidate({ id: tournament.id })
+      invalidateRegistrationQueries()
     },
     onError: () => {
       setInteraction('isWithdrawing', false)
@@ -115,20 +96,7 @@ export function TournamentHeroSection({
       setInteraction('isWithdrawing', false)
       setInteraction('withdrawSuccess', true)
 
-      // For active tournaments, player cannot re-register after dropping
-      setRegistrationStatus(tournament.id, {
-        isRegistered: false,
-        canRegister: false,
-        canWithdraw: false,
-        isFull: false,
-        participantCount: safeTournament.participants?.length || 0,
-        maxPlayers: tournament.maxPlayers || undefined,
-      })
-      invalidateTournament(tournament.id)
-
-      // Invalidate tRPC queries to trigger refetch
-      utils.tournaments.getRegistrationStatus.invalidate({ tournamentId: tournament.id })
-      utils.tournaments.getById.invalidate({ id: tournament.id })
+      invalidateRegistrationQueries()
     },
     onError: () => {
       setInteraction('isWithdrawing', false)
@@ -169,7 +137,7 @@ export function TournamentHeroSection({
       return
     }
     
-    if (effectiveIsRegistered) {
+    if (isRegistered) {
       // If tournament is active, this should behave as a "Drop" action
       if (tournament.status === 'ACTIVE') {
         handleDrop()
@@ -234,8 +202,8 @@ export function TournamentHeroSection({
 
   const handleManagementSuccess = () => {
     managementModal.close()
-    // Invalidate tournament data to refresh
-    invalidateTournament(tournament.id)
+    void utils.tournaments.getById.invalidate({ id: tournament.id })
+    onRegistrationChange?.()
   }
 
   const handleLoginSuccess = () => {
@@ -273,10 +241,10 @@ export function TournamentHeroSection({
     !isOrganizer &&
     tournament.status !== 'CANCELLED' &&
     tournament.status !== 'COMPLETED' &&
-    (registrationState.canRegister || effectiveIsRegistered)
+    (registrationState.canRegister || isRegistered)
 
   const isRegistrationButtonDisabled =
-    isWithdrawing || (!effectiveIsRegistered && !registrationState.canRegister)
+    isWithdrawing || (!isRegistered && !registrationState.canRegister)
 
   return (
     <>
@@ -324,8 +292,8 @@ export function TournamentHeroSection({
               <div className="flex flex-col gap-2">
                 <Button
                   onClick={handleRegistration}
-                  className={effectiveIsRegistered ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : ''}
-                  variant={effectiveIsRegistered ? 'destructive' : 'default'}
+                  className={isRegistered ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : ''}
+                  variant={isRegistered ? 'destructive' : 'default'}
                   disabled={isRegistrationButtonDisabled}
                 >
                   {isWithdrawing ? (
@@ -333,7 +301,7 @@ export function TournamentHeroSection({
                       <div className="w-4 h-4 border-2 border-destructive-foreground border-t-transparent rounded-full animate-spin mr-2" />
                       {tournament.status === 'ACTIVE' ? 'Dropping...' : 'Withdrawing...'}
                     </>
-                  ) : effectiveIsRegistered ? (
+                  ) : isRegistered ? (
                     <>
                       <UserMinus className="h-4 w-4 mr-2" />
                       {tournament.status === 'ACTIVE' ? 'Drop' : 'Withdraw'}
@@ -360,7 +328,7 @@ export function TournamentHeroSection({
                     </>
                   )}
                 </Button>
-                {!effectiveIsRegistered && !registrationState.canRegister && registrationState.reason && (
+                {!isRegistered && !registrationState.canRegister && registrationState.reason && (
                   <p className="text-xs text-muted-foreground text-center">
                     {registrationState.reason}
                   </p>
@@ -387,6 +355,7 @@ export function TournamentHeroSection({
       <TournamentRegistration
         tournamentId={tournament.id}
         currentUser={currentUser}
+        onRegisterSuccess={onRegistrationChange}
       />
 
       {/* Management Modal */}
