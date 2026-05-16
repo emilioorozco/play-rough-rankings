@@ -174,7 +174,7 @@ export function useTournamentQuery(tournamentId: string, enabled = true): {
 /**
  * Hook for tournament registration status
  */
-export function useTournamentRegistrationQuery(tournamentId: string, enabled = true) {
+export function useTournamentRegistrationQuery(tournamentId: string, enabled = false) {
   const registrationStatus = useTournamentStore((state) => 
     state.registrationStatusCache[tournamentId]
   )
