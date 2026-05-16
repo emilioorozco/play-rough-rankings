@@ -13,7 +13,8 @@ export const loginSchema = z.object({
   rememberMe: z.boolean().optional(),
 })
 
-export const registerSchema = z.object({
+/** Plain object shape — use for `.pick()` step schemas (Zod 4 forbids `.pick()` after object `.refine()`). */
+export const registerFormBaseSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   confirmPassword: z.string(),
@@ -24,9 +25,36 @@ export const registerSchema = z.object({
   subscribeToUpdates: z.boolean().optional(),
   nameDisplayPreference: z.enum(['FIRST_NAME', 'FIRST_LAST_NAME', 'DISPLAY_NAME', 'OPT_OUT']).optional(),
   optInCommunications: z.boolean().optional(),
-}).refine(data => data.password === data.confirmPassword, {
+})
+
+export const registerSchema = registerFormBaseSchema.refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
+})
+
+/** Sign-up wizard steps — derived from `registerFormBaseSchema` only (never from `registerSchema`). */
+export const registerStepPersonalInfoSchema = registerFormBaseSchema.pick({
+  username: true,
+  firstName: true,
+  lastName: true,
+})
+
+export const registerStepAccountInfoSchema = registerFormBaseSchema
+  .pick({
+    email: true,
+    password: true,
+    confirmPassword: true,
+  })
+  .refine(data => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  })
+
+export const registerStepPreferencesSchema = registerFormBaseSchema.pick({
+  agreeToTerms: true,
+  subscribeToUpdates: true,
+  nameDisplayPreference: true,
+  optInCommunications: true,
 })
 
 export const profileUpdateSchema = z.object({

@@ -50,7 +50,10 @@ export function TournamentRegistration({
   const { setError, clearError } = useError('tournament-registration')
   
   // Get registration status and refetch function
-  const { refetch: refetchRegistration } = useTournamentRegistrationQuery(tournamentId)
+  const { refetch: refetchRegistration } = useTournamentRegistrationQuery(
+    tournamentId,
+    !!currentUser
+  )
   
   // Registration mutation using direct tRPC with type casting to avoid deep type instantiation
   const registerMutation = trpc.tournaments.register.useMutation({

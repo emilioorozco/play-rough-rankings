@@ -4,12 +4,16 @@ import { useEffect, useCallback, useRef } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { useQueryClient } from '@tanstack/react-query'
 
+/** Single canonical interval for live tournament detail polling (see PLA-17). */
+export const TOURNAMENT_LIVE_POLL_MS = 30_000
+
 type MatchWithStatus = {
   id: string
   status: string
 }
 
 type TournamentWithLiveFlag = {
+  status?: string
   isLive?: boolean | null
 }
 
@@ -25,83 +29,82 @@ function hasLiveFlag(value: unknown): value is TournamentWithLiveFlag {
   return typeof value === 'object' && value !== null && 'isLive' in value
 }
 
-/**
- * Hook for real-time tournament updates using polling
- * Provides automatic refetching of tournament data when changes occur
- */
-export function useTournamentRealtime(tournamentId: string | null, options?: {
+/** Whether the LIVE stream badge should show (matches prior hook semantics). */
+export function getTournamentLiveBadgeVisible(tournament: unknown): boolean {
+  if (!hasLiveFlag(tournament)) return false
+  return tournament.status === 'ACTIVE' && Boolean(tournament.isLive)
+}
+
+export type UseTournamentRealtimeOptions = {
+  /** Tournament payload from the owning `getById` query (single cache key). */
+  tournament: unknown | null | undefined
+  /** Refetch from the same owning query (e.g. `tournamentQuery.refetch`). */
+  refetch: () => Promise<unknown>
   enabled?: boolean
-  pollingInterval?: number
   onMatchUpdate?: () => void
   onRoundAdvance?: () => void
   onStatusChange?: (newStatus: string) => void
-}) {
+}
+
+/**
+ * Change detection for live tournament updates. Does not subscribe to its own query;
+ * the detail page owns `refetchInterval` on `tournaments.getById` (PLA-17).
+ */
+export function useTournamentRealtime(
+  tournamentId: string | null,
+  options: UseTournamentRealtimeOptions
+) {
   const queryClient = useQueryClient()
-  // Store queryClient in ref to avoid dependency array issues
   const queryClientRef = useRef(queryClient)
   queryClientRef.current = queryClient
-  
+
   const {
+    tournament,
+    refetch,
     enabled = true,
-    pollingInterval = 10000, // 10 seconds default
     onMatchUpdate,
     onRoundAdvance,
     onStatusChange,
-  } = options || {}
+  } = options
 
-  // Store callbacks in refs to avoid dependency array type inference issues
   const callbacksRef = useRef({ onMatchUpdate, onRoundAdvance, onStatusChange })
   callbacksRef.current = { onMatchUpdate, onRoundAdvance, onStatusChange }
 
-  // Track previous state for change detection
   const previousStateRef = useRef<{
     status?: string
     currentRound?: number
     completedMatches?: number
   }>({})
 
-  // Query tournament data with polling
-  const { data: tournament, refetch } = trpc.tournaments.getById.useQuery(
-    {
-      id: tournamentId!,
-      includeMatches: true,
-      includeParticipants: false,
-    },
-    {
-      enabled: enabled && !!tournamentId,
-      refetchInterval: enabled && tournamentId ? pollingInterval : false,
-      refetchIntervalInBackground: false, // Only poll when tab is active
-      refetchOnWindowFocus: true, // Refetch when user returns to tab
-    }
-  )
-
-  // Detect changes and trigger callbacks
   useEffect(() => {
-    if (!tournament) return
+    previousStateRef.current = {}
+  }, [tournamentId])
+
+  useEffect(() => {
+    if (!enabled || !tournamentId || !tournament) return
 
     const previousState = previousStateRef.current
-    // Calculate currentRound from matches if not available, or convert to number
-    const currentRound = (tournament as any).currentRound 
-      ? (typeof (tournament as any).currentRound === 'string' 
-          ? parseInt((tournament as any).currentRound as string, 10) 
-          : (typeof (tournament as any).currentRound === 'number' 
-              ? (tournament as any).currentRound 
+    const currentRound = (tournament as any).currentRound
+      ? (typeof (tournament as any).currentRound === 'string'
+          ? parseInt((tournament as any).currentRound as string, 10)
+          : (typeof (tournament as any).currentRound === 'number'
+              ? (tournament as any).currentRound
               : 0))
-      : (tournament.matches && tournament.matches.length > 0 
-          ? Math.max(...tournament.matches.map(m => Number(m.round)))
-          : 0)
-    
+      : (tournament as any).matches && (tournament as any).matches.length > 0
+          ? Math.max(...(tournament as any).matches.map((m: { round: unknown }) => Number(m.round)))
+          : 0
+
     const currentState = {
-      status: tournament.status,
+      status: (tournament as any).status as string,
       currentRound: currentRound,
-      completedMatches: tournament.matches?.filter(m => m.status === 'COMPLETED').length || 0,
+      completedMatches:
+        (tournament as any).matches?.filter((m: { status: string }) => m.status === 'COMPLETED')
+          .length || 0,
     }
 
-    // Detect status change
     if (previousState.status && previousState.status !== currentState.status) {
       callbacksRef.current.onStatusChange?.(currentState.status)
-      
-      // Invalidate related queries
+
       queryClientRef.current.invalidateQueries({
         queryKey: [['tournaments', 'getById']],
       })
@@ -110,11 +113,12 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
       })
     }
 
-    // Detect round advance
-    if (previousState.currentRound !== undefined && previousState.currentRound !== currentState.currentRound) {
+    if (
+      previousState.currentRound !== undefined &&
+      previousState.currentRound !== currentState.currentRound
+    ) {
       callbacksRef.current.onRoundAdvance?.()
-      
-      // Invalidate tournament and match queries
+
       queryClientRef.current.invalidateQueries({
         queryKey: [['tournaments', 'getById']],
       })
@@ -123,26 +127,23 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
       })
     }
 
-    // Detect match completion
-    if (previousState.completedMatches !== undefined && 
-        previousState.completedMatches < currentState.completedMatches) {
+    if (
+      previousState.completedMatches !== undefined &&
+      previousState.completedMatches < currentState.completedMatches
+    ) {
       callbacksRef.current.onMatchUpdate?.()
-      
-      // Invalidate projected ratings
+
       queryClientRef.current.invalidateQueries({
         queryKey: [['tournamentLifecycle', 'getProjectedRatings']],
       })
     }
 
-    // Update previous state
     previousStateRef.current = currentState
-  }, [tournament])
+  }, [tournament, enabled, tournamentId])
 
-  // Manual refresh function
   const refresh = useCallback(async () => {
     await refetch()
-    
-    // Also invalidate related queries
+
     if (tournamentId) {
       queryClientRef.current.invalidateQueries({
         queryKey: [['tournaments', 'getById'], { input: { id: tournamentId } }],
@@ -157,27 +158,28 @@ export function useTournamentRealtime(tournamentId: string | null, options?: {
   }, [refetch, tournamentId])
 
   return {
-    tournament,
     refresh,
     isPolling: enabled && !!tournamentId,
   }
 }
 
 /**
- * Hook for real-time match updates
- * Provides automatic refetching of match data
+ * Hook for real-time match updates (optional polling). Prefer tournament-detail
+ * polling + invalidations when embedded on the live detail page (PLA-17).
  */
-export function useMatchRealtime(tournamentId: string | null, options?: {
-  enabled?: boolean
-  pollingInterval?: number
-  round?: number
-  onMatchComplete?: (matchId: string) => void
-}) {
+export function useMatchRealtime(
+  tournamentId: string | null,
+  options?: {
+    enabled?: boolean
+    pollingInterval?: number
+    round?: number
+    onMatchComplete?: (matchId: string) => void
+  }
+) {
   const queryClient = useQueryClient()
-  // Store queryClient in ref to avoid dependency array issues
   const queryClientRef = useRef(queryClient)
   queryClientRef.current = queryClient
-  
+
   const {
     enabled = true,
     pollingInterval = 10000,
@@ -185,14 +187,11 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
     onMatchComplete,
   } = options || {}
 
-  // Store callback in ref to avoid dependency array type inference issues
   const onMatchCompleteRef = useRef(onMatchComplete)
   onMatchCompleteRef.current = onMatchComplete
 
-  // Track previous completed matches
   const previousCompletedRef = useRef<Set<string>>(new Set())
 
-  // Query matches with polling
   const { data: matches, refetch } = trpc.matches.getByTournament.useQuery(
     {
       tournamentId: tournamentId!,
@@ -206,7 +205,6 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
     }
   )
 
-  // Detect newly completed matches
   useEffect(() => {
     if (!matches) return
 
@@ -214,28 +212,23 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
       .filter(hasIdAndStatus)
       .filter(m => m.status === 'COMPLETED')
       .map(m => m.id)
-    
+
     const currentCompleted = new Set<string>(completedMatchIds)
 
-    // Find newly completed matches
     const newlyCompleted = Array.from(currentCompleted).filter(
       id => !previousCompletedRef.current.has(id)
     )
 
-    // Trigger callbacks for newly completed matches
     newlyCompleted.forEach(matchId => {
       onMatchCompleteRef.current?.(matchId)
     })
 
-    // Update previous state
     previousCompletedRef.current = currentCompleted
   }, [matches])
 
-  // Manual refresh function
   const refresh = useCallback(async () => {
     await refetch()
-    
-    // Invalidate related queries
+
     if (tournamentId) {
       queryClientRef.current.invalidateQueries({
         queryKey: [['matches', 'getByTournament'], { input: { tournamentId } }],
@@ -254,29 +247,25 @@ export function useMatchRealtime(tournamentId: string | null, options?: {
 }
 
 /**
- * Hook for live tournament indicator
- * Shows if tournament is currently active and being updated
+ * Read-only observer for LIVE badge; uses the same `getById` input as tournament detail
+ * so React Query dedupes with the page query (no separate poll).
  */
 export function useLiveTournamentIndicator(tournamentId: string | null) {
   const { data: tournament } = trpc.tournaments.getById.useQuery(
     {
       id: tournamentId!,
-      includeMatches: false,
-      includeParticipants: false,
+      includeMatches: true,
+      includeParticipants: true,
     },
     {
       enabled: !!tournamentId,
-      refetchInterval: 30000, // Check every 30 seconds
     }
   )
 
-  const isLive =
-    tournament?.status === 'ACTIVE' &&
-    hasLiveFlag(tournament) &&
-    Boolean(tournament.isLive)
+  const isLive = getTournamentLiveBadgeVisible(tournament)
 
   return {
     isLive,
-    status: tournament?.status,
+    status: hasLiveFlag(tournament) ? tournament.status : undefined,
   }
 }

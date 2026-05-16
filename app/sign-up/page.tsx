@@ -4,7 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/components/auth/session-provider";
 import { useZustandFormSteps } from "@/hooks/use-form-zustand";
-import { registerSchema } from "@/lib/validation/schemas";
+import {
+  registerStepPersonalInfoSchema,
+  registerStepAccountInfoSchema,
+  registerStepPreferencesSchema,
+} from "@/lib/validation/schemas";
 import { FormInput, FormSelect, FormCheckbox, FormStatus } from "@/components/ui/form-components";
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,22 +51,9 @@ export default function RegisterPage() {
       optInCommunications: false,
     },
     validationSchemas: {
-      'personal-info': registerSchema.pick({
-        username: true,
-        firstName: true,
-        lastName: true,
-      }),
-      'account-info': registerSchema.pick({
-        email: true,
-        password: true,
-        confirmPassword: true,
-      }),
-      'preferences': registerSchema.pick({
-        agreeToTerms: true,
-        subscribeToUpdates: true,
-        nameDisplayPreference: true,
-        optInCommunications: true,
-      }),
+      'personal-info': registerStepPersonalInfoSchema,
+      'account-info': registerStepAccountInfoSchema,
+      'preferences': registerStepPreferencesSchema,
     },
     onSubmit: async (data) => {
       const result = await signUp.email({
