@@ -16,6 +16,13 @@ function getBaseURL(): string {
 
 export const authClient = createAuthClient({
   baseURL: getBaseURL(),
+  // Avoid focus/interval refetches for signed-out visitors; session is refreshed
+  // explicitly after sign-in, sign-up, sign-out, and profile updates.
+  sessionOptions: {
+    refetchInterval: 0,
+    refetchOnWindowFocus: false,
+    refetchWhenOffline: false,
+  },
 });
 
 // Export the standard methods that are always available

@@ -16,7 +16,11 @@ import { LiveTournamentIndicator } from '@/components/tournaments/live-tournamen
 import { useTournamentStore } from '@/stores/tournament-store'
 import { useTab } from '@/stores/ui-store'
 import { usePermissions } from '@/stores/auth-store'
-import { useTournamentRealtime } from '@/hooks/use-tournament-realtime'
+import {
+  useTournamentRealtime,
+  TOURNAMENT_LIVE_POLL_MS,
+  getTournamentLiveBadgeVisible,
+} from '@/hooks/use-tournament-realtime'
 import { useToast } from '@/hooks/use-toast'
 
 // Helper function to get tournament status badge variant
@@ -34,22 +38,34 @@ const getStatusVariant = (status: string) => {
 export default function TournamentDetailsPage() {
   const params = useParams()
   const router = useRouter()
-  const { user } = useSession()
+  const { user, isLoading: isAuthLoading } = useSession()
   const { toast } = useToast()
   const tournamentId = params.id as string
   const { canManageTournament } = usePermissions()
 
-  // Fetch tournament data with TRPC
-  const tournamentQuery = trpc.tournaments.getById.useQuery({
-    id: tournamentId,
-    includeMatches: true,
-    includeParticipants: true,
-  })
+  // Fetch tournament data with TRPC (single refetchInterval owner for live detail — PLA-17)
+  const tournamentQuery = trpc.tournaments.getById.useQuery(
+    {
+      id: tournamentId,
+      includeMatches: true,
+      includeParticipants: true,
+    },
+    {
+      refetchInterval: query => {
+        const status = (query.state.data as { status?: string } | undefined)?.status
+        if (status === 'ACTIVE' || status === 'PAUSED') {
+          return TOURNAMENT_LIVE_POLL_MS
+        }
+        return false
+      },
+      refetchIntervalInBackground: false,
+    }
+  )
 
-  // Fetch registration status with TRPC
+  // Registration status is user-specific; only fetch when session is resolved and authenticated
   const registrationStatusQuery = trpc.tournaments.getRegistrationStatus.useQuery(
     { tournamentId },
-    { enabled: !!user }
+    { enabled: !!user && !isAuthLoading }
   )
 
   // Get tournament store state and actions separately (stable selectors)
@@ -109,8 +125,8 @@ export default function TournamentDetailsPage() {
   } : null
   const isTournamentLoading = tournamentQuery.isLoading
   const tournamentError = tournamentQuery.error?.message
-  const isRegistrationLoading = registrationStatusQuery.isLoading
-  const registrationError = registrationStatusQuery.error?.message
+  const isRegistrationLoading =
+    !!user && !isAuthLoading && registrationStatusQuery.isLoading
 
   // Use UI Store for active tab
   const { activeTab, setActiveTab } = useTab('tournamentDetails')
@@ -131,10 +147,11 @@ export default function TournamentDetailsPage() {
     }
   }, [activeTab, setActiveTab])
 
-  // Set up real-time updates with callbacks
+  // Change detection + toasts (polling owned by tournamentQuery above)
   useTournamentRealtime(tournamentId, {
+    tournament: tournamentQuery.data,
+    refetch: tournamentQuery.refetch,
     enabled: safeTournament?.status === 'ACTIVE' || safeTournament?.status === 'PAUSED',
-    pollingInterval: 10000, // Poll every 10 seconds for active tournaments
     onMatchUpdate: () => {
       toast({
         title: 'Match Updated',
@@ -198,7 +215,7 @@ export default function TournamentDetailsPage() {
     )
   }
 
-  if (tournamentError || registrationError) {
+  if (tournamentError) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 pt-2 pb-6">
@@ -221,11 +238,10 @@ export default function TournamentDetailsPage() {
                   Error Loading Tournament
                 </h2>
                 <p className="text-muted-foreground mb-4">
-                  {tournamentError || registrationError}
+                  {tournamentError}
                 </p>
                 <Button onClick={() => {
                   tournamentQuery.refetch()
-                  registrationStatusQuery.refetch()
                 }}>
                   Try Again
                 </Button>
@@ -303,7 +319,7 @@ export default function TournamentDetailsPage() {
                 <Share2 className="h-4 w-4" />
               </Button>
             )}
-            <LiveTournamentIndicator tournamentId={tournamentId} />
+            <LiveTournamentIndicator isLive={getTournamentLiveBadgeVisible(safeTournament)} />
           </div>
         </div>
 
@@ -338,7 +354,9 @@ export default function TournamentDetailsPage() {
           canManage={canManage}
           onUpdate={() => {
             tournamentQuery.refetch()
-            registrationStatusQuery.refetch()
+            if (user) {
+              registrationStatusQuery.refetch()
+            }
           }}
         />
       </div>
