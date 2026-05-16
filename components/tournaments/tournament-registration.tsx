@@ -2,11 +2,9 @@
 
 import React, { useEffect, useRef } from 'react'
 import { trpc } from '@/lib/trpc/client'
-import { useTournamentRegistrationQuery } from '@/hooks/stores/use-tournament-queries'
 import { useZustandFormSteps } from '@/hooks/use-form-zustand'
 import { useLoading, useError } from '@/stores/loading-store'
 import { useModal } from '@/stores/ui-store'
-import { useTournamentStore } from '@/stores/tournament-store'
 import { tournamentRegistrationSchema, type TournamentRegistrationFormData } from '@/lib/validation/schemas'
 import { ModalForm } from '@/components/ui/form-components'
 import { Modal } from '@/components/ui/modal'
@@ -26,12 +24,14 @@ interface TournamentRegistrationProps {
     email?: string | null
   } | null
   className?: string
+  onRegisterSuccess?: () => void
 }
 
 export function TournamentRegistration({ 
   tournamentId, 
   currentUser, 
-  className 
+  className,
+  onRegisterSuccess,
 }: TournamentRegistrationProps) {
   const hasResetOnOpen = useRef(false)
   const hasResetOnClose = useRef(false)
@@ -39,46 +39,23 @@ export function TournamentRegistration({
   // Use UI store for modal management
   const modal = useModal('tournamentRegistration')
   
-  // Use tournament store for state management
-  const { setRegistrationStatus, invalidateTournament } = useTournamentStore()
-
-  // tRPC utils for invalidation
   const utils = trpc.useUtils()
 
   // Loading and error state management
   const { setLoading } = useLoading('tournament-registration')
   const { setError, clearError } = useError('tournament-registration')
   
-  // Get registration status and refetch function
-  const { refetch: refetchRegistration } = useTournamentRegistrationQuery(
-    tournamentId,
-    !!currentUser
-  )
-  
-  // Registration mutation using direct tRPC with type casting to avoid deep type instantiation
   const registerMutation = trpc.tournaments.register.useMutation({
     onMutate: () => {
       setLoading(true)
       clearError()
     },
     onSuccess: async () => {
-      // Update tournament store state
-      setRegistrationStatus(tournamentId, {
-        isRegistered: true,
-        canRegister: false,
-        canWithdraw: true,
-        isFull: false,
-        participantCount: 0, // Will be updated by refetch
-        maxPlayers: undefined,
-      })
-      invalidateTournament(tournamentId)
-      // Refetch registration status to get updated data
-      await refetchRegistration()
-      // Invalidate relevant queries to refresh server state
       await Promise.all([
         utils.tournaments.getRegistrationStatus.invalidate({ tournamentId }),
         utils.tournaments.getById.invalidate({ id: tournamentId }),
       ])
+      onRegisterSuccess?.()
       setLoading(false)
     },
     onError: (error: any) => {
