@@ -16,7 +16,11 @@ import { LiveTournamentIndicator } from '@/components/tournaments/live-tournamen
 import { useTournamentStore } from '@/stores/tournament-store'
 import { useTab } from '@/stores/ui-store'
 import { usePermissions } from '@/stores/auth-store'
-import { useTournamentRealtime } from '@/hooks/use-tournament-realtime'
+import {
+  useTournamentRealtime,
+  TOURNAMENT_LIVE_POLL_MS,
+  getTournamentLiveBadgeVisible,
+} from '@/hooks/use-tournament-realtime'
 import { useToast } from '@/hooks/use-toast'
 
 // Helper function to get tournament status badge variant
@@ -39,12 +43,24 @@ export default function TournamentDetailsPage() {
   const tournamentId = params.id as string
   const { canManageTournament } = usePermissions()
 
-  // Fetch tournament data with TRPC
-  const tournamentQuery = trpc.tournaments.getById.useQuery({
-    id: tournamentId,
-    includeMatches: true,
-    includeParticipants: true,
-  })
+  // Fetch tournament data with TRPC (single refetchInterval owner for live detail — PLA-17)
+  const tournamentQuery = trpc.tournaments.getById.useQuery(
+    {
+      id: tournamentId,
+      includeMatches: true,
+      includeParticipants: true,
+    },
+    {
+      refetchInterval: query => {
+        const status = (query.state.data as { status?: string } | undefined)?.status
+        if (status === 'ACTIVE' || status === 'PAUSED') {
+          return TOURNAMENT_LIVE_POLL_MS
+        }
+        return false
+      },
+      refetchIntervalInBackground: false,
+    }
+  )
 
   // Fetch registration status with TRPC
   const registrationStatusQuery = trpc.tournaments.getRegistrationStatus.useQuery(
@@ -131,10 +147,11 @@ export default function TournamentDetailsPage() {
     }
   }, [activeTab, setActiveTab])
 
-  // Set up real-time updates with callbacks
+  // Change detection + toasts (polling owned by tournamentQuery above)
   useTournamentRealtime(tournamentId, {
+    tournament: tournamentQuery.data,
+    refetch: tournamentQuery.refetch,
     enabled: safeTournament?.status === 'ACTIVE' || safeTournament?.status === 'PAUSED',
-    pollingInterval: 10000, // Poll every 10 seconds for active tournaments
     onMatchUpdate: () => {
       toast({
         title: 'Match Updated',
@@ -303,7 +320,7 @@ export default function TournamentDetailsPage() {
                 <Share2 className="h-4 w-4" />
               </Button>
             )}
-            <LiveTournamentIndicator tournamentId={tournamentId} />
+            <LiveTournamentIndicator isLive={getTournamentLiveBadgeVisible(safeTournament)} />
           </div>
         </div>
 
