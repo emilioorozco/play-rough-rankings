@@ -1,5 +1,7 @@
+import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { bearer } from "better-auth/plugins";
 import { prisma } from "./prisma";
 import {
   sendVerificationEmail,
@@ -30,17 +32,33 @@ export function normalizeAuthUrl(url: string): string {
   }
 }
 
+/** Deep-link scheme from play-rough-events/apps/mobile/app.json */
+const EVENTS_APP_SCHEME = "play-rough-events";
+
+const expoDevTrustedOrigins =
+  process.env.NODE_ENV === "development"
+    ? [
+        "exp://",
+        "exp://**",
+        "exp://192.168.*.*:*/**",
+        "exp://10.0.0.*:*/**",
+      ]
+    : [];
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
   secret: process.env.BETTER_AUTH_SECRET!,
   baseURL: process.env.BETTER_AUTH_URL!,
+  plugins: [bearer(), expo()],
   trustedOrigins: [
     process.env.BETTER_AUTH_URL!,
     process.env.NEXT_PUBLIC_APP_URL,
     "http://192.168.86.47:3000",
     "https://appleid.apple.com",
+    `${EVENTS_APP_SCHEME}://`,
+    ...expoDevTrustedOrigins,
   ].filter(Boolean) as string[],
   emailAndPassword: {
     enabled: true,
