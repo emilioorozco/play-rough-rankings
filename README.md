@@ -120,6 +120,18 @@ npm run dev:localhost
 
 Visit [http://localhost:3000](http://localhost:3000) to see the application.
 
+### Auth URLs for Rankings and Events mobile
+
+Rankings Better Auth serves web cookie sessions and mobile bearer-token sessions (via the `bearer()` and `@better-auth/expo` plugins in `lib/auth.ts`). The Events Expo app should set `EXPO_PUBLIC_AUTH_URL` to the same base URL as Rankings `BETTER_AUTH_URL` for each stage:
+
+| Stage | `BETTER_AUTH_URL` (Rankings) | Events mobile `EXPO_PUBLIC_AUTH_URL` |
+|-------|------------------------------|--------------------------------------|
+| Local | `http://localhost:3000` | Same as `BETTER_AUTH_URL` |
+| Dev/preview | `https://www.playroughrankings.dev/` | Same as `BETTER_AUTH_URL` |
+| Production | `https://www.playroughrankings.com/` | Same as `BETTER_AUTH_URL` |
+
+For physical-device local testing, run `npm run dev:ngrok` and point both URLs at the ngrok tunnel URL.
+
 ### 5. Verify Setup
 
 ```bash
