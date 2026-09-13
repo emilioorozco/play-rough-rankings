@@ -30,6 +30,21 @@ export function normalizeAuthUrl(url: string): string {
   }
 }
 
+/**
+ * Play Rough Analytics (separate web app on a playroughrankings.* subdomain / CloudFront).
+ * Comma-separated origins, e.g. "https://tcgl.playroughrankings.dev,https://d123.cloudfront.net,http://localhost:5173".
+ */
+const analyticsTrustedOrigins = (process.env.ANALYTICS_APP_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter((origin) => origin.length > 0);
+
+/**
+ * Share the session cookie across subdomains (e.g. ".playroughrankings.dev") so a social sign-in
+ * that lands on www is visible to Analytics on tcgl. Unset = host-only cookies (previous behaviour).
+ */
+const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN?.trim();
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
@@ -41,7 +56,18 @@ export const auth = betterAuth({
     process.env.NEXT_PUBLIC_APP_URL,
     "http://192.168.86.47:3000",
     "https://appleid.apple.com",
+    ...analyticsTrustedOrigins,
   ].filter(Boolean) as string[],
+  ...(authCookieDomain
+    ? {
+        advanced: {
+          crossSubDomainCookies: {
+            enabled: true,
+            domain: authCookieDomain,
+          },
+        },
+      }
+    : {}),
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || false, // Enable via env var
